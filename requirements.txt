@@ -1,0 +1,3 @@
+# QRPrint currently contains no Python source files and has no Python package
+# dependencies. This file is kept so install.bat can provision a ready-to-use
+# virtual environment for future Python utilities without manual setup.

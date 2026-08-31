@@ -1,0 +1,13 @@
+{
+  "name": "qrprint",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "install:merchant": "cd merchant && npm install",
+    "install:customer": "cd customer && npm install",
+    "build:merchant": "cd merchant && npm run build",
+    "build:customer": "cd customer && npm run build",
+    "dev:merchant": "cd merchant && npm run dev",
+    "dev:customer": "cd customer && npm run dev"
+  }
+}

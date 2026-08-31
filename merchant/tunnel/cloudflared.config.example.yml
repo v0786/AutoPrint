@@ -1,0 +1,17 @@
+﻿# QRPrint Cloudflare Tunnel example configuration.
+#
+# Do NOT commit real tunnel credentials.
+#
+# Copy this file outside version control or configure the tunnel
+# through Cloudflare's Zero Trust dashboard.
+
+tunnel: YOUR_TUNNEL_ID
+credentials-file: C:\ProgramData\cloudflared\YOUR_TUNNEL_ID.json
+
+ingress:
+  # Public merchant API endpoint.
+  - hostname: merchant-api.example.com
+    service: http://127.0.0.1:4100
+
+  # Reject all other requests.
+  - service: http_status:404

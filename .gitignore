@@ -1,0 +1,42 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+data/
+# ================================================================
+# QRPRINT - LOCAL / GENERATED FILES
+# ================================================================
+# Dependencies
+**/node_modules/
+# Build output
+**/dist/
+.next/
+**/.next/
+out/
+release/
+# Environment secrets
+.env.local
+.env.*.local
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+# Electron generated files
+merchant/release/
+merchant/out/
+# Audit and backup artifacts
+audit-reports/
+audit-suite-v2/
+backups/
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+# OS files
+Thumbs.db
+desktop.ini

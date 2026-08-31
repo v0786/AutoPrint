@@ -1,0 +1,50 @@
+appId: com.qrprint.merchant
+productName: QRPrint Merchant
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+  - "!**/*.map"
+  - "!**/*.test.*"
+  - "!**/tests/**"
+  - "!**/*.md"
+
+asar: true
+
+asarUnpack:
+  - resources/**
+  - backend/**
+
+win:
+  target:
+    - nsis
+    - portable
+  certificateFile: null
+  certificatePassword: null
+  signingHashAlgorithms:
+    - sha256
+  sign: null
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: QRPrint Merchant
+  deleteAppDataOnUninstall: false
+  installerIcon: resources/icons/installer-icon.ico
+  uninstallerIcon: resources/icons/uninstaller-icon.ico
+  installerHeaderIcon: resources/icons/header-icon.ico
+
+artifactName: QRPrint-Merchant-${version}-${arch}.${ext}
+
+publish:
+  provider: github
+  owner: qrprint
+  repo: qrprint
