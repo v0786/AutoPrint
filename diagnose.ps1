@@ -79,11 +79,6 @@ function Repair-NPMDependencies {
     & npm install 2>&1 | Out-Null
     Pop-Location
     
-    Write-Host "Installing customer dependencies..." -ForegroundColor Gray
-    Push-Location customer
-    & npm install 2>&1 | Out-Null
-    Pop-Location
-    
     Write-Host "[FIXED] All dependencies reinstalled" -ForegroundColor Green
     $script:fixes_applied++
 }
@@ -165,17 +160,10 @@ Write-Host ""
 Write-Host "[CHECK 5] Repository structure..." -ForegroundColor Cyan
 if (-not (Test-Path "merchant\package.json")) {
     Write-Host "  [FAIL] merchant/package.json not found" -ForegroundColor Red
-    Write-Host "  [ACTION] Run from repository root: cd D:\QRPrint" -ForegroundColor Yellow
+    Write-Host "  [ACTION] Run from repository root: cd E:\project\AutoPrint" -ForegroundColor Yellow
     $errors++
 } else {
     Write-Host "  [PASS] Merchant project found" -ForegroundColor Green
-}
-
-if (-not (Test-Path "customer\package.json")) {
-    Write-Host "  [FAIL] customer/package.json not found" -ForegroundColor Red
-    $errors++
-} else {
-    Write-Host "  [PASS] Customer project found" -ForegroundColor Green
 }
 
 if (-not (Test-Path "shared\src\index.ts")) {
@@ -270,12 +258,6 @@ if (Test-Path "merchant\node_modules") {
     Write-Host "  [INFO] Merchant node_modules found" -ForegroundColor Cyan
 } else {
     Write-Host "  [WARN] Merchant node_modules not found" -ForegroundColor Yellow
-    $warnings++
-}
-if (Test-Path "customer\node_modules") {
-    Write-Host "  [INFO] Customer node_modules found" -ForegroundColor Cyan
-} else {
-    Write-Host "  [WARN] Customer node_modules not found" -ForegroundColor Yellow
     $warnings++
 }
 

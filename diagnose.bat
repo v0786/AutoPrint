@@ -75,23 +75,15 @@ REM Check repository structure
 echo [CHECK 5] Repository structure...
 if not exist "merchant\package.json" (
     echo   [FAIL] merchant/package.json not found
-    echo   [FIX] Run from repository root: cd D:\QRPrint
+    echo   [FIX] Run from repository root: cd E:\project\AutoPrint
     set /a errors+=1
 ) else (
     echo   [PASS] Merchant project found
 )
 
-if not exist "customer\package.json" (
-    echo   [FAIL] customer/package.json not found
-    echo   [FIX] Clone repository: git clone https://github.com/qrprint/qrprint.git
-    set /a errors+=1
-) else (
-    echo   [PASS] Customer project found
-)
-
 if not exist "shared\src\index.ts" (
     echo   [FAIL] shared/src/index.ts not found
-    echo   [FIX] Clone repository: git clone https://github.com/qrprint/qrprint.git
+    echo   [FIX] Clone repository: git clone https://github.com/v0786/AutoPrint.git
     set /a errors+=1
 ) else (
     echo   [PASS] Shared package found

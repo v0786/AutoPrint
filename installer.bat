@@ -90,16 +90,6 @@ if errorlevel 1 (
   exit /b 1
 )
 
-REM Install customer dependencies
-echo [QRPrint] Installing customer dependencies...
-cd "%~dp0customer"
-call npm install
-if errorlevel 1 (
-  echo [QRPrint] Customer installation failed.
-  cd "%~dp0"
-  exit /b 1
-)
-
 echo.
 echo ============================================================
 echo  Installation Complete!
@@ -118,7 +108,7 @@ echo.
 echo To build installer for distribution:
 echo   npm run package:win
 echo.
-echo Configure tunnel URL in merchant/.env and customer/.env.local
+echo Configure tunnel URL in merchant/.env. The customer web app is maintained on the customer Git branch.
 echo.
 echo For help, see: INSTALL_AND_USE.md
 echo.

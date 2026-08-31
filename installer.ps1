@@ -66,10 +66,6 @@ Set-Location "$repoRoot\merchant"
 Write-Host "[INFO] Building merchant for Electron..." -ForegroundColor Cyan
 & npm run build:electron
 
-Write-Host "[INFO] Installing customer dependencies..." -ForegroundColor Cyan
-Set-Location "$repoRoot\customer"
-& npm install
-
 Set-Location $repoRoot
 
 Write-Host ""
@@ -90,7 +86,7 @@ Write-Host ""
 Write-Host "To build installer for distribution:" -ForegroundColor Cyan
 Write-Host "  npm run package:win" -ForegroundColor Gray
 Write-Host ""
-Write-Host "Configure tunnel URL in merchant/.env and customer/.env.local" -ForegroundColor Yellow
+Write-Host "Configure tunnel URL in merchant/.env. The customer web app is maintained on the customer Git branch." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "For help, see: INSTALL_AND_USE.md" -ForegroundColor Cyan
 Write-Host "" 

@@ -66,10 +66,9 @@ Supported customer file types include PDF, Word (`.docx`), PowerPoint
 
 ## Customer web page
 
-The customer page is a separate website. It needs to be deployed and connected
-to the shop computer before customers outside the store can submit orders. This
-is usually a one-time setup for the person managing the system; see the detailed
-guide below.
+The customer page is a separate website, maintained in the repository's
+`customer` branch. It needs to be deployed and connected to the shop computer
+before customers outside the store can submit orders.
 
 ## About `install.bat`
 

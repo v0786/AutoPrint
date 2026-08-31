@@ -62,8 +62,8 @@ git --version
 
 ```cmd
 cd %USERPROFILE%\Desktop
-git clone https://github.com/qrprint/qrprint.git
-cd qrprint
+git clone https://github.com/v0786/AutoPrint.git
+cd AutoPrint
 ```
 
 **Verify the structure:**
@@ -73,7 +73,6 @@ dir
 
 **Expected output:**
 ```
-customer/
 data/
 installer.bat
 installer.ps1
@@ -115,7 +114,7 @@ installer.bat
 **What the installer does:**
 - ✅ Verifies you have Administrator privileges
 - ✅ Checks Node.js and npm installation
-- ✅ Installs merchant and customer dependencies
+- ✅ Installs merchant dependencies
 - ✅ Creates local database directory
 - ✅ Initializes the merchant database
 - ✅ Builds the Electron application
@@ -330,12 +329,12 @@ PORT=4101
 **Solutions:**
 1. Verify database file exists:
    ```cmd
-   dir D:\QRPrint\data\merchant.db
+   dir E:\project\AutoPrint\data\merchant.db
    ```
 
 2. If missing, create it:
    ```cmd
-   cd D:\QRPrint\data
+   cd E:\project\AutoPrint\data
    type nul > merchant.db
    ```
 
@@ -438,7 +437,7 @@ PORT=4101
 
 3. Check database permissions:
    ```cmd
-   dir D:\QRPrint\data\
+   dir E:\project\AutoPrint\data\
    ```
 
 4. View detailed error logs:
@@ -467,7 +466,7 @@ PORT=4101
    - Should see: `{"ok":true,"service":"qrprint-merchant"}`
 
 2. Check environment configuration:
-   - Open `customer/.env.local`
+   - In a checkout of the `customer` branch, open `customer/.env.local`
    - Verify: `MERCHANT_API_BASE_URL=http://localhost:4100`
    - For production tunnel: `MERCHANT_API_BASE_URL=https://your-tunnel.example`
 
@@ -528,7 +527,7 @@ PORT=4101
    - Check it's accessible locally: `curl http://localhost:4100/health`
 
 3. Update environment variables:
-   - `customer/.env.local`: 
+   - In the `customer` branch, `customer/.env.local`:
      ```env
      MERCHANT_API_BASE_URL=https://your-tunnel.example
      ```
@@ -550,12 +549,12 @@ PORT=4101
 **Create a backup of store data:**
 
 ```cmd
-xcopy D:\QRPrint\data D:\QRPrint\backups\%date:~-4,4%%date:~-10,2%%date:~-7,2% /E /I
+xcopy E:\project\AutoPrint\data E:\project\AutoPrint\backups\%date:~-4,4%%date:~-10,2%%date:~-7,2% /E /I
 ```
 
 Or manually copy:
 1. Open File Explorer
-2. Navigate to `D:\QRPrint\data`
+2. Navigate to `E:\project\AutoPrint\data`
 3. Right-click → Copy
 4. Paste in a safe location (USB drive, cloud storage, etc.)
 
@@ -576,7 +575,7 @@ Or manually copy:
 
 **Check for updates:**
 ```cmd
-cd D:\QRPrint
+cd E:\project\AutoPrint
 git pull origin main
 ```
 
@@ -584,7 +583,6 @@ git pull origin main
 ```cmd
 npm install
 cd merchant && npm install
-cd ../customer && npm install
 ```
 
 **Test update:**
@@ -600,7 +598,7 @@ npm run electron-dev
 
 **Merchant backend logs:**
 ```cmd
-cd D:\QRPrint\merchant
+cd E:\project\AutoPrint\merchant
 npm run server 2>&1 | tee merchant.log
 ```
 
@@ -619,7 +617,7 @@ type C:\Users\%USERNAME%\AppData\Roaming\QRPrint\logs\latest.log
 Create a diagnostic report:
 
 ```cmd
-cd D:\QRPrint
+cd E:\project\AutoPrint
 echo System Information > diagnostic-report.txt
 systeminfo >> diagnostic-report.txt
 echo. >> diagnostic-report.txt
@@ -676,7 +674,7 @@ Share `diagnostic-report.txt` when reporting issues.
 **For technical support:**
 1. Check this guide for your error
 2. Collect diagnostic information (see Logs section)
-3. Visit [GitHub Issues](https://github.com/qrprint/qrprint/issues)
+3. Visit [GitHub Issues](https://github.com/v0786/AutoPrint/issues)
 4. Email: support@qrprint.example.com
 
 **For printer support:**
@@ -704,7 +702,7 @@ Share `diagnostic-report.txt` when reporting issues.
 
 **Method 3: Manual**
 ```cmd
-cd D:\QRPrint
+cd E:\project\AutoPrint
 rmdir /S /Q node_modules
 rmdir /S /Q .git
 rmdir /S /Q dist
