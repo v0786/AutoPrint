@@ -1,6 +1,0 @@
-{
-  "name": "AutoPrint",
-  "description": "Customer-facing self-service print shop web interface for document upload, print specifications, UPI/cash payment, and 8-digit collection code generation.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
