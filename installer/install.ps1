@@ -3,8 +3,8 @@
     AutoPrint / QRPrint Production Windows Installation Wizard
 .DESCRIPTION
     Interactive installation wizard for AutoPrint. Handles port configuration (5000/6000/7000),
-    datastore hierarchy setup, dependency installation, TypeScript compilation,
-    printer detection, shortcut creation, and automated verification.
+    PageKite public customer ingress setup, datastore hierarchy setup, dependency installation,
+    TypeScript compilation, printer detection, shortcut creation, and automated verification.
 #>
 
 param(
@@ -25,7 +25,7 @@ Write-InstallerLog "Starting AutoPrint Installation Wizard..." -Level "INFO"
 if (-not (Test-IsAdmin)) {
     Write-Host ""
     Write-Host "  [NOTICE] AutoPrint is running without Administrator privileges." -ForegroundColor Yellow
-    Write-Host "  Administrator privileges are recommended for creating system shortcuts and configuring Windows printers." -ForegroundColor Gray
+    Write-Host "  Administrator privileges are recommended for creating system shortcuts, firewall rules, and configuring Windows printers." -ForegroundColor Gray
     Write-Host ""
     $elevate = Read-Host "  Relaunch installer with Administrator privileges? [Y/N] (Default: N)"
     if ($elevate -match "^[Yy]") {
@@ -135,11 +135,51 @@ $merchantPort = Verify-PortNoConflict "Merchant Desktop" $merchantPort
 $customerPort = Verify-PortNoConflict "Customer Kiosk" $customerPort
 
 # =============================================================================
-# 5. PRINTER CONFIGURATION
+# 5. PAGEKITE INTERNET ACCESS CONFIGURATION
 # =============================================================================
 Write-Host ""
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
-Write-Host "  STEP 4: Printer Hardware Configuration" -ForegroundColor Cyan
+Write-Host "  STEP 4: Customer Internet Access & PageKite Ingress" -ForegroundColor Cyan
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host ""
+Write-Host "  PageKite allows customers to scan your QR code and upload print files" -ForegroundColor White
+Write-Host "  from mobile data (4G/5G) or external Wi-Fi without router port-forwarding." -ForegroundColor Gray
+Write-Host ""
+Write-Host "  Do you want Internet access for customers through PageKite?" -ForegroundColor White
+Write-Host "    [1] Yes - Configure PageKite Tunnel (Recommended)" -ForegroundColor Green
+Write-Host "    [2] No  - Local Network / LAN Only" -ForegroundColor Gray
+Write-Host ""
+
+$pkChoice = Read-Host "  Selection [Default: 1]"
+if ([string]::IsNullOrWhiteSpace($pkChoice)) { $pkChoice = "1" }
+
+$pagekiteEnabled = $false
+$pagekiteName = ""
+$pagekiteSecret = ""
+
+if ($pkChoice -eq "1" -or $pkChoice -match "^[Yy]") {
+    $pagekiteEnabled = $true
+    $pagekiteName = Read-Host "  Enter PageKite Subdomain Name (e.g. quickprint-delhi)"
+    if ([string]::IsNullOrWhiteSpace($pagekiteName)) {
+        $pagekiteName = "autoprint-kiosk-" + (Get-Random -Minimum 1000 -Maximum 9999)
+        Write-Host "  Assigned automatic subdomain: $pagekiteName.pagekite.me" -ForegroundColor Cyan
+    }
+    
+    # Prompt for secret securely
+    $secPass = Read-Host -Prompt "  Enter PageKite Auth Secret (Press Enter to skip if using public test)" -AsSecureString
+    $pagekiteSecret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secPass))
+    
+    Write-InstallerLog "PageKite configured: https://$pagekiteName.pagekite.me" -Level "SUCCESS"
+} else {
+    Write-InstallerLog "PageKite disabled. Customer access will use Local LAN IP." -Level "INFO"
+}
+
+# =============================================================================
+# 6. PRINTER CONFIGURATION
+# =============================================================================
+Write-Host ""
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "  STEP 5: Printer Hardware Configuration" -ForegroundColor Cyan
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host ""
 
@@ -165,11 +205,36 @@ if ($printers.Count -gt 0) {
 Write-InstallerLog "Configured Printer: $selectedPrinter" -Level "SUCCESS"
 
 # =============================================================================
-# 6. SHORTCUTS & PREFERENCES
+# 7. WINDOWS FIREWALL PERMISSIONS
 # =============================================================================
 Write-Host ""
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
-Write-Host "  STEP 5: Shortcuts & Preferences" -ForegroundColor Cyan
+Write-Host "  STEP 6: Windows Firewall Local Port Rules" -ForegroundColor Cyan
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host ""
+Write-Host "  AutoPrint needs local network access for configured ports ($backendPort, $merchantPort, $customerPort)." -ForegroundColor Gray
+Write-Host "    [1] Allow required ports (Create Windows Firewall Rules)" -ForegroundColor White
+Write-Host "    [2] Do not create firewall rules" -ForegroundColor Gray
+$fwChoice = Read-Host "  Selection [Default: 1]"
+if ([string]::IsNullOrWhiteSpace($fwChoice)) { $fwChoice = "1" }
+
+if ($fwChoice -eq "1" -and (Test-IsAdmin)) {
+    try {
+        New-NetFirewallRule -DisplayName "AutoPrint Backend Port $backendPort" -Direction Inbound -LocalPort $backendPort -Protocol TCP -Action Allow -ErrorAction SilentlyContinue | Out-Null
+        New-NetFirewallRule -DisplayName "AutoPrint Customer Kiosk Port $customerPort" -Direction Inbound -LocalPort $customerPort -Protocol TCP -Action Allow -ErrorAction SilentlyContinue | Out-Null
+        New-NetFirewallRule -DisplayName "AutoPrint Merchant Desk Port $merchantPort" -Direction Inbound -LocalPort $merchantPort -Protocol TCP -Action Allow -ErrorAction SilentlyContinue | Out-Null
+        Write-InstallerLog "Windows Firewall rules created successfully." -Level "SUCCESS"
+    } catch {
+        Write-InstallerLog "Firewall rule creation skipped or non-admin." -Level "WARN"
+    }
+}
+
+# =============================================================================
+# 8. SHORTCUTS & PREFERENCES
+# =============================================================================
+Write-Host ""
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "  STEP 7: Shortcuts & Preferences" -ForegroundColor Cyan
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host ""
 
@@ -177,43 +242,48 @@ $createDesktop = Read-Host "  Create Desktop shortcuts? [Y/N] (Default: Y)"
 if ([string]::IsNullOrWhiteSpace($createDesktop)) { $createDesktop = "Y" }
 
 # =============================================================================
-# 7. SAFETY BACKUP CREATION
+# 9. SAFETY BACKUP CREATION
 # =============================================================================
 Write-Host ""
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
-Write-Host "  STEP 6: Automated Safety Backup" -ForegroundColor Cyan
+Write-Host "  STEP 8: Automated Safety Backup" -ForegroundColor Cyan
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host ""
 
 $backupDir = Join-Path $dataDir "backups\backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
 New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
 
-if (Test-Path "$installDir\datastore\backend") {
-    Copy-Item "$installDir\datastore\backend\*" "$backupDir\" -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path "$installDir\datastore\database") {
+    Copy-Item "$installDir\datastore\database\*" "$backupDir\" -Recurse -Force -ErrorAction SilentlyContinue
     Write-InstallerLog "Created pre-installation backup at: $backupDir" -Level "SUCCESS"
 } else {
     Write-InstallerLog "Initial installation detected; backup initialized." -Level "INFO"
 }
 
 # =============================================================================
-# 8. INITIALIZING DIRECTORIES & CONFIGURATION
+# 10. INITIALIZING DIRECTORIES & CONFIGURATION
 # =============================================================================
 Write-Host ""
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
-Write-Host "  STEP 7: Initializing Datastore & Configuration" -ForegroundColor Cyan
+Write-Host "  STEP 9: Initializing Datastore & Environment" -ForegroundColor Cyan
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host ""
 
 $requiredDirs = @(
-    "$dataDir\customer\uploads",
-    "$dataDir\customer\documents",
-    "$dataDir\merchant\jobs",
-    "$dataDir\merchant\transactions",
-    "$dataDir\merchant\cash",
-    "$dataDir\backend\database",
-    "$dataDir\backend\audit",
-    "$dataDir\backend\logs",
-    "$dataDir\connectors",
+    "$dataDir\config",
+    "$dataDir\database",
+    "$dataDir\customers",
+    "$dataDir\merchants",
+    "$dataDir\documents\incoming",
+    "$dataDir\documents\processing",
+    "$dataDir\documents\completed",
+    "$dataDir\documents\failed",
+    "$dataDir\print-queue",
+    "$dataDir\audit-logs",
+    "$dataDir\generated\qr",
+    "$dataDir\generated\watermarked",
+    "$dataDir\generated\receipts",
+    "$dataDir\runtime",
     "$dataDir\backups",
     "$dataDir\temp",
     "$installDir\runtime\logs",
@@ -227,11 +297,13 @@ foreach ($dir in $requiredDirs) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 }
-Write-InstallerLog "Datastore directories initialized." -Level "SUCCESS"
+Write-InstallerLog "Datastore directory hierarchy initialized." -Level "SUCCESS"
 
 # Generate .env configuration
+$publicCustUrl = if ($pagekiteEnabled -and $pagekiteName) { "https://$pagekiteName.pagekite.me" } else { "http://localhost:$customerPort" }
+
 $envContent = @"
-# AutoPrint / QRPrint Centralized Configuration
+# AutoPrint / QRPrint Centralized Runtime Configuration
 PORT=$backendPort
 MERCHANT_PORT=$merchantPort
 CUSTOMER_PORT=$customerPort
@@ -239,26 +311,33 @@ NODE_ENV=development
 API_PREFIX=/api
 MAX_DIGITAL_ATTEMPTS=3
 HMAC_SECRET=AP_VERIFY_HMAC_SECURE_2026_CHANGE_THIS_IN_PRODUCTION
-CORS_ORIGIN=http://localhost:$customerPort,http://localhost:$merchantPort,http://localhost:3000,http://localhost:3001,http://localhost:5000,http://localhost:6000,http://localhost:7000,http://localhost:8085
+CORS_ORIGIN=http://localhost:$customerPort,http://localhost:$merchantPort,http://localhost:3000,http://localhost:3001,http://localhost:5000,http://localhost:6000,http://localhost:7000,https://$pagekiteName.pagekite.me
 CURRENCY=INR
 MAX_FILE_SIZE_MB=50
 AUTOPRINT_DATA_DIR=$dataDir
 DEFAULT_PRINTER=$selectedPrinter
+
+# PageKite Dynamic Customer Ingress
+PAGEKITE_ENABLED=$($pagekiteEnabled.ToString().ToLower())
+PAGEKITE_NAME=$pagekiteName
+PAGEKITE_DOMAIN=pagekite.me
+PAGEKITE_SECRET=$pagekiteSecret
+CUSTOMER_PUBLIC_URL=$publicCustUrl
 "@
 
 Set-Content -Path "$installDir\.env" -Value $envContent -Force
 Write-InstallerLog "Environment configuration saved to .env." -Level "SUCCESS"
 
 # =============================================================================
-# 9. DEPENDENCIES & APPLICATION BUILDS
+# 11. DEPENDENCIES & APPLICATION BUILDS
 # =============================================================================
 Write-Host ""
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
-Write-Host "  STEP 8: Installing Dependencies & Building Applications" -ForegroundColor Cyan
+Write-Host "  STEP 10: Installing Dependencies & Building Applications" -ForegroundColor Cyan
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host ""
 
-Write-Host "  Installing dependencies..." -ForegroundColor Gray
+Write-Host "  Installing dependencies across workspaces..." -ForegroundColor Gray
 Push-Location "$installDir"
 try {
     npm run install:all
@@ -280,12 +359,12 @@ finally {
 }
 
 # =============================================================================
-# 10. SHORTCUTS CREATION
+# 12. SHORTCUTS CREATION
 # =============================================================================
 if ($createDesktop -match "^[Yy]") {
     $desktopDir = [Environment]::GetFolderPath("Desktop")
     $iconPath   = Join-Path $installDir "assets\icon\favicon.ico"
-    $startScript = Join-Path $installDir "scripts\start-all.cmd"
+    $startScript = Join-Path $installDir "scripts\start-autoprint.cmd"
 
     New-AppShortcut -ShortcutPath (Join-Path $desktopDir "AutoPrint Manager.lnk") `
                     -TargetPath "cmd.exe" `
@@ -296,26 +375,27 @@ if ($createDesktop -match "^[Yy]") {
 }
 
 # =============================================================================
-# 11. INSTALLATION SUMMARY & LAUNCH
+# 13. INSTALLATION SUMMARY & LAUNCH
 # =============================================================================
 Write-Host ""
 Write-Host "===============================================================================" -ForegroundColor Green
 Write-Host "   AUTOPRINT INSTALLATION COMPLETED SUCCESSFULLY!" -ForegroundColor White
 Write-Host "===============================================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Configured Endpoints:" -ForegroundColor White
+Write-Host "  Configured Access Endpoints:" -ForegroundColor White
+Write-Host "    [Public Customer URL]    : $publicCustUrl" -ForegroundColor Cyan
+Write-Host "    [Customer Mobile Kiosk]  : http://localhost:$customerPort" -ForegroundColor Cyan
+Write-Host "    [Merchant Counter Desk]  : http://localhost:$merchantPort" -ForegroundColor Cyan
 Write-Host "    [Backend REST API]       : http://localhost:$backendPort/api" -ForegroundColor Cyan
-Write-Host "    [Customer Kiosk Web]     : http://localhost:$customerPort" -ForegroundColor Cyan
-Write-Host "    [Merchant Desktop Desk]  : http://localhost:$merchantPort" -ForegroundColor Cyan
 Write-Host "    [Backend Health Endpoint]: http://localhost:$backendPort/health" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Persistent Datastore Location:" -ForegroundColor White
+Write-Host "  Persistent Datastore Root:" -ForegroundColor White
 Write-Host "    $dataDir" -ForegroundColor Gray
 Write-Host ""
 
 $launch = Read-Host "  Would you like to launch AutoPrint services now? [Y/N] (Default: N)"
 if ($launch -match "^[Yy]") {
-    Start-Process cmd.exe -ArgumentList "/c `"$installDir\scripts\start-all.cmd`""
+    Start-Process cmd.exe -ArgumentList "/c `"$installDir\scripts\start-autoprint.cmd`""
 }
 
 Write-Host ""

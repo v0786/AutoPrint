@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { CustomerAccessBanner } from './CustomerAccessBanner';
 import {
   PrintJob,
   JobStatus,
@@ -192,6 +193,9 @@ export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Live Customer Portal & Dynamic QR Standee Banner */}
+      <CustomerAccessBanner />
+
       {/* Spotlight Card: Live Spooling / Active Job */}
       {currentActiveJob ? (
         <section className="bg-white rounded-3xl shadow-sm border border-blue-100 p-6 sm:p-7 relative overflow-hidden transition-all duration-200">

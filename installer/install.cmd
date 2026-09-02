@@ -19,17 +19,16 @@ echo.
 echo   [1] Fresh Installation           - Clean system setup, directory initialization, build ^& test
 echo   [2] Upgrade Existing             - Backup current state, update dependencies, rebuild
 echo   [3] Repair Installation          - Verify and rebuild corrupted or missing application components
-echo   [4] Reorganize Project           - Establish clean apps/ vs datastore/ structure
-echo   [5] Backup Datastore             - Create a standalone timestamped backup of database ^& uploads
-echo   [6] Safe Uninstaller             - Remove builds with optional datastore preservation
+echo   [4] Backup Datastore             - Create a standalone timestamped backup of database ^& uploads
+echo   [5] Safe Uninstaller             - Remove builds with optional datastore preservation
 echo   [P] Preview / Dry-Run            - Inspect actions without modifying disk
-echo   [7] Exit
+echo   [6] Exit
 echo.
-set /p "INSTALL_MODE=Select option [1-7 or P]: "
+set /p "INSTALL_MODE=Select option [1-6 or P]: "
 
-if /i "%INSTALL_MODE%"=="7" goto :exit_installer
-if /i "%INSTALL_MODE%"=="5" goto :run_backup_only
-if /i "%INSTALL_MODE%"=="6" goto :run_uninstall
+if /i "%INSTALL_MODE%"=="6" goto :exit_installer
+if /i "%INSTALL_MODE%"=="4" goto :run_backup_only
+if /i "%INSTALL_MODE%"=="5" goto :run_uninstall
 if /i "%INSTALL_MODE%"=="3" goto :run_repair
 if /i "%INSTALL_MODE%"=="P" goto :run_dry_run
 
@@ -48,14 +47,14 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 :: ============================================================================
-:: STEP 2: CONFIGURATION PARAMETERS
+:: STEP 2: CONFIGURATION & PORT ALLOCATION
 :: ============================================================================
 call "%LIB_DIR%\common.cmd" :print_step "2" "Configuration & Port Allocation"
 
 echo Default Configuration:
-echo   - Backend REST API Port   : 4100
-echo   - Customer Web Kiosk Port : 3000
-echo   - Merchant Desktop Port   : 3001
+echo   - Backend REST API Port   : 5000
+echo   - Merchant Desktop Port   : 6000
+echo   - Customer Web Kiosk Port : 7000
 echo   - Datastore Directory     : %PROJECT_ROOT%\datastore
 echo.
 
@@ -63,26 +62,47 @@ set "PROMPT_RESULT=Y"
 call "%LIB_DIR%\common.cmd" :prompt_yn "Use standard default port and datastore configuration?" "Y"
 
 if /i "!PROMPT_RESULT!"=="N" (
-    set /p "CUSTOM_API_PORT=Enter Backend API Port [Default 4100]: "
-    if "!CUSTOM_API_PORT!"=="" set "CUSTOM_API_PORT=4100"
+    set /p "CUSTOM_API_PORT=Enter Backend API Port [Default 5000]: "
+    if "!CUSTOM_API_PORT!"=="" set "CUSTOM_API_PORT=5000"
     
+    set /p "CUSTOM_MERCHANT_PORT=Enter Merchant Desktop Port [Default 6000]: "
+    if "!CUSTOM_MERCHANT_PORT!"=="" set "CUSTOM_MERCHANT_PORT=6000"
+
+    set /p "CUSTOM_CUSTOMER_PORT=Enter Customer Kiosk Port [Default 7000]: "
+    if "!CUSTOM_CUSTOMER_PORT!"=="" set "CUSTOM_CUSTOMER_PORT=7000"
+
     set /p "CUSTOM_DATA_DIR=Enter Datastore Directory [Default %PROJECT_ROOT%\datastore]: "
     if "!CUSTOM_DATA_DIR!"=="" set "CUSTOM_DATA_DIR=%PROJECT_ROOT%\datastore"
 ) else (
-    set "CUSTOM_API_PORT=4100"
+    set "CUSTOM_API_PORT=5000"
+    set "CUSTOM_MERCHANT_PORT=6000"
+    set "CUSTOM_CUSTOMER_PORT=7000"
     set "CUSTOM_DATA_DIR=%PROJECT_ROOT%\datastore"
 )
 
-:: Generate .env if not present
-if not exist "%PROJECT_ROOT%\.env" (
-    copy "%PROJECT_ROOT%\.env.example" "%PROJECT_ROOT%\.env" >nul 2>&1
-    call "%LIB_DIR%\common.cmd" :success_msg "Created production .env from .env.example."
+:: ============================================================================
+:: STEP 3: PAGEKITE INTERNET ACCESS
+:: ============================================================================
+call "%LIB_DIR%\common.cmd" :print_step "3" "Customer Internet Access & PageKite Ingress"
+
+echo PageKite enables customers to scan your QR code and access the kiosk
+echo from mobile data (4G/5G) or foreign Wi-Fi without router port-forwarding.
+echo.
+set "PAGEKITE_ENABLE=Y"
+call "%LIB_DIR%\common.cmd" :prompt_yn "Enable customer Internet access through PageKite?" "Y"
+set "PAGEKITE_ENABLE=!PROMPT_RESULT!"
+
+set "PAGEKITE_NAME=quickprint-kiosk"
+if /i "!PAGEKITE_ENABLE!"=="Y" (
+    set /p "PAGEKITE_NAME=Enter PageKite Subdomain (e.g. quickprint-delhi): "
+    if "!PAGEKITE_NAME!"=="" set "PAGEKITE_NAME=autoprint-kiosk"
+    echo Configured Public URL: https://!PAGEKITE_NAME!.pagekite.me
 )
 
 :: ============================================================================
-:: STEP 3: BACKUP BEFORE PROCEEDING
+:: STEP 4: BACKUP BEFORE PROCEEDING
 :: ============================================================================
-call "%LIB_DIR%\common.cmd" :print_step "3" "Safety Backup Creation"
+call "%LIB_DIR%\common.cmd" :print_step "4" "Safety Backup Creation"
 
 set "PROMPT_RESULT=Y"
 call "%LIB_DIR%\common.cmd" :prompt_yn "Create automated timestamped backup before continuing?" "Y"
@@ -91,129 +111,114 @@ if /i "!PROMPT_RESULT!"=="Y" (
 )
 
 :: ============================================================================
-:: STEP 4: DATASTORE DIRECTORIES
+:: STEP 5: DATASTORE DIRECTORIES
 :: ============================================================================
-call "%LIB_DIR%\common.cmd" :print_step "4" "Datastore Directory Initialization"
+call "%LIB_DIR%\common.cmd" :print_step "5" "Datastore Directory Initialization"
 
-set "PROMPT_RESULT=Y"
-call "%LIB_DIR%\common.cmd" :prompt_yn "Initialize required datastore folders in !CUSTOM_DATA_DIR!?" "Y"
+if not exist "%PROJECT_ROOT%\datastore\config" mkdir "%PROJECT_ROOT%\datastore\config" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\database" mkdir "%PROJECT_ROOT%\datastore\database" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\customers" mkdir "%PROJECT_ROOT%\datastore\customers" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\merchants" mkdir "%PROJECT_ROOT%\datastore\merchants" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\documents\incoming" mkdir "%PROJECT_ROOT%\datastore\documents\incoming" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\documents\processing" mkdir "%PROJECT_ROOT%\datastore\documents\processing" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\documents\completed" mkdir "%PROJECT_ROOT%\datastore\documents\completed" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\documents\failed" mkdir "%PROJECT_ROOT%\datastore\documents\failed" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\print-queue" mkdir "%PROJECT_ROOT%\datastore\print-queue" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\audit-logs" mkdir "%PROJECT_ROOT%\datastore\audit-logs" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\generated\qr" mkdir "%PROJECT_ROOT%\datastore\generated\qr" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\generated\watermarked" mkdir "%PROJECT_ROOT%\datastore\generated\watermarked" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\generated\receipts" mkdir "%PROJECT_ROOT%\datastore\generated\receipts" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\runtime" mkdir "%PROJECT_ROOT%\datastore\runtime" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\backups" mkdir "%PROJECT_ROOT%\datastore\backups" >nul 2>&1
+if not exist "%PROJECT_ROOT%\datastore\temp" mkdir "%PROJECT_ROOT%\datastore\temp" >nul 2>&1
+if not exist "%PROJECT_ROOT%\runtime\logs" mkdir "%PROJECT_ROOT%\runtime\logs" >nul 2>&1
+if not exist "%PROJECT_ROOT%\runtime\pid" mkdir "%PROJECT_ROOT%\runtime\pid" >nul 2>&1
 
-if /i "!PROMPT_RESULT!"=="Y" (
-    if not exist "%PROJECT_ROOT%\datastore\customer\uploads" mkdir "%PROJECT_ROOT%\datastore\customer\uploads" >nul 2>&1
-    if not exist "%PROJECT_ROOT%\datastore\customer\documents" mkdir "%PROJECT_ROOT%\datastore\customer\documents" >nul 2>&1
-    if not exist "%PROJECT_ROOT%\datastore\merchant\jobs" mkdir "%PROJECT_ROOT%\datastore\merchant\jobs" >nul 2>&1
-    if not exist "%PROJECT_ROOT%\datastore\backend\database" mkdir "%PROJECT_ROOT%\datastore\backend\database" >nul 2>&1
-    if not exist "%PROJECT_ROOT%\datastore\backend\logs" mkdir "%PROJECT_ROOT%\datastore\backend\logs" >nul 2>&1
-    if not exist "%PROJECT_ROOT%\datastore\backend\audit" mkdir "%PROJECT_ROOT%\datastore\backend\audit" >nul 2>&1
-    if not exist "%PROJECT_ROOT%\datastore\backups" mkdir "%PROJECT_ROOT%\datastore\backups" >nul 2>&1
-    call "%LIB_DIR%\common.cmd" :success_msg "Datastore directories initialized."
+call "%LIB_DIR%\common.cmd" :success_msg "Datastore directories initialized."
+
+:: Generate .env
+(
+echo PORT=!CUSTOM_API_PORT!
+echo MERCHANT_PORT=!CUSTOM_MERCHANT_PORT!
+echo CUSTOMER_PORT=!CUSTOM_CUSTOMER_PORT!
+echo NODE_ENV=development
+echo API_PREFIX=/api
+echo MAX_DIGITAL_ATTEMPTS=3
+echo HMAC_SECRET=AP_VERIFY_HMAC_SECURE_2026_CHANGE_THIS_IN_PRODUCTION
+echo CORS_ORIGIN=http://localhost:!CUSTOM_CUSTOMER_PORT!,http://localhost:!CUSTOM_MERCHANT_PORT!,http://localhost:3000,http://localhost:3001,http://localhost:5000,http://localhost:6000,http://localhost:7000,https://!PAGEKITE_NAME!.pagekite.me
+echo CURRENCY=INR
+echo MAX_FILE_SIZE_MB=50
+echo AUTOPRINT_DATA_DIR=%PROJECT_ROOT%\datastore
+echo PAGEKITE_ENABLED=!PAGEKITE_ENABLE!
+echo PAGEKITE_NAME=!PAGEKITE_NAME!
+echo PAGEKITE_DOMAIN=pagekite.me
+echo CUSTOMER_PUBLIC_URL=https://!PAGEKITE_NAME!.pagekite.me
+) > "%PROJECT_ROOT%\.env"
+
+call "%LIB_DIR%\common.cmd" :success_msg "Saved runtime configuration to .env"
+
+:: ============================================================================
+:: STEP 6: DEPENDENCIES INSTALLATION
+:: ============================================================================
+call "%LIB_DIR%\common.cmd" :print_step "6" "Installing Dependencies"
+
+echo   Installing root and component dependencies...
+cd /d "%PROJECT_ROOT%"
+call npm run install:all
+call "%LIB_DIR%\common.cmd" :success_msg "All dependencies installed."
+
+:: ============================================================================
+:: STEP 7: APPLICATION BUILDS
+:: ============================================================================
+call "%LIB_DIR%\common.cmd" :print_step "7" "Building Applications"
+
+cd /d "%PROJECT_ROOT%"
+call npm run build:all
+if %ERRORLEVEL% NEQ 0 (
+    call "%LIB_DIR%\common.cmd" :error_msg "Application build failed."
+    goto :installer_failed
 )
+call "%LIB_DIR%\common.cmd" :success_msg "All applications built successfully."
 
 :: ============================================================================
-:: STEP 5: DEPENDENCIES INSTALLATION
+:: STEP 8: AUTOMATED TESTS VERIFICATION
 :: ============================================================================
-call "%LIB_DIR%\common.cmd" :print_step "5" "Installing Dependencies"
+call "%LIB_DIR%\common.cmd" :print_step "8" "Running Verification Tests"
 
-set "PROMPT_RESULT=Y"
-call "%LIB_DIR%\common.cmd" :prompt_yn "Run npm dependency installation across all components?" "Y"
-
-if /i "!PROMPT_RESULT!"=="Y" (
-    echo   Installing backend dependencies...
-    cd /d "%PROJECT_ROOT%\apps\backend"
-    call npm install
-    
-    echo   Installing customer kiosk dependencies...
-    cd /d "%PROJECT_ROOT%\apps\customer-web"
-    call npm install
-    
-    echo   Installing merchant desktop dependencies...
-    cd /d "%PROJECT_ROOT%\apps\merchant-desktop"
-    call npm install
-    
-    cd /d "%PROJECT_ROOT%"
-    call "%LIB_DIR%\common.cmd" :success_msg "All dependencies installed."
+cd /d "%PROJECT_ROOT%"
+call npm run test:backend
+if %ERRORLEVEL% NEQ 0 (
+    call "%LIB_DIR%\common.cmd" :error_msg "Automated tests reported failures."
+    goto :installer_failed
 )
+call "%LIB_DIR%\common.cmd" :success_msg "All 11 automated test suites passed successfully."
 
 :: ============================================================================
-:: STEP 6: APPLICATION BUILDS
+:: STEP 9: COMPLETION & LAUNCH
 :: ============================================================================
-call "%LIB_DIR%\common.cmd" :print_step "6" "Building Applications"
-
-set "PROMPT_RESULT=Y"
-call "%LIB_DIR%\common.cmd" :prompt_yn "Build backend, customer-web, and merchant-desktop for production?" "Y"
-
-if /i "!PROMPT_RESULT!"=="Y" (
-    echo   Compiling backend (TypeScript)...
-    cd /d "%PROJECT_ROOT%\apps\backend"
-    call npm run build
-    if %ERRORLEVEL% NEQ 0 (
-        call "%LIB_DIR%\common.cmd" :error_msg "Backend build failed."
-        goto :installer_failed
-    )
-
-    echo   Building customer web interface (Vite)...
-    cd /d "%PROJECT_ROOT%\apps\customer-web"
-    call npm run build
-    if %ERRORLEVEL% NEQ 0 (
-        call "%LIB_DIR%\common.cmd" :error_msg "Customer Web build failed."
-        goto :installer_failed
-    )
-
-    echo   Building merchant desktop interface (Vite)...
-    cd /d "%PROJECT_ROOT%\apps\merchant-desktop"
-    call npm run build
-    if %ERRORLEVEL% NEQ 0 (
-        call "%LIB_DIR%\common.cmd" :error_msg "Merchant Desktop build failed."
-        goto :installer_failed
-    )
-
-    cd /d "%PROJECT_ROOT%"
-    call "%LIB_DIR%\common.cmd" :success_msg "All applications built successfully."
-)
-
-:: ============================================================================
-:: STEP 7: AUTOMATED TESTS VERIFICATION
-:: ============================================================================
-call "%LIB_DIR%\common.cmd" :print_step "7" "Running Verification Tests"
-
-set "PROMPT_RESULT=Y"
-call "%LIB_DIR%\common.cmd" :prompt_yn "Execute automated test suite to verify system integrity?" "Y"
-
-if /i "!PROMPT_RESULT!"=="Y" (
-    cd /d "%PROJECT_ROOT%\apps\backend"
-    call npm test
-    if %ERRORLEVEL% NEQ 0 (
-        call "%LIB_DIR%\common.cmd" :error_msg "Automated tests reported failures."
-        goto :installer_failed
-    )
-    cd /d "%PROJECT_ROOT%"
-    call "%LIB_DIR%\common.cmd" :success_msg "All 11 automated test suites passed successfully."
-)
-
-:: ============================================================================
-:: STEP 8: COMPLETION & LAUNCH
-:: ============================================================================
-call "%LIB_DIR%\common.cmd" :print_step "8" "Installation Complete"
+call "%LIB_DIR%\common.cmd" :print_step "9" "Installation Complete"
 
 echo ===============================================================================
 echo   AUTOPRINT INSTALLATION COMPLETED SUCCESSFULLY!
 echo ===============================================================================
 echo.
-echo   Application Components:
-echo     [Backend REST API]       : http://localhost:4100/api
-echo     [Customer Kiosk Web]     : http://localhost:3000
-echo     [Merchant Desktop Desk]  : http://localhost:3001
+echo   Configured Access Endpoints:
+echo     [Customer Mobile Portal] : http://localhost:!CUSTOM_CUSTOMER_PORT!
+if /i "!PAGEKITE_ENABLE!"=="Y" echo     [Public Customer URL]    : https://!PAGEKITE_NAME!.pagekite.me
+echo     [Merchant Counter Desk]  : http://localhost:!CUSTOM_MERCHANT_PORT!
+echo     [Backend REST API]       : http://localhost:!CUSTOM_API_PORT!/api
+echo     [Backend Health Check]   : http://localhost:!CUSTOM_API_PORT!/health
 echo     [Persistent Datastore]   : %PROJECT_ROOT%\datastore
 echo.
-echo   To start services manually:
-echo     scripts\start-all.cmd
+echo   To start services:
+echo     scripts\start-autoprint.cmd
 echo.
 
 set "PROMPT_RESULT=N"
 call "%LIB_DIR%\common.cmd" :prompt_yn "Would you like to launch AutoPrint services now?" "N"
 
 if /i "!PROMPT_RESULT!"=="Y" (
-    call "%PROJECT_ROOT%\scripts\start-all.cmd"
+    call "%PROJECT_ROOT%\scripts\start-autoprint.cmd"
 )
 
 goto :exit_installer
@@ -228,18 +233,10 @@ echo   PREVIEW / DRY-RUN MODE (No disk changes will be performed)
 echo ===============================================================================
 echo.
 echo   [DIRECTORY TARGETS]
-echo     Source Apps : %PROJECT_ROOT%\apps\ (backend, customer-web, merchant-desktop)
-echo     Datastore   : %PROJECT_ROOT%\datastore\ (database, uploads, logs, audit)
-echo     Connectors  : %PROJECT_ROOT%\connectors\ (printer, payment, storage)
+echo     Source Apps : %PROJECT_ROOT%\app\ (backend, customer-web, merchant-desktop)
+echo     Datastore   : %PROJECT_ROOT%\datastore\ (database, documents, generated, audit)
+echo     Connectors  : %PROJECT_ROOT%\app\connectors\ (printer, payment, storage, tunnel)
 echo     Assets      : %PROJECT_ROOT%\assets\ (app-icon.png, logo.png)
-echo.
-echo   [ACTIONS TO BE PERFORMED IN REAL RUN]
-echo     1. Verify Node.js v18+ and npm in system PATH.
-echo     2. Initialize persistent datastore directories.
-echo     3. Copy configuration from .env.example to .env.
-echo     4. Install npm dependencies across all 3 components.
-echo     5. Compile backend TypeScript and build Vite frontends.
-echo     6. Execute automated backend test suite (11 test cases).
 echo.
 pause
 goto :exit_installer
@@ -262,7 +259,7 @@ goto :exit_installer
 
 :installer_failed
 echo.
-call "%LIB_DIR%\common.cmd" :error_msg "Installer encountered an error. Check logs in installer\logs\."
+call "%LIB_DIR%\common.cmd" :error_msg "Installer encountered an error. Check logs in runtime\logs\."
 pause
 exit /b 1
 

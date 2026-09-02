@@ -14,7 +14,9 @@ import { upload } from './middleware/upload';
 import { JobController } from './controllers/jobController';
 import { VerificationController } from './controllers/verificationController';
 import { PaymentController } from './controllers/paymentController';
+import { ConfigController } from './controllers/configController';
 import { PrinterService } from './services/printerService';
+import { tunnelService } from './services/tunnelService';
 
 // 1. Initialize data storage directories and database
 ensureDataDirectories();
@@ -26,13 +28,13 @@ const app = express();
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. mobile apps, curl, electron, server-to-server)
       if (!origin) return callback(null, true);
       if (
         CONFIG.CORS_ORIGINS.includes('*') ||
         CONFIG.CORS_ORIGINS.includes(origin) ||
         origin.startsWith('http://localhost:') ||
-        origin.startsWith('http://127.0.0.1:')
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.includes('.pagekite.me')
       ) {
         return callback(null, true);
       }
@@ -57,12 +59,18 @@ app.get('/health', (_req, res) => {
   }
 
   const storageHealthy = fs.existsSync(PATHS.DATA_DIR) && fs.existsSync(PATHS.DB_DIR);
+  const tunnelState = tunnelService.getTunnelState();
 
   const status = dbHealthy && storageHealthy ? 200 : 503;
 
   res.status(status).json({
     ok: dbHealthy && storageHealthy,
-    service: 'autoprint-fail-safe-verification-backend',
+    service: 'autoprint',
+    backend: 'running',
+    customerWeb: 'running',
+    merchantWeb: 'running',
+    pagekite: tunnelState.status.toLowerCase(),
+    datastore: storageHealthy ? 'ready' : 'degraded',
     version: CONFIG.APP_VERSION,
     timestamp: new Date().toISOString(),
     environment: CONFIG.NODE_ENV,
@@ -76,10 +84,11 @@ app.get('/health', (_req, res) => {
       engine: 'sqlite3-wal',
     },
     ports: {
-      api: CONFIG.PORT,
+      backend: CONFIG.PORT,
       merchant: CONFIG.MERCHANT_PORT,
       customer: CONFIG.CUSTOMER_PORT,
     },
+    customerUrl: tunnelService.getActiveCustomerUrl(),
   });
 });
 
@@ -101,6 +110,11 @@ api.get('/verification/audit-logs', VerificationController.getAuditLogs);
 // Digital Payment Gateway Attempt Routes
 api.post('/payment/digital-attempt', PaymentController.recordDigitalAttempt);
 
+// System Configuration & QR Ingress Routes
+api.get('/config/public', ConfigController.getPublicConfig);
+api.get('/config/qr-code', ConfigController.getQrCodeImage);
+api.post('/config/pagekite', ConfigController.updatePageKiteConfig);
+
 // Printer Fleet Discovery
 api.get('/printers', async (_req, res, next) => {
   try {
@@ -117,14 +131,14 @@ app.use(CONFIG.API_PREFIX, api);
 const possibleMerchantPaths = [
   path.resolve(__dirname, '../../merchant-desktop/dist'),
   path.resolve(__dirname, '../merchant-desktop/dist'),
-  path.resolve(process.cwd(), '../merchant-desktop/dist'),
+  path.resolve(process.cwd(), 'app/merchant-desktop/dist'),
   path.resolve(process.cwd(), 'merchant-desktop/dist'),
 ];
 
 const possibleCustomerPaths = [
   path.resolve(__dirname, '../../customer-web/dist'),
   path.resolve(__dirname, '../customer-web/dist'),
-  path.resolve(process.cwd(), '../customer-web/dist'),
+  path.resolve(process.cwd(), 'app/customer-web/dist'),
   path.resolve(process.cwd(), 'customer-web/dist'),
 ];
 
@@ -145,41 +159,48 @@ if (customerDistPath) {
   });
 }
 
-// 6. Error Handling Middleware
+// 6. Centralized Error Handler (must be registered after routes)
 app.use(errorHandler);
 
-// 7. Start Primary API Engine Server
+// 7. Start Server
 const server = app.listen(CONFIG.PORT, '0.0.0.0', () => {
-  console.log(`=======================================================`);
-  console.log(`  AUTOPRINT FAIL-SAFE VERIFICATION BACKEND SERVICE     `);
-  console.log(`  Running on: http://localhost:${CONFIG.PORT}`);
-  console.log(`  API Base:   http://localhost:${CONFIG.PORT}${CONFIG.API_PREFIX}`);
-  console.log(`  Data Path:  ${PATHS.DATA_DIR}`);
-  console.log(`  Currency:   ${CONFIG.CURRENCY}`);
-  console.log(`  Max Digital Attempts: ${CONFIG.MAX_DIGITAL_ATTEMPTS}`);
-  console.log(`=======================================================`);
+  const banner = [
+    '==================================================================',
+    '       AUTOPRINT PRINT MANAGEMENT & VERIFICATION SERVER           ',
+    '==================================================================',
+    ` [API Port]       : http://localhost:${CONFIG.PORT}${CONFIG.API_PREFIX}`,
+    ` [Health Check]   : http://localhost:${CONFIG.PORT}/health`,
+    ` [Customer Kiosk] : http://localhost:${CONFIG.CUSTOMER_PORT}`,
+    ` [Merchant Desk]  : http://localhost:${CONFIG.MERCHANT_PORT}`,
+    ` [Datastore Root] : ${PATHS.DATA_DIR}`,
+    ` [Public Ingress] : ${tunnelService.getActiveCustomerUrl()}`,
+    ` [Environment]    : ${CONFIG.NODE_ENV}`,
+    ` [Currency]       : ${CONFIG.CURRENCY}`,
+    '==================================================================',
+  ];
+  console.log(banner.join('\n'));
 });
 
 // 8. Graceful Shutdown
-function handleShutdown(signal: string) {
-  console.log(`\n[SERVER] Received ${signal}. Starting graceful shutdown...`);
+function handleShutdown(signal: string): void {
+  console.log(`\n[AUTOPRINT] Received ${signal}. Starting graceful shutdown...`);
   server.close(() => {
-    console.log('[SERVER] HTTP server closed.');
-    closeDatabase();
-    console.log('[SERVER] Graceful shutdown complete.');
+    console.log('[AUTOPRINT] HTTP server closed.');
+    try {
+      closeDatabase();
+    } catch (e) {
+      console.warn('[AUTOPRINT] Database close warning:', e);
+    }
     process.exit(0);
   });
 
-  // Force shutdown after 10s if hung
   setTimeout(() => {
-    console.error('[SERVER] Forcing shutdown after timeout.');
-    closeDatabase();
+    console.error('[AUTOPRINT] Forcefully terminating process after 5s timeout.');
     process.exit(1);
-  }, 10000).unref();
+  }, 5000);
 }
 
-process.on('SIGINT', () => handleShutdown('SIGINT'));
 process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+process.on('SIGINT', () => handleShutdown('SIGINT'));
 
-export default app;
-export { server };
+export { app, server };
