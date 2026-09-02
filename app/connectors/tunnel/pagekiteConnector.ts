@@ -1,7 +1,7 @@
 /**
  * PageKite Reverse Proxy & Public Tunnel Connector
  * Manages outbound tunnel connection exposing local Customer Web (:7000)
- * to a secure public URL (https://SHOPNAME.pagekite.me) without router configuration.
+ * to a secure public URL (https://autoprint.pagekite.me) without router configuration.
  */
 
 import { spawn, ChildProcess } from 'child_process';
@@ -39,20 +39,19 @@ export class PageKiteConnector extends EventEmitter {
     super();
     this.config = {
       ...config,
+      subdomain: config.subdomain || 'autoprint',
       domain: config.domain || 'pagekite.me',
       localPort: config.localPort || 7000,
     };
 
-    const publicUrl = this.config.enabled && this.config.subdomain
-      ? `https://${this.config.subdomain.toLowerCase().trim()}.${this.config.domain}`
-      : null;
+    const publicUrl = `https://${this.config.subdomain.toLowerCase().trim()}.${this.config.domain}`;
 
     this.state = {
       status: this.config.enabled ? 'CONNECTING' : 'DISABLED',
-      publicUrl,
-      subdomain: this.config.subdomain || '',
-      domain: this.config.domain || 'pagekite.me',
-      localPort: this.config.localPort || 7000,
+      publicUrl: this.config.enabled ? publicUrl : null,
+      subdomain: this.config.subdomain,
+      domain: this.config.domain,
+      localPort: this.config.localPort,
       lastConnectedAt: null,
       error: null,
     };
@@ -109,12 +108,26 @@ export class PageKiteConnector extends EventEmitter {
     const kiteName = `${this.config.subdomain.toLowerCase().trim()}.${this.config.domain}`;
     const localPort = this.config.localPort;
 
-    // Find executable or fallback to python / pagekite.py
-    const execCmd = this.config.executablePath || 'pagekite';
-    const args = [String(localPort), kiteName];
+    // Locate pagekite.py script
+    const possibleScriptPaths = [
+      path.resolve(__dirname, 'pagekite.py'),
+      path.resolve(process.cwd(), 'scripts/pagekite.py'),
+      path.resolve(process.cwd(), 'app/connectors/tunnel/pagekite.py'),
+      path.resolve(process.cwd(), 'app/backend/src/connectors/pagekite.py'),
+    ];
+    const scriptPath = possibleScriptPaths.find((p) => fs.existsSync(p));
+
+    let execCmd = 'python';
+    let args: string[] = ['--nossl'];
 
     if (this.config.secret) {
-      args.push(this.config.secret);
+      args.push(`--service_cfg=${kiteName}:${localPort}:${this.config.secret}`);
+    }
+    args.push(String(localPort));
+    args.push(kiteName);
+
+    if (scriptPath) {
+      args.unshift(scriptPath);
     }
 
     try {
@@ -125,7 +138,7 @@ export class PageKiteConnector extends EventEmitter {
 
       this.process.stdout?.on('data', (data: Buffer) => {
         const text = data.toString();
-        if (text.includes('kites are flying') || text.includes('Connected') || text.includes('Flying')) {
+        if (text.includes('kites are flying') || text.includes('Connected') || text.includes('Flying') || text.includes('FE=')) {
           this.state.status = 'CONNECTED';
           this.state.lastConnectedAt = new Date().toISOString();
           this.state.error = null;
@@ -136,7 +149,7 @@ export class PageKiteConnector extends EventEmitter {
 
       this.process.stderr?.on('data', (data: Buffer) => {
         const errText = data.toString();
-        if (errText.toLowerCase().includes('error') || errText.toLowerCase().includes('fail')) {
+        if (errText.toLowerCase().includes('error') && !errText.includes('signal handler')) {
           this.state.error = errText.trim();
           this.emit('error', this.state.error);
         }
