@@ -1,42 +1,62 @@
-node_modules/
-build/
-dist/
-coverage/
-.DS_Store
-*.log
-.env*
-!.env.example
-
-data/
-# ================================================================
-# QRPRINT - LOCAL / GENERATED FILES
-# ================================================================
 # Dependencies
+node_modules/
 **/node_modules/
-# Build output
+
+# Build Output
+dist/
 **/dist/
-.next/
-**/.next/
+build/
+**/build/
 out/
 release/
-# Environment secrets
+.next/
+
+# Environment Secrets
+.env
 .env.local
 .env.*.local
-# Local databases
+!.env.example
+
+# Local Databases & SQLite
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
-# Electron generated files
-merchant/release/
-merchant/out/
-# Audit and backup artifacts
-audit-reports/
-audit-suite-v2/
-backups/
-# Logs
+
+# Datastore Persistent Data
+datastore/customer/uploads/*
+!datastore/customer/uploads/.gitkeep
+datastore/customer/documents/*
+!datastore/customer/documents/.gitkeep
+datastore/backend/database/*
+!datastore/backend/database/.gitkeep
+datastore/backend/audit/*
+!datastore/backend/audit/.gitkeep
+datastore/backend/logs/*
+!datastore/backend/logs/.gitkeep
+datastore/backups/*
+!datastore/backups/.gitkeep
+datastore/temp/*
+!datastore/temp/.gitkeep
+
+# Runtime Ephemeral Data
+runtime/logs/*
+!runtime/logs/.gitkeep
+runtime/temp/*
+!runtime/temp/.gitkeep
+runtime/pid/*
+!runtime/pid/.gitkeep
+runtime/status/*
+!runtime/status/.gitkeep
+
+# System & Editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
-# OS files
-Thumbs.db
-desktop.ini
+.vscode/
+.idea/

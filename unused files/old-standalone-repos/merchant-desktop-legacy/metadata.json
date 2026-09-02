@@ -1,0 +1,6 @@
+{
+  "name": "Merchant Desktop Print Job Manager",
+  "description": "Real-time desktop print queue manager and spooler bridge for single-PC merchant environments with OS spooler integration, receipt & label dispatch, and silent print execution.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

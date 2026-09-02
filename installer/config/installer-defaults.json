@@ -1,0 +1,21 @@
+{
+  "appName": "AutoPrint / QRPrint",
+  "version": "2.0.0",
+  "ports": {
+    "backendApi": 4100,
+    "customerWeb": 3000,
+    "merchantDesktop": 3001
+  },
+  "directories": {
+    "datastore": "datastore",
+    "backups": "datastore/backups",
+    "uploads": "datastore/customer/uploads",
+    "database": "datastore/backend/database",
+    "logs": "datastore/backend/logs"
+  },
+  "defaults": {
+    "currency": "INR",
+    "environment": "development",
+    "maxDigitalAttempts": 3
+  }
+}

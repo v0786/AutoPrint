@@ -1,0 +1,47 @@
+{
+  "name": "qrprint-merchant",
+  "private": true,
+  "version": "1.0.0",
+  "description": "QRPrint Merchant - Local desktop application for print store management",
+  "main": "dist/electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "server": "tsx server.ts",
+    "electron": "electron .",
+    "electron-dev": "NODE_ENV=development electron .",
+    "build": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "package": "electron-builder",
+    "package:win": "electron-builder --win",
+    "package:portable": "electron-builder --win portable",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/express": "^5.0.0",
+    "better-sqlite3": "^12.11.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "lucide-react": "^0.525.0",
+    "postcss": "^8.5.26",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@types/electron": "^1.6.10",
+    "@types/node": "^20.14.14",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^5.0.4",
+    "cross-env": "^10.1.0",
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.3"
+  }
+}

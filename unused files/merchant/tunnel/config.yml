@@ -1,0 +1,25 @@
+﻿# =====================================================================
+# AUTOPRINT CLOUDFLARE TUNNEL
+# SINGLE STORE CONFIGURATION
+# =====================================================================
+
+# IMPORTANT:
+#
+# After running:
+#
+#   cloudflared tunnel create autoprint-merchant
+#
+# Replace the values below with the generated tunnel ID and credentials.
+
+tunnel: REPLACE_WITH_TUNNEL_ID
+
+credentials-file: C:\Users\sonku\.cloudflared\REPLACE_WITH_TUNNEL_ID.json
+
+ingress:
+
+  # Merchant API exposed securely through Cloudflare.
+  - hostname: merchant.REPLACE_WITH_YOUR_DOMAIN.com
+    service: http://localhost:4100
+
+  # Return 404 for all unmatched requests.
+  - service: http_status:404

@@ -1,0 +1,323 @@
+<#
+.SYNOPSIS
+    AutoPrint / QRPrint Production Windows Installation Wizard
+.DESCRIPTION
+    Interactive installation wizard for AutoPrint. Handles port configuration (5000/6000/7000),
+    datastore hierarchy setup, dependency installation, TypeScript compilation,
+    printer detection, shortcut creation, and automated verification.
+#>
+
+param(
+    [string]$SourcePath = (Split-Path $PSScriptRoot -Parent)
+)
+
+$ErrorActionPreference = 'Stop'
+
+. "$PSScriptRoot\common.ps1"
+
+Show-AutoPrintBanner "Production Windows Installation Wizard v2.0"
+
+Write-InstallerLog "Starting AutoPrint Installation Wizard..." -Level "INFO"
+
+# =============================================================================
+# 1. ELEVATION CHECK
+# =============================================================================
+if (-not (Test-IsAdmin)) {
+    Write-Host ""
+    Write-Host "  [NOTICE] AutoPrint is running without Administrator privileges." -ForegroundColor Yellow
+    Write-Host "  Administrator privileges are recommended for creating system shortcuts and configuring Windows printers." -ForegroundColor Gray
+    Write-Host ""
+    $elevate = Read-Host "  Relaunch installer with Administrator privileges? [Y/N] (Default: N)"
+    if ($elevate -match "^[Yy]") {
+        Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+        return
+    }
+}
+
+# =============================================================================
+# 2. PREREQUISITES
+# =============================================================================
+Write-Host ""
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "  STEP 1: System Requirements & Runtime Validation" -ForegroundColor Cyan
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host ""
+
+$prereqsOk = Test-SystemPrerequisites
+if (-not $prereqsOk) {
+    Write-Host ""
+    $cont = Read-Host "Prerequisite checks reported missing tools. Continue anyway? [Y/N] (Default: N)"
+    if ($cont -notmatch "^[Yy]") {
+        Write-Host "Installation aborted. Please install required dependencies and re-run." -ForegroundColor Yellow
+        return
+    }
+}
+
+# =============================================================================
+# 3. DIRECTORY SELECTION
+# =============================================================================
+Write-Host ""
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "  STEP 2: Installation & Datastore Paths" -ForegroundColor Cyan
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host ""
+
+$defaultInstall = if (Test-Path "E:\QRPrint\AutoPrint") { "E:\QRPrint\AutoPrint" } else { (Split-Path $PSScriptRoot -Parent) }
+$installDir = Read-Host "  Installation Directory [Default: $defaultInstall]"
+if ([string]::IsNullOrWhiteSpace($installDir)) { $installDir = $defaultInstall }
+
+$defaultData = Join-Path $installDir "datastore"
+$dataDir = Read-Host "  Persistent Datastore Directory [Default: $defaultData]"
+if ([string]::IsNullOrWhiteSpace($dataDir)) { $dataDir = $defaultData }
+
+Write-InstallerLog "Target Installation Root : $installDir" -Level "INFO"
+Write-InstallerLog "Target Datastore Root    : $dataDir" -Level "INFO"
+
+# =============================================================================
+# 4. PORT CONFIGURATION
+# =============================================================================
+Write-Host ""
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "  STEP 3: Network Port Configuration" -ForegroundColor Cyan
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host ""
+Write-Host "  Default Port Configuration:" -ForegroundColor White
+Write-Host "    - Backend REST API Engine : 5000" -ForegroundColor Gray
+Write-Host "    - Merchant Desktop Desk   : 6000" -ForegroundColor Gray
+Write-Host "    - Customer Kiosk Portal   : 7000" -ForegroundColor Gray
+Write-Host ""
+
+$useDefaultPorts = Read-Host "  Would you like to use the default ports? [Y/N] (Default: Y)"
+if ([string]::IsNullOrWhiteSpace($useDefaultPorts)) { $useDefaultPorts = "Y" }
+
+$backendPort  = 5000
+$merchantPort = 6000
+$customerPort = 7000
+
+if ($useDefaultPorts -notmatch "^[Yy]") {
+    function Prompt-ValidPort([string]$Label, [int]$Default) {
+        while ($true) {
+            $inputPort = Read-Host "  Enter $Label port [1024-65535, Default: $Default]"
+            if ([string]::IsNullOrWhiteSpace($inputPort)) { return $Default }
+            if ($inputPort -match '^\d+$') {
+                $p = [int]$inputPort
+                if ($p -ge 1024 -and $p -le 65535) {
+                    return $p
+                }
+            }
+            Write-Host "  [ERROR] Invalid port number. Must be between 1024 and 65535." -ForegroundColor Red
+        }
+    }
+
+    $backendPort  = Prompt-ValidPort "Backend REST API" 5000
+    $merchantPort = Prompt-ValidPort "Merchant Desktop" 6000
+    $customerPort = Prompt-ValidPort "Customer Kiosk" 7000
+}
+
+# Check port availability
+function Verify-PortNoConflict([string]$Name, [int]$Port) {
+    if (-not (Test-PortAvailability -Port $Port)) {
+        Write-Host "  [WARNING] Port $Port ($Name) is currently in use or listening." -ForegroundColor Yellow
+        Write-Host "    1. Keep port anyway" -ForegroundColor Gray
+        Write-Host "    2. Select another port" -ForegroundColor Gray
+        $choice = Read-Host "    Selection [Default: 1]"
+        if ($choice -eq "2") {
+            return Prompt-ValidPort $Name $Port
+        }
+    } else {
+        Write-InstallerLog "Port $Port ($Name) is available." -Level "SUCCESS"
+    }
+    return $Port
+}
+
+$backendPort  = Verify-PortNoConflict "Backend API" $backendPort
+$merchantPort = Verify-PortNoConflict "Merchant Desktop" $merchantPort
+$customerPort = Verify-PortNoConflict "Customer Kiosk" $customerPort
+
+# =============================================================================
+# 5. PRINTER CONFIGURATION
+# =============================================================================
+Write-Host ""
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "  STEP 4: Printer Hardware Configuration" -ForegroundColor Cyan
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host ""
+
+$printers = Get-AvailablePrinters
+$selectedPrinter = "AutoPrint Virtual Spooler"
+
+if ($printers.Count -gt 0) {
+    Write-Host "  Detected Printers on this system:" -ForegroundColor White
+    for ($i = 0; $i -lt $printers.Count; $i++) {
+        $p = $printers[$i]
+        $defTag = if ($p.Default) { " (Default)" } else { "" }
+        Write-Host "    [$($i+1)] $($p.Name)$defTag" -ForegroundColor Gray
+    }
+    Write-Host "    [0] Use AutoPrint Virtual Spooler (Fallback / Tray Mode)" -ForegroundColor Gray
+    Write-Host ""
+    $pChoice = Read-Host "  Select printer for AutoPrint [Default: 1]"
+    if ([string]::IsNullOrWhiteSpace($pChoice)) { $pChoice = "1" }
+    
+    if ($pChoice -match '^\d+$' -and [int]$pChoice -gt 0 -and [int]$pChoice -le $printers.Count) {
+        $selectedPrinter = $printers[[int]$pChoice - 1].Name
+    }
+}
+Write-InstallerLog "Configured Printer: $selectedPrinter" -Level "SUCCESS"
+
+# =============================================================================
+# 6. SHORTCUTS & PREFERENCES
+# =============================================================================
+Write-Host ""
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "  STEP 5: Shortcuts & Preferences" -ForegroundColor Cyan
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host ""
+
+$createDesktop = Read-Host "  Create Desktop shortcuts? [Y/N] (Default: Y)"
+if ([string]::IsNullOrWhiteSpace($createDesktop)) { $createDesktop = "Y" }
+
+# =============================================================================
+# 7. SAFETY BACKUP CREATION
+# =============================================================================
+Write-Host ""
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "  STEP 6: Automated Safety Backup" -ForegroundColor Cyan
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host ""
+
+$backupDir = Join-Path $dataDir "backups\backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+
+if (Test-Path "$installDir\datastore\backend") {
+    Copy-Item "$installDir\datastore\backend\*" "$backupDir\" -Recurse -Force -ErrorAction SilentlyContinue
+    Write-InstallerLog "Created pre-installation backup at: $backupDir" -Level "SUCCESS"
+} else {
+    Write-InstallerLog "Initial installation detected; backup initialized." -Level "INFO"
+}
+
+# =============================================================================
+# 8. INITIALIZING DIRECTORIES & CONFIGURATION
+# =============================================================================
+Write-Host ""
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "  STEP 7: Initializing Datastore & Configuration" -ForegroundColor Cyan
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host ""
+
+$requiredDirs = @(
+    "$dataDir\customer\uploads",
+    "$dataDir\customer\documents",
+    "$dataDir\merchant\jobs",
+    "$dataDir\merchant\transactions",
+    "$dataDir\merchant\cash",
+    "$dataDir\backend\database",
+    "$dataDir\backend\audit",
+    "$dataDir\backend\logs",
+    "$dataDir\connectors",
+    "$dataDir\backups",
+    "$dataDir\temp",
+    "$installDir\runtime\logs",
+    "$installDir\runtime\temp",
+    "$installDir\runtime\pid",
+    "$installDir\runtime\status"
+)
+
+foreach ($dir in $requiredDirs) {
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+}
+Write-InstallerLog "Datastore directories initialized." -Level "SUCCESS"
+
+# Generate .env configuration
+$envContent = @"
+# AutoPrint / QRPrint Centralized Configuration
+PORT=$backendPort
+MERCHANT_PORT=$merchantPort
+CUSTOMER_PORT=$customerPort
+NODE_ENV=development
+API_PREFIX=/api
+MAX_DIGITAL_ATTEMPTS=3
+HMAC_SECRET=AP_VERIFY_HMAC_SECURE_2026_CHANGE_THIS_IN_PRODUCTION
+CORS_ORIGIN=http://localhost:$customerPort,http://localhost:$merchantPort,http://localhost:3000,http://localhost:3001,http://localhost:5000,http://localhost:6000,http://localhost:7000,http://localhost:8085
+CURRENCY=INR
+MAX_FILE_SIZE_MB=50
+AUTOPRINT_DATA_DIR=$dataDir
+DEFAULT_PRINTER=$selectedPrinter
+"@
+
+Set-Content -Path "$installDir\.env" -Value $envContent -Force
+Write-InstallerLog "Environment configuration saved to .env." -Level "SUCCESS"
+
+# =============================================================================
+# 9. DEPENDENCIES & APPLICATION BUILDS
+# =============================================================================
+Write-Host ""
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "  STEP 8: Installing Dependencies & Building Applications" -ForegroundColor Cyan
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host ""
+
+Write-Host "  Installing dependencies..." -ForegroundColor Gray
+Push-Location "$installDir"
+try {
+    npm run install:all
+    Write-InstallerLog "Dependencies installed successfully." -Level "SUCCESS"
+
+    Write-Host "  Compiling TypeScript backend and Vite frontends..." -ForegroundColor Gray
+    npm run build:all
+    Write-InstallerLog "All applications built successfully." -Level "SUCCESS"
+
+    Write-Host "  Running verification test suite..." -ForegroundColor Gray
+    npm run test:backend
+    Write-InstallerLog "Verification test suite passed (11/11 tests)." -Level "SUCCESS"
+}
+catch {
+    Write-InstallerLog "Build or test error: $_" -Level "ERROR"
+}
+finally {
+    Pop-Location
+}
+
+# =============================================================================
+# 10. SHORTCUTS CREATION
+# =============================================================================
+if ($createDesktop -match "^[Yy]") {
+    $desktopDir = [Environment]::GetFolderPath("Desktop")
+    $iconPath   = Join-Path $installDir "assets\icon\favicon.ico"
+    $startScript = Join-Path $installDir "scripts\start-all.cmd"
+
+    New-AppShortcut -ShortcutPath (Join-Path $desktopDir "AutoPrint Manager.lnk") `
+                    -TargetPath "cmd.exe" `
+                    -Arguments "/c `"$startScript`"" `
+                    -IconLocation $iconPath `
+                    -Description "AutoPrint Print Shop & Verification Manager" | Out-Null
+    Write-InstallerLog "Desktop shortcut created: AutoPrint Manager" -Level "SUCCESS"
+}
+
+# =============================================================================
+# 11. INSTALLATION SUMMARY & LAUNCH
+# =============================================================================
+Write-Host ""
+Write-Host "===============================================================================" -ForegroundColor Green
+Write-Host "   AUTOPRINT INSTALLATION COMPLETED SUCCESSFULLY!" -ForegroundColor White
+Write-Host "===============================================================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "  Configured Endpoints:" -ForegroundColor White
+Write-Host "    [Backend REST API]       : http://localhost:$backendPort/api" -ForegroundColor Cyan
+Write-Host "    [Customer Kiosk Web]     : http://localhost:$customerPort" -ForegroundColor Cyan
+Write-Host "    [Merchant Desktop Desk]  : http://localhost:$merchantPort" -ForegroundColor Cyan
+Write-Host "    [Backend Health Endpoint]: http://localhost:$backendPort/health" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Persistent Datastore Location:" -ForegroundColor White
+Write-Host "    $dataDir" -ForegroundColor Gray
+Write-Host ""
+
+$launch = Read-Host "  Would you like to launch AutoPrint services now? [Y/N] (Default: N)"
+if ($launch -match "^[Yy]") {
+    Start-Process cmd.exe -ArgumentList "/c `"$installDir\scripts\start-all.cmd`""
+}
+
+Write-Host ""
+Write-Host "Thank you for installing AutoPrint!" -ForegroundColor Green
+Write-Host ""

@@ -1,83 +1,98 @@
-# QRPrint
+# AutoPrint / QRPrint — Automated Print Shop Management System
 
-QRPrint helps a print shop take document-printing orders. Store staff use the
-merchant app to manage orders and printers; customers can use the customer web
-page to submit a print request.
+![AutoPrint Logo](assets/icon/app-icon.png)
 
-You do not need programming experience to install the merchant app. Follow the
-steps below in order.
+**AutoPrint** is a production-grade automated kiosk and print shop desktop management system designed for document upload, physical 8-digit verification watermarking, 3-strike fail-safe payment reconciliation, and staff-governed document handover.
 
-## Before you begin
+---
 
-You will need:
+## 🚀 One-Line Web Installer (Recommended)
 
-- A Windows 10 or Windows 11 computer
-- An internet connection for the first installation
-- A printer connected to the computer and working in Windows
-- About 2 GB of free disk space
+Run the following command in PowerShell (Run as Administrator recommended):
 
-The installer also needs **Node.js**. If it is not already installed, download
-the **LTS** version from [nodejs.org](https://nodejs.org/en/download), install
-it using the default options, then restart your computer before continuing.
-
-## Install QRPrint
-
-1. Download or copy the complete QRPrint project folder to your computer.
-2. Open that folder in File Explorer.
-3. Right-click `installer.bat` and choose **Run as administrator**.
-4. If Windows asks for permission, choose **Yes**.
-5. Keep the installer window open until it says **Installation Complete**. The
-   first installation may take several minutes.
-
-If the window closes or shows an error, take a screenshot of the message before
-trying again. The most common cause is missing Node.js or a lost internet
-connection.
-
-## Start the merchant app
-
-After installation:
-
-1. Open the QRPrint project folder.
-2. Click the address bar at the top of File Explorer, type `cmd`, and press
-   Enter. A black Command Prompt window will open already in the right folder.
-3. Copy and paste the following two lines, pressing Enter after each one:
-
-```cmd
-cd merchant
-npm run electron
+```powershell
+irm https://raw.githubusercontent.com/v0786/AutoPrint/main/installer/bootstrap.ps1 | iex
 ```
 
-4. Leave the black window open while you use QRPrint. Closing it stops the app.
+*For installations targeting the `customer` branch:*
+```powershell
+irm https://raw.githubusercontent.com/v0786/AutoPrint/customer/installer/bootstrap.ps1 | iex
+```
 
-On the first launch, complete the on-screen setup: sign in as the local
-administrator, enter your business details, and choose the printer you want to
-use. QRPrint saves these settings on that computer.
+---
 
-## Everyday use
+## 🌐 Default Access Portals
 
-1. Open the merchant app.
-2. Check the incoming order list.
-3. Review the customer's file and chosen print options.
-4. Confirm payment (cash or UPI, as applicable).
-5. Print the order and update its status in the app.
+| Portal | Default URL | Purpose |
+| :--- | :--- | :--- |
+| **Customer Kiosk** | [`http://localhost:7000`](http://localhost:7000) | Document upload, specifications, & 8-digit verification code. |
+| **Merchant Desk** | [`http://localhost:6000`](http://localhost:6000) | Code lookup, cash collection, & physical handover confirmation. |
+| **Backend Health** | [`http://localhost:5000/health`](http://localhost:5000/health) | Live server diagnostic and SQLite database connection status. |
+| **Backend API** | [`http://localhost:5000/api`](http://localhost:5000/api) | Authoritative REST API service endpoints. |
 
-Supported customer file types include PDF, Word (`.docx`), PowerPoint
-(`.pptx`), Excel (`.xlsx` or `.xls`), and JPG images.
+---
 
-## Customer web page
+## 📁 Repository Structure
 
-The customer page is a separate website, maintained in the repository's
-`customer` branch. It needs to be deployed and connected to the shop computer
-before customers outside the store can submit orders.
+```
+AutoPrint/
+├── app/                           # Active Applications (backend, customer-web, merchant-desktop, connectors)
+├── datastore/                     # Persistent Runtime Data (database, uploads, audit, logs)
+├── runtime/                       # Ephemeral Process Runtime State (logs, temp, pid, status)
+├── installer/                     # Complete PowerShell & CMD Installer Wizard Suite
+├── assets/                        # High-resolution application branding & icons
+├── docs/                          # Architecture, User, Admin, Installation, & Quick-Start Guides
+├── scripts/                       # Operational Management Scripts (start-all, stop-all, health-check)
+└── unused files/                  # Archived Legacy Files (100% Data Preservation Guarantee)
+```
 
-## About `install.bat`
+---
 
-`install.bat` prepares a Python environment for future QRPrint utilities. Most
-users do not need to run it for the merchant application; use `installer.bat`
-for the normal QRPrint installation.
+## 🛠 Operational Commands
 
-## Need more help?
+### Start All Services:
+```cmd
+scripts\start-all.cmd
+```
 
-The detailed setup, customer website deployment, and troubleshooting guide is
-available in [INSTALL_AND_USE.md](INSTALL_AND_USE.md). If you need technical
-help, share the exact error message and a screenshot with your support person.
+### Stop All Services:
+```cmd
+scripts\stop-all.cmd
+```
+
+### Check System Health:
+```cmd
+scripts\health-check.cmd
+```
+
+### Run Backend Tests:
+```powershell
+npm run test:backend
+```
+
+### Build All Applications:
+```powershell
+npm run build:all
+```
+
+---
+
+## 📖 Complete Documentation Suite
+* 📘 [User & Staff Operational Guide](docs/USER_GUIDE.md)
+* ⚙️ [Installation & Deployment Manual](docs/INSTALLATION.md)
+* 🔧 [Administrator Operations Guide](docs/ADMIN_GUIDE.md)
+* ⚡ [Quick Start Reference](docs/QUICK_START.md)
+* 📄 [System Brochure & Workflow Overview](docs/AUTOPRINT_BROCHURE.md)
+* 🏗️ [Architecture Specification](docs/ARCHITECTURE.md)
+* 🗄️ [Datastore Specification](docs/DATASTORE.md)
+* 🔌 [Hardware & Gateway Connectors](docs/CONNECTORS.md)
+* 🚨 [Troubleshooting Manual](docs/TROUBLESHOOTING.md)
+* 📊 [Production Readiness Report](docs/PRODUCTION_READINESS_REPORT.md)
+
+---
+
+## 🔒 Verification & Security Architecture
+* **8-Digit Verification Code**: Rejection-sampled cryptographic random codes (`XXXX XXXX`).
+* **HMAC-SHA256 Checksum**: Deterministic verification watermark checksum for physical tamper detection.
+* **3-Strike Digital Lockout**: Automatic fail-safe cash lock on 3 consecutive payment failures.
+* **Persistent SQLite Database**: ACID transactions, foreign keys, and WAL journal mode.

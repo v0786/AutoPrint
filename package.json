@@ -1,13 +1,29 @@
 {
-  "name": "qrprint",
+  "name": "autoprint-workspace",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "description": "AutoPrint / QRPrint Unified Multi-App Production Workspace",
   "scripts": {
-    "install:merchant": "cd merchant && npm install",
-    "install:customer": "cd customer && npm install",
-    "build:merchant": "cd merchant && npm run build",
-    "build:customer": "cd customer && npm run build",
-    "dev:merchant": "cd merchant && npm run dev",
-    "dev:customer": "cd customer && npm run dev"
-  }
+    "install:all": "npm install --prefix app/backend && npm install --prefix app/merchant-desktop && npm install --prefix app/customer-web",
+    "dev:backend": "npm run dev --prefix app/backend",
+    "dev:merchant": "npm run dev --prefix app/merchant-desktop",
+    "dev:customer": "npm run dev --prefix app/customer-web",
+    "build:backend": "npm run build --prefix app/backend",
+    "build:merchant": "npm run build --prefix app/merchant-desktop",
+    "build:customer": "npm run build --prefix app/customer-web",
+    "build:all": "npm run build:backend && npm run build:merchant && npm run build:customer",
+    "test:backend": "npm test --prefix app/backend",
+    "test:all": "npm test --prefix app/backend && npm run lint --prefix app/merchant-desktop && npm run lint --prefix app/customer-web",
+    "start:backend": "npm start --prefix app/backend"
+  },
+  "keywords": [
+    "autoprint",
+    "qrprint",
+    "verification-code",
+    "spooler",
+    "pos-printer",
+    "kiosk"
+  ],
+  "author": "AutoPrint Engineering",
+  "license": "Apache-2.0"
 }
