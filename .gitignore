@@ -60,3 +60,5 @@ yarn-debug.log*
 pnpm-debug.log*
 .vscode/
 .idea/
+
+*.old.exe
