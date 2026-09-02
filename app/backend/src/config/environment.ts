@@ -99,7 +99,7 @@ function resolveCorsOrigins(): string[] {
 // ─── Exported Config ──────────────────────────────────────────────────────────
 export const CONFIG = {
   PORT:                 Number(process.env.PORT || 5000),
-  MERCHANT_PORT:        Number(process.env.MERCHANT_PORT || 6000),
+  MERCHANT_PORT:        Number(process.env.MERCHANT_PORT || 8000),
   CUSTOMER_PORT:        Number(process.env.CUSTOMER_PORT || 7000),
   NODE_ENV:             process.env.NODE_ENV || 'development',
   API_PREFIX:           process.env.API_PREFIX || '/api',

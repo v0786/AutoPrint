@@ -11,7 +11,7 @@ echo.
 
 powershell -NoProfile -Command "
 `$backendPort = 5000;
-`$merchantPort = 6000;
+`$merchantPort = 8000;
 `$customerPort = 7000;
 
 if (Test-Path '.env') {

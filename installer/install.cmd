@@ -53,7 +53,7 @@ call "%LIB_DIR%\common.cmd" :print_step "2" "Configuration & Port Allocation"
 
 echo Default Configuration:
 echo   - Backend REST API Port   : 5000
-echo   - Merchant Desktop Port   : 6000
+echo   - Merchant Desktop Port   : 8000
 echo   - Customer Web Kiosk Port : 7000
 echo   - Datastore Directory     : %PROJECT_ROOT%\datastore
 echo.

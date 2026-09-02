@@ -83,7 +83,7 @@ Write-Host "--------------------------------------------------------------------
 Write-Host ""
 Write-Host "  Default Port Configuration:" -ForegroundColor White
 Write-Host "    - Backend REST API Engine : 5000" -ForegroundColor Gray
-Write-Host "    - Merchant Desktop Desk   : 6000" -ForegroundColor Gray
+Write-Host "    - Merchant Desktop Desk   : 8000" -ForegroundColor Gray
 Write-Host "    - Customer Kiosk Portal   : 7000" -ForegroundColor Gray
 Write-Host ""
 
@@ -91,7 +91,7 @@ $useDefaultPorts = Read-Host "  Would you like to use the default ports? [Y/N] (
 if ([string]::IsNullOrWhiteSpace($useDefaultPorts)) { $useDefaultPorts = "Y" }
 
 $backendPort  = 5000
-$merchantPort = 6000
+$merchantPort = 8000
 $customerPort = 7000
 
 if ($useDefaultPorts -notmatch "^[Yy]") {

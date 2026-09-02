@@ -21,7 +21,7 @@ if not exist "runtime\pid" mkdir "runtime\pid"
 
 :: Load configured ports from .env if present
 set "BACKEND_PORT=5000"
-set "MERCHANT_PORT=6000"
+set "MERCHANT_PORT=8000"
 set "CUSTOMER_PORT=7000"
 
 if exist ".env" (
