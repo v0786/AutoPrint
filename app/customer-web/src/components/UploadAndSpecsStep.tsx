@@ -1,24 +1,28 @@
 import React, { useRef, useState } from 'react';
 import { usePrintJob } from '../context/PrintJobContext';
+import { useLanguage } from '../context/LanguageContext';
 import {
   ColorMode,
   DuplexMode,
   FinishingOption,
-  Orientation,
   PaperSize,
 } from '../types';
 import { formatBytes, parseCustomPageRange } from '../utils/helpers';
 import {
   Upload,
+  FileText,
   FileCheck,
   Eye,
   Trash2,
   Sparkles,
   Layers,
+  Scissors,
+  Check,
   AlertCircle,
   ArrowRight,
   Sliders,
-  CheckCircle2,
+  AlertTriangle,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -33,10 +37,11 @@ export const UploadAndSpecsStep: React.FC = () => {
     pricing,
     currentShop,
     isShopOnline,
-    queueMessage,
-    setStep,
+    isHeavyWorkload,
+    queueWorkloadMessage,
     setPreviewModalOpen,
   } = usePrintJob();
+  const { t } = useLanguage();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -46,6 +51,7 @@ export const UploadAndSpecsStep: React.FC = () => {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setValidationError(null);
       handleFileUpload(e.dataTransfer.files[0]);
     }
   };
@@ -64,12 +70,12 @@ export const UploadAndSpecsStep: React.FC = () => {
 
   const validateAndProceed = () => {
     if (!isShopOnline) {
-      setValidationError('Shop is currently offline. Orders cannot be placed at this time.');
+      setValidationError(t('noShopSelected') + ' - ' + t('scanShopQrDesc'));
       return;
     }
 
     if (!uploadedFile) {
-      setValidationError('Please upload a document to print.');
+      setValidationError(t('uploadDocument') + ': ' + t('tapToUpload'));
       return;
     }
 
@@ -87,22 +93,24 @@ export const UploadAndSpecsStep: React.FC = () => {
     }
 
     setValidationError(null);
-    // Open Document Preview for customer review before final payment
+    // Open mandatory document preview for customer review before payment
     setPreviewModalOpen(true);
   };
 
+  const isBw = specs.colorMode === 'bw';
+  const isColor = specs.colorMode === 'color';
+  const isPhoto = specs.colorMode === 'photo';
+
   return (
-    <div className="max-w-4xl mx-auto px-4 pb-32 sm:px-6 pt-2 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 pb-32 sm:px-6 pt-2 space-y-6 font-sans">
       
       {/* Offline Shop Alert Banner */}
       {!isShopOnline && (
         <div className="p-4 rounded-3xl bg-amber-500/15 border border-amber-500/30 text-amber-200 flex items-start gap-3.5 shadow-lg">
           <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
           <div className="text-xs space-y-1">
-            <h4 className="font-bold text-amber-100 text-sm">No shop is selected / Shop is Offline</h4>
-            <p className="leading-relaxed text-amber-200/90">
-              The merchant service is currently unavailable or has not completed onboarding. You can configure print settings, but order submission is temporarily paused until the merchant connects.
-            </p>
+            <h4 className="font-bold text-amber-100 text-sm">{t('noShopSelected')}</h4>
+            <p className="leading-relaxed text-amber-200/90">{t('scanShopQrDesc')}</p>
           </div>
         </div>
       )}
@@ -120,19 +128,19 @@ export const UploadAndSpecsStep: React.FC = () => {
             <span className="flex-1">{validationError}</span>
             <button
               onClick={() => setValidationError(null)}
-              className="text-xs underline hover:text-white"
+              className="text-xs underline hover:text-white cursor-pointer"
             >
-              Dismiss
+              {t('close')}
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Dynamic Queue Workload Banner (Only shown under real high workload) */}
-      {queueMessage && (
+      {/* Dynamic Queue Workload Banner — ONLY displayed when queue genuinely exceeds printer capacity */}
+      {isHeavyWorkload && queueWorkloadMessage && (
         <div className="p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex items-center gap-3.5 text-xs text-amber-300">
-          <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
-          <p className="font-medium leading-relaxed">{queueMessage}</p>
+          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+          <p className="font-medium leading-relaxed">{queueWorkloadMessage}</p>
         </div>
       )}
 
@@ -144,8 +152,8 @@ export const UploadAndSpecsStep: React.FC = () => {
               <Upload className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">1. Document Upload</h2>
-              <p className="text-xs text-zinc-400">Upload your PDF, Word doc, or images</p>
+              <h2 className="text-lg font-bold text-white">{t('stepSpecs')} — {t('uploadDocument')}</h2>
+              <p className="text-xs text-zinc-400">{t('supportedFiles')}</p>
             </div>
           </div>
           {uploadedFile && (
@@ -154,7 +162,7 @@ export const UploadAndSpecsStep: React.FC = () => {
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-md text-xs font-semibold text-[#D0BCFF] hover:border-[#D0BCFF]/30 transition-all cursor-pointer shadow-sm"
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Preview Pages</span>
+              <span>{t('previewDoc')}</span>
             </button>
           )}
         </div>
@@ -178,9 +186,10 @@ export const UploadAndSpecsStep: React.FC = () => {
               ref={fileInputRef}
               type="file"
               className="hidden"
-              accept=".pdf,.docx,.doc,.pptx,.jpg,.jpeg,.png,.webp"
+              accept=".pdf,.docx,.doc,.pptx,.jpg,.jpeg,.png,.webp,.txt"
               onChange={(e) => {
                 if (e.target.files && e.target.files.length > 0) {
+                  setValidationError(null);
                   handleFileUpload(e.target.files[0]);
                 }
               }}
@@ -190,15 +199,15 @@ export const UploadAndSpecsStep: React.FC = () => {
               <Upload className="w-6 h-6 animate-bounce" />
             </div>
             <p className="text-sm font-bold text-white mb-1">
-              Tap to choose a file or drag & drop here
+              {t('tapToUpload')}
             </p>
             <p className="text-xs text-zinc-400 mb-3">
-              PDF, Word (.docx), PPTX, JPG, PNG (Max 50MB)
+              {t('supportedFiles')}
             </p>
 
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] text-zinc-300">
               <Sparkles className="w-3 h-3 text-[#D0BCFF]" />
-              <span>Live document preview & print specs validation</span>
+              <span>{t('encryptedUpload')}</span>
             </div>
           </div>
         ) : (
@@ -206,7 +215,11 @@ export const UploadAndSpecsStep: React.FC = () => {
           <div className="bg-black/30 rounded-2xl p-4 border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5 min-w-0">
               <div className="w-12 h-12 rounded-2xl bg-[#D0BCFF]/15 text-[#D0BCFF] flex items-center justify-center flex-shrink-0 border border-[#D0BCFF]/30 shadow-md">
-                <FileCheck className="w-6 h-6" />
+                {uploadedFile.fileCategory === 'image' ? (
+                  <ImageIcon className="w-6 h-6" />
+                ) : (
+                  <FileCheck className="w-6 h-6" />
+                )}
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -221,7 +234,7 @@ export const UploadAndSpecsStep: React.FC = () => {
                   <span>{formatBytes(uploadedFile.size)}</span>
                   <span>•</span>
                   <span className="text-[#D0BCFF] font-semibold">
-                    {uploadedFile.totalPages} {uploadedFile.totalPages === 1 ? 'Page' : 'Pages'}
+                    {uploadedFile.totalPages} {uploadedFile.totalPages === 1 ? t('page') : t('pages')}
                   </span>
                 </div>
               </div>
@@ -233,7 +246,7 @@ export const UploadAndSpecsStep: React.FC = () => {
                 className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-zinc-300 hover:text-[#D0BCFF] flex items-center gap-1.5 transition-all cursor-pointer"
               >
                 <Eye className="w-3.5 h-3.5" />
-                <span>Preview Document</span>
+                <span>{t('previewDoc')}</span>
               </button>
               <button
                 onClick={() => setUploadedFile(null)}
@@ -254,30 +267,36 @@ export const UploadAndSpecsStep: React.FC = () => {
             <Sliders className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white">2. Print Specifications</h2>
-            <p className="text-xs text-zinc-400">Configure color, paper, layout, and finishing</p>
+            <h2 className="text-lg font-bold text-white">{t('stepSpecs')}</h2>
+            <p className="text-xs text-zinc-400">{t('colorMode')}, {t('paperSize')}, {t('sidesDuplex')}</p>
           </div>
         </div>
 
         {/* 1. Color Mode */}
         <div className="space-y-2.5">
           <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center justify-between">
-            <span>Color Mode</span>
-            <span className="text-[11px] text-zinc-400 font-normal">Base rates per page</span>
+            <span>{t('colorMode')}</span>
+            <span className="text-[11px] text-zinc-400 font-normal">{t('avgPrintSpeed')} Instant</span>
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               {
                 id: 'bw' as ColorMode,
-                title: 'Black & White',
-                desc: 'Standard Grayscale',
-                rate: `₹${currentShop.rates.bwSingle.toFixed(2)}/page`,
+                title: t('bw'),
+                desc: t('bwDesc'),
+                rate: `₹${(currentShop?.rates.bwSingle || 2).toFixed(2)}/${t('page')}`,
               },
               {
                 id: 'color' as ColorMode,
-                title: 'Full Color',
-                desc: 'Vibrant CMYK',
-                rate: `₹${currentShop.rates.colorSingle.toFixed(2)}/page`,
+                title: t('color'),
+                desc: t('colorDesc'),
+                rate: `₹${(currentShop?.rates.colorSingle || 10).toFixed(2)}/${t('page')}`,
+              },
+              {
+                id: 'photo' as ColorMode,
+                title: t('photo'),
+                desc: t('photoDesc'),
+                rate: `₹${(currentShop?.rates.photoGlossy || 25).toFixed(2)}/${t('page')}`,
               },
             ].map((opt) => {
               const selected = specs.colorMode === opt.id;
@@ -306,7 +325,7 @@ export const UploadAndSpecsStep: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-              Paper Size
+              {t('paperSize')}
             </label>
             <div className="grid grid-cols-3 gap-2">
               {(['a4', 'a3', 'legal'] as PaperSize[]).map((size) => (
@@ -327,12 +346,12 @@ export const UploadAndSpecsStep: React.FC = () => {
 
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-              Sides (Duplex)
+              {t('sidesDuplex')}
             </label>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { id: 'single' as DuplexMode, label: '1-Sided (Simplex)' },
-                { id: 'double' as DuplexMode, label: '2-Sided (Duplex)' },
+                { id: 'single' as DuplexMode, label: t('singleSided') },
+                { id: 'double' as DuplexMode, label: t('doubleSided') },
               ].map((d) => (
                 <button
                   key={d.id}
@@ -354,7 +373,7 @@ export const UploadAndSpecsStep: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-white/5">
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-              Number of Copies
+              {t('copies')}
             </label>
             <div className="flex items-center gap-3">
               <button
@@ -377,7 +396,7 @@ export const UploadAndSpecsStep: React.FC = () => {
 
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-              Pages to Print
+              {t('pageRange')}
             </label>
             <div className="flex gap-2">
               <button
@@ -388,7 +407,7 @@ export const UploadAndSpecsStep: React.FC = () => {
                     : 'border-white/10 hover:border-white/20 bg-black/20 text-zinc-300'
                 }`}
               >
-                All Pages ({uploadedFile?.totalPages || 1})
+                {t('allPages')} ({uploadedFile?.totalPages || 1})
               </button>
               <button
                 onClick={() => updateSpecs({ pageRangeType: 'custom' })}
@@ -398,14 +417,14 @@ export const UploadAndSpecsStep: React.FC = () => {
                     : 'border-white/10 hover:border-white/20 bg-black/20 text-zinc-300'
                 }`}
               >
-                Custom Range
+                {t('customRange')}
               </button>
             </div>
 
             {specs.pageRangeType === 'custom' && (
               <input
                 type="text"
-                placeholder="e.g. 1-3, 5, 8"
+                placeholder={t('customRangePlaceholder')}
                 value={specs.customPageRange}
                 onChange={(e) => handleRangeChange(e.target.value)}
                 className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D0BCFF]"
@@ -413,36 +432,68 @@ export const UploadAndSpecsStep: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* 4. Document Finishing Options */}
+        <div className="space-y-2 pt-2 border-t border-white/5">
+          <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+            {t('finishing')}
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {[
+              { id: 'none' as FinishingOption, title: t('noFinishing'), cost: '₹0' },
+              { id: 'staple' as FinishingOption, title: t('staple'), cost: '+₹5' },
+              { id: 'spiral' as FinishingOption, title: t('spiral'), cost: '+₹40' },
+              { id: 'hardcover' as FinishingOption, title: t('hardcover'), cost: '+₹150' },
+              { id: 'lamination' as FinishingOption, title: t('lamination'), cost: '+₹20/pg' },
+            ].map((f) => {
+              const selected = specs.finishing === f.id;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => updateSpecs({ finishing: f.id })}
+                  className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                    selected
+                      ? 'border-[#D0BCFF] bg-[#D0BCFF]/15 text-[#D0BCFF]'
+                      : 'border-white/10 hover:border-white/20 bg-black/20 text-zinc-300'
+                  }`}
+                >
+                  <div className="text-xs font-bold truncate">{f.title}</div>
+                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5">{f.cost}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* SECTION 3: PRICING SUMMARY CARD */}
       <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/40 space-y-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-bold text-white">Order Summary</span>
-          <span className="text-xs text-zinc-400">{specs.selectedPagesCount * specs.copies} total pages to print</span>
+          <span className="text-sm font-bold text-white">{t('orderSummary')}</span>
+          <span className="text-xs text-zinc-400">{specs.selectedPagesCount * specs.copies} {t('pages')}</span>
         </div>
 
         <div className="space-y-2 text-xs text-zinc-400 border-t border-b border-white/5 py-3">
           <div className="flex justify-between items-center">
-            <span>Color & Paper</span>
+            <span>{t('colorMode')} & {t('paperSize')}</span>
             <span className="text-white font-medium capitalize">
-              {specs.colorMode === 'bw' ? 'B&W' : 'Color'} • {specs.paperSize.toUpperCase()} • {specs.duplex}
+              {specs.colorMode === 'bw' ? t('bw') : specs.colorMode === 'color' ? t('color') : t('photo')} • {specs.paperSize.toUpperCase()} • {specs.duplex === 'double' ? t('doubleSided') : t('singleSided')}
             </span>
           </div>
 
           <div className="flex justify-between items-center">
-            <span>Subtotal</span>
+            <span>{t('subtotal')}</span>
             <span className="text-white font-mono">₹{pricing.subtotal.toFixed(2)}</span>
           </div>
 
           <div className="flex justify-between items-center text-zinc-500">
-            <span>GST & Service (5%)</span>
+            <span>{t('gst')} (5%)</span>
             <span className="font-mono">₹{pricing.gstAmount.toFixed(2)}</span>
           </div>
         </div>
 
         <div className="flex items-center justify-between pt-1">
-          <span className="text-base font-bold text-white">Total Payable</span>
+          <span className="text-base font-bold text-white">{t('total')}</span>
           <span className="text-2xl font-black text-[#D0BCFF] font-mono">
             ₹{pricing.totalAmount.toFixed(2)}
           </span>
@@ -453,7 +504,7 @@ export const UploadAndSpecsStep: React.FC = () => {
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-[#0F0F12]/90 backdrop-blur-xl border-t border-white/10 p-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
           <div>
-            <span className="text-[11px] text-zinc-400 block">Total:</span>
+            <span className="text-[11px] text-zinc-400 block">{t('total')}:</span>
             <span className="font-mono text-2xl font-black text-[#D0BCFF]">
               ₹{pricing.totalAmount.toFixed(2)}
             </span>
@@ -467,7 +518,7 @@ export const UploadAndSpecsStep: React.FC = () => {
                 className="hidden sm:flex py-3 px-5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-200 text-xs font-bold items-center gap-1.5 cursor-pointer transition-colors"
               >
                 <Eye className="w-4 h-4 text-[#D0BCFF]" />
-                <span>Preview Document</span>
+                <span>{t('previewDoc')}</span>
               </button>
             )}
 
@@ -477,7 +528,7 @@ export const UploadAndSpecsStep: React.FC = () => {
               onClick={validateAndProceed}
               className="py-3.5 px-7 rounded-2xl bg-[#D0BCFF] hover:bg-[#decbf7] disabled:opacity-40 disabled:cursor-not-allowed text-[#381E72] font-black text-sm shadow-xl shadow-[#D0BCFF]/15 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer"
             >
-              <span>REVIEW & PROCEED</span>
+              <span>{t('proceedToPayment')}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

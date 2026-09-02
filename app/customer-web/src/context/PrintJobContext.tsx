@@ -1,12 +1,14 @@
 /**
  * Print Job Context
  * Global state management for the customer kiosk workflow.
- * Directly integrated with the real AutoPrint backend and live merchant status.
+ * Directly integrated with the real AutoPrint backend, live merchant status,
+ * dynamic printer capacity workload calculations, and multilingual translations.
  */
 
 import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
 import {
   AppStep,
+  FinishingOption,
   JobStatus,
   PaymentDetails,
   PaymentMethod,
@@ -20,13 +22,15 @@ import {
 import { calculatePricing } from '../utils/pricing';
 import { parseCustomPageRange } from '../utils/helpers';
 import { CustomerApiClient } from '../services/apiClient';
+import { DEFAULT_OFFLINE_SHOP } from '../data/shops';
 
 interface PrintJobContextType {
   currentStep: AppStep;
-  currentShop: ShopInfo;
+  currentShop: ShopInfo | null;
   isShopOnline: boolean;
   shopStatusMessage: string;
-  queueMessage: string | null;
+  isHeavyWorkload: boolean;
+  queueWorkloadMessage: string | null;
   uploadedFile: UploadedFileDetails | null;
   specs: PrintSpecifications;
   pricing: PriceBreakdown;
@@ -41,12 +45,15 @@ interface PrintJobContextType {
 
   // Actions
   setStep: (step: AppStep) => void;
+  switchShop: (shopId: string) => void;
+  connectShop: (shopId: string) => void;
+  disconnectShop: () => void;
   setUploadedFile: (file: UploadedFileDetails | null) => void;
   handleFileUpload: (file: File) => Promise<void>;
   updateSpecs: (partial: Partial<PrintSpecifications>) => void;
   setPageRangeString: (rangeStr: string) => void;
-  initiatePayment: (method: PaymentMethod, upiApp?: UpiAppId) => void;
-  completePayment: () => Promise<void>;
+  initiatePayment: (method: PaymentMethod, details?: Partial<PaymentDetails>) => void;
+  completePayment: (paymentOverride?: Partial<PaymentDetails>) => Promise<void>;
   resetJob: () => void;
   setShopModalOpen: (open: boolean) => void;
   setQrModalOpen: (open: boolean) => void;
@@ -68,50 +75,20 @@ const DEFAULT_SPECS: PrintSpecifications = {
 
 const DEFAULT_PAYMENT: PaymentDetails = {
   method: 'upi',
+  gateway: 'razorpay',
   upiApp: 'gpay',
   paymentVerified: false,
-};
-
-const DEFAULT_OFFLINE_SHOP: ShopInfo = {
-  id: 'offline',
-  name: 'No shop is selected',
-  branch: 'Offline Counter',
-  address: 'Shop is currently offline or unconfigured.',
-  kioskNumber: 'Counter #00',
-  status: 'maintenance',
-  activePrinters: [],
-  queueLength: 0,
-  averageWaitMins: 0,
-  rates: {
-    bwSingle: 2.0,
-    bwDoublePerSide: 1.5,
-    colorSingle: 10.0,
-    colorDoublePerSide: 8.0,
-    photoGlossy: 25.0,
-    a3Multiplier: 2.0,
-    legalMultiplier: 1.25,
-    letterMultiplier: 1.0,
-    finishing: {
-      staple: 5.0,
-      spiral: 40.0,
-      hardcover: 150.0,
-      laminationPerSheet: 20.0,
-    },
-  },
-  upiDetails: {
-    vpa: '',
-    payeeName: '',
-  },
 };
 
 const PrintJobContext = createContext<PrintJobContextType | undefined>(undefined);
 
 export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentStep, setStep] = useState<AppStep>('splash');
-  const [currentShop, setCurrentShop] = useState<ShopInfo>(DEFAULT_OFFLINE_SHOP);
+  const [currentShop, setCurrentShop] = useState<ShopInfo | null>(null);
   const [isShopOnline, setIsShopOnline] = useState<boolean>(false);
   const [shopStatusMessage, setShopStatusMessage] = useState<string>('Checking shop status...');
-  const [queueMessage, setQueueMessage] = useState<string | null>(null);
+  const [isHeavyWorkload, setIsHeavyWorkload] = useState<boolean>(false);
+  const [queueWorkloadMessage, setQueueWorkloadMessage] = useState<string | null>(null);
 
   const [uploadedFile, setUploadedFile] = useState<UploadedFileDetails | null>(null);
   const [specs, setSpecs] = useState<PrintSpecifications>(DEFAULT_SPECS);
@@ -128,7 +105,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isQrModalOpen, setQrModalOpen] = useState(false);
   const [isPreviewModalOpen, setPreviewModalOpen] = useState(false);
 
-  // Fetch real merchant online profile & system workload
+  // Fetch real merchant online profile & dynamic printer-capacity workload from backend
   const refreshShopStatus = async () => {
     try {
       const res = await fetch('/api/merchant/public-profile');
@@ -145,6 +122,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             address: profile.address || 'Verified Shop Counter',
             kioskNumber: profile.kioskNumber || 'Counter #01',
             status: 'online',
+            isMerchantConfigured: true,
             activePrinters: profile.selectedPrinter ? [profile.selectedPrinter] : ['AutoPrint Spooler'],
             queueLength: 0,
             averageWaitMins: 2,
@@ -157,64 +135,86 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               vpa: profile.upiDetails?.vpa || profile.paymentConfig?.upiId || '',
               payeeName: profile.upiDetails?.payeeName || profile.name,
             },
+            paymentGateways: {
+              razorpayEnabled: Boolean(profile.paymentConfig?.hasRazorpay),
+              razorpayKeyId: profile.paymentConfig?.razorpayKeyId,
+              juspayEnabled: false,
+            },
           });
         } else {
           setIsShopOnline(false);
           setShopStatusMessage('No shop is selected');
-          setCurrentShop(DEFAULT_OFFLINE_SHOP);
+          setCurrentShop(null);
         }
       } else {
         setIsShopOnline(false);
         setShopStatusMessage('No shop is selected');
-        setCurrentShop(DEFAULT_OFFLINE_SHOP);
+        setCurrentShop(null);
       }
 
-      // Check system workload
+      // Check system workload based on connected printer capacity
       const workloadRes = await fetch('/api/system/workload').catch(() => null);
       if (workloadRes && workloadRes.ok) {
         const wJson = await workloadRes.json();
-        if (wJson.ok && wJson.data?.queueMessage) {
-          setQueueMessage(wJson.data.queueMessage);
-        } else {
-          setQueueMessage(null);
+        if (wJson.ok && wJson.data) {
+          setIsHeavyWorkload(Boolean(wJson.data.isHighWorkload));
+          setQueueWorkloadMessage(wJson.data.queueMessage || null);
+          if (wJson.data.activeJobs !== undefined && currentShop) {
+            setCurrentShop((prev) => (prev ? { ...prev, queueLength: wJson.data.pendingJobs || 0 } : prev));
+          }
         }
       }
     } catch {
       setIsShopOnline(false);
       setShopStatusMessage('No shop is selected');
-      setCurrentShop(DEFAULT_OFFLINE_SHOP);
+      setCurrentShop(null);
     }
   };
 
   useEffect(() => {
     refreshShopStatus();
-    const interval = setInterval(refreshShopStatus, 8000);
+    const interval = setInterval(refreshShopStatus, 6000);
     return () => clearInterval(interval);
   }, []);
 
-  // Handle Real File Upload with Object URL generation
+  // Handle Real File Upload with Object URL generation & metadata extraction
   const handleFileUpload = async (file: File) => {
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     const isImage = file.type.startsWith('image/');
-    const previewUrl = URL.createObjectURL(file);
+    const isDoc = file.name.endsWith('.docx') || file.name.endsWith('.doc') || file.name.endsWith('.pptx');
+    const isText = file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md');
+    const isSpreadsheet = file.name.endsWith('.xlsx') || file.name.endsWith('.csv');
 
-    // Approximate page count
+    const previewUrl = URL.createObjectURL(file);
+    let textContent: string | undefined;
+
+    if (isText) {
+      try {
+        textContent = await file.text();
+      } catch {}
+    }
+
     let estimatedPages = 1;
     if (isPdf) {
       estimatedPages = Math.max(1, Math.ceil(file.size / (120 * 1024)));
+    } else if (isDoc) {
+      estimatedPages = Math.max(1, Math.ceil(file.size / (180 * 1024)));
     }
+
+    const fileCategory = isPdf ? 'pdf' : isImage ? 'image' : isDoc ? 'doc' : isText ? 'text' : isSpreadsheet ? 'spreadsheet' : 'pdf';
 
     const uploaded: UploadedFileDetails = {
       name: file.name,
       size: file.size,
       type: file.type || 'application/octet-stream',
       totalPages: estimatedPages,
-      rawFile: file,
       previewUrl,
-      isPdf,
-      isImage,
+      textContent,
+      fileCategory,
       uploadTimestamp: Date.now(),
     };
+
+    (uploaded as any).rawFile = file;
 
     setUploadedFile(uploaded);
     setSpecs((prev) => ({
@@ -243,7 +243,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Recalculate pricing based on real merchant rates
   const pricing = useMemo(() => {
-    return calculatePricing(specs, currentShop);
+    return calculatePricing(specs, currentShop || DEFAULT_OFFLINE_SHOP);
   }, [specs, currentShop]);
 
   const updateSpecs = (partial: Partial<PrintSpecifications>) => {
@@ -266,48 +266,68 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }));
   };
 
-  const initiatePayment = (method: PaymentMethod, upiApp?: UpiAppId) => {
-    setPaymentDetails({
-      method,
-      upiApp: method === 'upi' ? upiApp || 'gpay' : undefined,
-      paymentVerified: false,
-    });
+  const switchShop = (_shopId: string) => {
+    refreshShopStatus();
+    setShopModalOpen(false);
   };
 
-  const completePayment = async () => {
+  const connectShop = (_shopId: string) => {
+    refreshShopStatus();
+  };
+
+  const disconnectShop = () => {
+    setIsShopOnline(false);
+    setCurrentShop(null);
+    setShopStatusMessage('No shop is selected');
+  };
+
+  const initiatePayment = (method: PaymentMethod, details?: Partial<PaymentDetails>) => {
+    setPaymentDetails((prev) => ({
+      ...prev,
+      method,
+      ...details,
+      paymentVerified: false,
+    }));
+  };
+
+  const completePayment = async (paymentOverride?: Partial<PaymentDetails>) => {
     if (!uploadedFile) return;
 
     setIsSubmitting(true);
     setSubmissionError(null);
 
     try {
+      const finalPayment = { ...paymentDetails, ...paymentOverride };
       const amountMinorUnits = Math.round(pricing.totalAmount * 100);
-      const backendPaymentMethod = paymentDetails.method === 'cash' ? 'CASH' : 'UPI';
+      const backendPaymentMethod = finalPayment.method === 'cash' ? 'CASH' : 'UPI';
+      const rawFile = (uploadedFile as any).rawFile || null;
 
       // 1. Submit actual file and print specifications to backend API
       const backendJob = await CustomerApiClient.submitPrintJob({
-        file: uploadedFile.rawFile || null,
+        file: rawFile,
         fileName: uploadedFile.name,
         customerName: 'Kiosk Customer',
+        customerPhone: finalPayment.payerContact?.phone,
         specs,
         paymentMethod: backendPaymentMethod,
         amountMinorUnits,
         currency: 'INR',
-        printerName: currentShop.activePrinters[0] || 'AutoPrint Spooler',
+        printerName: currentShop?.activePrinters[0] || 'AutoPrint Spooler',
       });
 
       const now = new Date();
-      const estimatedTime = new Date(now.getTime() + (currentShop.averageWaitMins || 2) * 60000);
+      const waitMins = currentShop?.averageWaitMins || 2;
+      const estimatedTime = new Date(now.getTime() + waitMins * 60000);
 
-      // 2. If UPI payment, record payment attempt
-      let upiTxnId: string | undefined;
+      // 2. If UPI or Razorpay payment, record payment attempt
+      let upiTxnId = finalPayment.gatewayPaymentId || finalPayment.transactionId;
       if (backendPaymentMethod === 'UPI') {
-        upiTxnId = `UPI/2026/${Date.now().toString().slice(-8)}`;
+        upiTxnId = upiTxnId || `UPI/2026/${Date.now().toString().slice(-8)}`;
         await CustomerApiClient.recordDigitalAttempt({
           verificationCode: backendJob.verification.verificationCode,
           status: 'SUCCESS',
           gatewayRef: upiTxnId,
-          vpa: currentShop.upiDetails.vpa,
+          vpa: currentShop?.upiDetails.vpa,
         }).catch((e) => console.warn('Digital attempt registration:', e));
       }
 
@@ -321,15 +341,15 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const newOrder: PrintOrder = {
         orderId: backendJob.id,
         collectionCode: backendJob.verification.formattedCode,
-        shopId: currentShop.id,
-        shopName: currentShop.name,
-        kioskNumber: currentShop.kioskNumber,
+        shopId: currentShop?.id || 'AP-01',
+        shopName: currentShop?.name || 'AutoPrint Station',
+        kioskNumber: currentShop?.kioskNumber || 'Counter #01',
         file: uploadedFile,
         specs: { ...specs },
         pricing: { ...pricing },
         payment: {
-          ...paymentDetails,
-          paymentVerified: backendPaymentMethod === 'UPI',
+          ...finalPayment,
+          paymentVerified: backendPaymentMethod === 'UPI' || Boolean(finalPayment.paymentVerified),
           paidAt: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }),
           transactionId: upiTxnId,
         },
@@ -386,7 +406,8 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         currentShop,
         isShopOnline,
         shopStatusMessage,
-        queueMessage,
+        isHeavyWorkload,
+        queueWorkloadMessage,
         uploadedFile,
         specs,
         pricing,
@@ -399,6 +420,9 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isSubmitting,
         submissionError,
         setStep,
+        switchShop,
+        connectShop,
+        disconnectShop,
         setUploadedFile,
         handleFileUpload,
         updateSpecs,

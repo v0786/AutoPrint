@@ -51,7 +51,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
 
 // 3. Health Check Endpoint
-app.get('/health', (_req, res) => {
+const healthHandler = (_req: express.Request, res: express.Response) => {
   let dbHealthy = false;
   try {
     const row = getDb().prepare('SELECT 1 as ok').get() as { ok: number };
@@ -62,11 +62,11 @@ app.get('/health', (_req, res) => {
 
   const storageHealthy = fs.existsSync(PATHS.DATA_DIR) && fs.existsSync(PATHS.DB_DIR);
   const tunnelState = tunnelService.getTunnelState();
-
   const status = dbHealthy && storageHealthy ? 200 : 503;
 
   res.status(status).json({
     ok: dbHealthy && storageHealthy,
+    status: dbHealthy && storageHealthy ? 'healthy' : 'unhealthy',
     service: 'autoprint',
     backend: 'running',
     customerWeb: 'running',
@@ -92,10 +92,14 @@ app.get('/health', (_req, res) => {
     },
     customerUrl: tunnelService.getActiveCustomerUrl(),
   });
-});
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // 4. API Routes
 const api = express.Router();
+api.get('/health', healthHandler);
 
 // Job Management Routes (supports multipart file upload)
 api.post('/jobs', upload.single('file'), JobController.submitJob);
