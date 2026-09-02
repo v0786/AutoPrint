@@ -1,39 +1,56 @@
-# AutoPrint / QRPrint — Troubleshooting & Diagnostics Guide
+# AutoPrint Express — Diagnostics & Troubleshooting Guide
 
-## Common Diagnostics & Solutions
-
-### 1. Port 4100 / 3000 / 3001 Already in Use
-* **Symptom**: `EADDRINUSE: address already in use :::4100` on server startup.
-* **Resolution**:
-  ```cmd
-  scripts\stop-all.cmd
-  ```
-  Or find and terminate the process holding the port:
-  ```powershell
-  Get-Process -Id (Get-NetTCPConnection -LocalPort 4100).OwningProcess | Stop-Process -Force
-  ```
+This guide provides troubleshooting solutions for port conflicts, offline hardware, PageKite tunnel status, and service recovery.
 
 ---
 
-### 2. Physical Printer Shows "Ready in Tray" Instead of Hardware Print
-* **Cause**: No physical printer driver is installed or selected in Windows, or the printer is offline.
-* **Behavior**: AutoPrint's `PrinterService` fails safely by queuing the watermarked PDF in `datastore/customer/documents/` and marking the status as `READY_FOR_HANDOVER` / `READY_IN_TRAY` without crashing.
+## 1. Port Already in Use Error
+
+**Symptom**: AutoPrint alerts that port 5000, 7000, or 8000 is occupied.
+
+**Solution**:
+1. Check what process is using the port:
+   ```powershell
+   Get-NetTCPConnection -LocalPort 5000, 7000, 8000 -State Listen
+   ```
+2. Reconfigure AutoPrint to use alternative ports:
+   - Edit `C:\ProgramData\AutoPrint\config\appsettings.json`.
+   - Update `ports.backend`, `ports.merchant`, or `ports.customer`.
+   - Right-click AutoPrint tray icon $\rightarrow$ **Restart Services**.
 
 ---
 
-### 3. Customer Locked in "Cash Collection Required"
-* **Cause**: 3 consecutive digital/UPI attempts failed or timed out, triggering the 3-strike fail-safe lockout.
-* **Resolution**:
-  1. Staff opens Merchant Desktop Manager (`http://localhost:3001` or `5000`).
-  2. Enters the customer's 8-digit verification code.
-  3. Collects cash from the customer and confirms change calculation.
-  4. System transitions to `CASH_COLLECTED` and permits document handover.
+## 2. No Printers Detected
+
+**Symptom**: Merchant Dashboard indicates "No printers detected".
+
+**Solution**:
+1. Verify printer is powered on and connected via USB or local network.
+2. In Windows, open **Settings** $\rightarrow$ **Bluetooth & devices** $\rightarrow$ **Printers & scanners**. Ensure the printer appears as an active device.
+3. In the Merchant Dashboard, navigate to **Hardware & Printers** and click **Refresh Fleet**.
 
 ---
 
-### 4. Health Check Fails
-* **Test**:
-  ```cmd
-  scripts\health-check.cmd
-  ```
-* **Verify**: Ensure the backend Node service is running (`apps\backend`) and `datastore/backend/database/autoprint.db` has write permissions.
+## 3. Customer Cannot Connect Over Mobile / QR Code
+
+**Symptom**: Scanning customer QR displays "Site cannot be reached".
+
+**Solution**:
+1. Check PageKite status in the Merchant Dashboard or system tray.
+2. Verify internet connection on the store computer.
+3. Check `C:\ProgramData\AutoPrint\logs\pagekite.log` for tunnel connection errors.
+4. Ensure your PageKite secret and subdomain match in `appsettings.json`.
+
+---
+
+## 4. Viewing Application Logs
+
+All runtime diagnostic logs are stored at:
+`C:\ProgramData\AutoPrint\logs\`
+
+- `backend.log`: REST API requests, SQLite database migrations, and verification logs.
+- `merchant.log`: Staff portal and authentication telemetry.
+- `customer.log`: Kiosk proxy and document upload logs.
+- `pagekite.log`: Public tunnel connection events.
+
+You can instantly open this folder by right-clicking the AutoPrint system tray icon $\rightarrow$ **View Logs Directory**.

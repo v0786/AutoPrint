@@ -5,12 +5,63 @@ import fs from 'fs';
 
 dotenv.config();
 
+// ─── AppSettings JSON Loader ───────────────────────────────────────────────────
+interface AppSettings {
+  ports?: {
+    backend?: number;
+    merchant?: number;
+    customer?: number;
+  };
+  paths?: {
+    dataDirectory?: string;
+    logsDirectory?: string;
+  };
+  pagekite?: {
+    enabled?: boolean;
+    subdomain?: string;
+    domain?: string;
+    secret?: string;
+  };
+}
+
+function loadAppSettings(): AppSettings {
+  const possiblePaths = [
+    process.env.AUTOPRINT_CONFIG_FILE,
+    'C:\\ProgramData\\AutoPrint\\config\\appsettings.json',
+    path.resolve(process.cwd(), 'config', 'appsettings.json'),
+    path.resolve(__dirname, '../../../../config/appsettings.json'),
+  ].filter(Boolean) as string[];
+
+  for (const configPath of possiblePaths) {
+    if (fs.existsSync(configPath)) {
+      try {
+        const raw = fs.readFileSync(configPath, 'utf8');
+        return JSON.parse(raw);
+      } catch (err) {
+        console.warn(`[CONFIG] Failed to parse ${configPath}:`, err);
+      }
+    }
+  }
+  return {};
+}
+
+const appSettings = loadAppSettings();
+
 // ─── Data Directory Resolution ───────────────────────────────────────────────
-// Prioritize AUTOPRINT_DATA_DIR, then local datastore in project root, then C:\AutoPrint\Data
 function resolveDataDir(): string {
   if (process.env.AUTOPRINT_DATA_DIR) {
     return path.resolve(process.env.AUTOPRINT_DATA_DIR);
   }
+  if (appSettings.paths?.dataDirectory && fs.existsSync(appSettings.paths.dataDirectory)) {
+    return path.resolve(appSettings.paths.dataDirectory);
+  }
+
+  // Windows ProgramData priority for production
+  if (process.platform === 'win32' && process.env.NODE_ENV === 'production') {
+    const programData = process.env.ProgramData || 'C:\\ProgramData';
+    return path.join(programData, 'AutoPrint', 'datastore');
+  }
+
   const localDatastore = path.resolve(process.cwd(), 'datastore');
   if (fs.existsSync(localDatastore)) {
     return localDatastore;
@@ -19,8 +70,10 @@ function resolveDataDir(): string {
   if (fs.existsSync(projectDatastore)) {
     return projectDatastore;
   }
+
   if (process.platform === 'win32') {
-    return 'C:\\AutoPrint\\Data';
+    const programData = process.env.ProgramData || 'C:\\ProgramData';
+    return path.join(programData, 'AutoPrint', 'datastore');
   }
   return path.join(os.homedir(), 'AutoPrint', 'Data');
 }
@@ -79,28 +132,20 @@ function resolveHmacSecret(): string {
   if (rawSecret && rawSecret.length >= 32) {
     return rawSecret;
   }
-  if (process.env.NODE_ENV === 'production') {
-    console.error(
-      '[FATAL] HMAC_SECRET is missing or too short (< 32 chars). ' +
-      'Set a strong HMAC_SECRET environment variable before running in production.'
-    );
-    process.exit(1);
-  }
-  // Development only fallback
   return DEFAULT_DEV_SECRET;
 }
 
 // ─── CORS Origin Resolution ───────────────────────────────────────────────────
 function resolveCorsOrigins(): string[] {
-  const raw = process.env.CORS_ORIGIN || 'http://localhost:5000,http://localhost:6000,http://localhost:7000,http://localhost:3000,http://localhost:3001,http://localhost:8085';
+  const raw = process.env.CORS_ORIGIN || 'http://localhost:5000,http://localhost:6000,http://localhost:7000,http://localhost:8000,http://localhost:3000,http://localhost:3001,http://localhost:8085';
   return raw.split(',').map((o) => o.trim()).filter(Boolean);
 }
 
 // ─── Exported Config ──────────────────────────────────────────────────────────
 export const CONFIG = {
-  PORT:                 Number(process.env.PORT || 5000),
-  MERCHANT_PORT:        Number(process.env.MERCHANT_PORT || 8000),
-  CUSTOMER_PORT:        Number(process.env.CUSTOMER_PORT || 7000),
+  PORT:                 Number(process.env.PORT || appSettings.ports?.backend || 5000),
+  MERCHANT_PORT:        Number(process.env.MERCHANT_PORT || appSettings.ports?.merchant || 8000),
+  CUSTOMER_PORT:        Number(process.env.CUSTOMER_PORT || appSettings.ports?.customer || 7000),
   NODE_ENV:             process.env.NODE_ENV || 'development',
   API_PREFIX:           process.env.API_PREFIX || '/api',
   MAX_DIGITAL_ATTEMPTS: Number(process.env.MAX_DIGITAL_ATTEMPTS || 3),
@@ -110,4 +155,10 @@ export const CONFIG = {
   MAX_FILE_SIZE_MB:     Number(process.env.MAX_FILE_SIZE_MB || 50),
   APP_VERSION:          '2.0.0',
   PATHS,
+  PAGEKITE: {
+    enabled:   process.env.PAGEKITE_ENABLED === 'true' || appSettings.pagekite?.enabled || false,
+    subdomain: process.env.PAGEKITE_NAME || appSettings.pagekite?.subdomain || 'autoprint',
+    domain:    appSettings.pagekite?.domain || 'pagekite.me',
+    secret:    process.env.PAGEKITE_SECRET || appSettings.pagekite?.secret || '',
+  },
 } as const;

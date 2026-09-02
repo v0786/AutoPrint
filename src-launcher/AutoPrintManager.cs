@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -35,13 +36,13 @@ namespace AutoPrint.Launcher
                 }
             }
 
-            // 1. Single Instance Protection
+            // 1. Single Instance Protection via Global Mutex
             bool createdNew;
             using (Mutex mutex = new Mutex(true, MUTEX_NAME, out createdNew))
             {
                 if (!createdNew)
                 {
-                    // Existing instance is running. Open dashboard and exit.
+                    // An existing instance is already running. Focus dashboard and exit.
                     try
                     {
                         Process.Start("http://localhost:8000");
@@ -50,7 +51,7 @@ namespace AutoPrint.Launcher
                     return;
                 }
 
-                // 2. Run the Tray Application Context (No visible Form window)
+                // 2. Run Native Background Tray Context (Zero Console Window)
                 Application.Run(new AutoPrintTrayContext(isSilentStartup));
             }
         }
@@ -68,13 +69,16 @@ namespace AutoPrint.Launcher
         private Process pagekiteProcess;
 
         private readonly string projectRoot;
-        private readonly string runtimeLogsDir;
+        private string runtimeLogsDir;
+        private string dataDir;
         private readonly string iconPath;
 
         private int backendPort = 5000;
         private int merchantPort = 8000;
         private int customerPort = 7000;
         private bool isPagekiteEnabled = true;
+        private string pagekiteName = "autoprint";
+        private string pagekiteSecret = "xakd4af2azx229x94effe9az79262cxz";
 
         private readonly bool isSilentStartup;
         private bool isStopping = false;
@@ -83,14 +87,12 @@ namespace AutoPrint.Launcher
         {
             isSilentStartup = silent;
 
-            // Resolve project root directory
+            // Resolve base paths
             projectRoot = ResolveProjectRoot();
-            runtimeLogsDir = Path.Combine(projectRoot, "runtime", "logs");
-            iconPath = Path.Combine(projectRoot, "assets", "icon", "favicon.ico");
-
-            if (!Directory.Exists(runtimeLogsDir))
+            iconPath = Path.Combine(projectRoot, "assets", "icon", "autoprint.ico");
+            if (!File.Exists(iconPath))
             {
-                Directory.CreateDirectory(runtimeLogsDir);
+                iconPath = Path.Combine(projectRoot, "assets", "icon", "favicon.ico");
             }
 
             LoadConfiguration();
@@ -171,11 +173,11 @@ namespace AutoPrint.Launcher
             trayIcon.ShowBalloonTip(
                 4000,
                 "AutoPrint is Running",
-                "AutoPrint services are operating in the background. Right-click this tray icon to manage.",
+                "AutoPrint services are active in the background. Double-click to open dashboard.",
                 ToolTipIcon.Info
             );
 
-            // Open Dashboard if not silent startup
+            // Open Dashboard in default browser if not silent startup
             if (!isSilentStartup)
             {
                 new Thread(() =>
@@ -205,6 +207,70 @@ namespace AutoPrint.Launcher
 
         private void LoadConfiguration()
         {
+            // Default locations
+            string programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+            if (string.IsNullOrEmpty(programData)) programData = "C:\\ProgramData";
+
+            dataDir = Path.Combine(programData, "AutoPrint", "datastore");
+            runtimeLogsDir = Path.Combine(programData, "AutoPrint", "logs");
+
+            if (!Directory.Exists(dataDir))
+            {
+                // Fallback to local project datastore if ProgramData is not yet initialized
+                string localData = Path.Combine(projectRoot, "datastore");
+                if (Directory.Exists(localData))
+                {
+                    dataDir = localData;
+                    runtimeLogsDir = Path.Combine(projectRoot, "runtime", "logs");
+                }
+            }
+
+            if (!Directory.Exists(runtimeLogsDir))
+            {
+                Directory.CreateDirectory(runtimeLogsDir);
+            }
+
+            // 1. Try reading C:\ProgramData\AutoPrint\config\appsettings.json
+            string appsettingsPath = Path.Combine(programData, "AutoPrint", "config", "appsettings.json");
+            if (!File.Exists(appsettingsPath))
+            {
+                appsettingsPath = Path.Combine(projectRoot, "config", "appsettings.json");
+            }
+
+            if (File.Exists(appsettingsPath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(appsettingsPath);
+
+                    int p1 = ExtractJsonInt(json, "backend");
+                    if (p1 > 0) backendPort = p1;
+
+                    int p2 = ExtractJsonInt(json, "merchant");
+                    if (p2 > 0) merchantPort = p2;
+
+                    int p3 = ExtractJsonInt(json, "customer");
+                    if (p3 > 0) customerPort = p3;
+
+                    string customData = ExtractJsonString(json, "dataDirectory");
+                    if (!string.IsNullOrEmpty(customData)) dataDir = customData;
+
+                    string customLogs = ExtractJsonString(json, "logsDirectory");
+                    if (!string.IsNullOrEmpty(customLogs)) runtimeLogsDir = customLogs;
+
+                    string pkEnabled = ExtractJsonString(json, "enabled");
+                    if (!string.IsNullOrEmpty(pkEnabled)) isPagekiteEnabled = pkEnabled.Equals("true", StringComparison.OrdinalIgnoreCase);
+
+                    string pkSubdomain = ExtractJsonString(json, "subdomain");
+                    if (!string.IsNullOrEmpty(pkSubdomain)) pagekiteName = pkSubdomain;
+
+                    string pkSecret = ExtractJsonString(json, "secret");
+                    if (!string.IsNullOrEmpty(pkSecret)) pagekiteSecret = pkSecret;
+                }
+                catch { }
+            }
+
+            // 2. Override from local .env if present
             try
             {
                 string envFile = Path.Combine(projectRoot, ".env");
@@ -218,20 +284,77 @@ namespace AutoPrint.Launcher
                         var key = parts[0].Trim();
                         var val = parts[1].Trim();
 
-                        int p1, p2, p3;
-                        if (key == "PORT" && int.TryParse(val, out p1)) backendPort = p1;
-                        if (key == "MERCHANT_PORT" && int.TryParse(val, out p2)) merchantPort = p2;
-                        if (key == "CUSTOMER_PORT" && int.TryParse(val, out p3)) customerPort = p3;
+                        int p;
+                        if (key == "PORT" && int.TryParse(val, out p)) backendPort = p;
+                        if (key == "MERCHANT_PORT" && int.TryParse(val, out p)) merchantPort = p;
+                        if (key == "CUSTOMER_PORT" && int.TryParse(val, out p)) customerPort = p;
                         if (key == "PAGEKITE_ENABLED") isPagekiteEnabled = !val.Equals("false", StringComparison.OrdinalIgnoreCase);
+                        if (key == "PAGEKITE_NAME") pagekiteName = val;
+                        if (key == "PAGEKITE_SECRET") pagekiteSecret = val;
                     }
                 }
             }
             catch { }
         }
 
+        private int ExtractJsonInt(string json, string key)
+        {
+            var match = Regex.Match(json, string.Format("\"{0}\"\\s*:\\s*(\\d+)", key), RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                int val;
+                if (int.TryParse(match.Groups[1].Value, out val)) return val;
+            }
+            return 0;
+        }
+
+        private string ExtractJsonString(string json, string key)
+        {
+            var match = Regex.Match(json, string.Format("\"{0}\"\\s*:\\s*\"([^\"]*)\"", key), RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return match.Groups[1].Value;
+            }
+            var boolMatch = Regex.Match(json, string.Format("\"{0}\"\\s*:\\s*(true|false)", key), RegexOptions.IgnoreCase);
+            if (boolMatch.Success)
+            {
+                return boolMatch.Groups[1].Value;
+            }
+            return null;
+        }
+
+        private string FindNodeExecutable()
+        {
+            // 1. Check bundled runtime node.exe
+            string bundledNode = Path.Combine(projectRoot, "runtime", "node", "node.exe");
+            if (File.Exists(bundledNode)) return bundledNode;
+
+            bundledNode = Path.Combine(projectRoot, "bin", "node.exe");
+            if (File.Exists(bundledNode)) return bundledNode;
+
+            // 2. Check system PATH node.exe
+            return "node";
+        }
+
+        private string FindPythonExecutable()
+        {
+            // 1. Check bundled runtime python.exe
+            string bundledPython = Path.Combine(projectRoot, "runtime", "python", "python.exe");
+            if (File.Exists(bundledPython)) return bundledPython;
+
+            // 2. Check .venv
+            string venvPython = Path.Combine(projectRoot, ".venv", "Scripts", "python.exe");
+            if (File.Exists(venvPython)) return venvPython;
+
+            // 3. Fallback to system PATH
+            return "python";
+        }
+
         private void StartServices()
         {
             isStopping = false;
+            string nodeExe = FindNodeExecutable();
+            string pythonExe = FindPythonExecutable();
 
             // 1. Backend REST API
             if (!IsPortInUse(backendPort))
@@ -241,31 +364,31 @@ namespace AutoPrint.Launcher
                 {
                     backendScript = Path.Combine(projectRoot, "app", "backend", "src", "server.ts");
                 }
-                backendProcess = StartBackgroundProcess("node", string.Format("\"{0}\"", backendScript), "backend.log");
+                backendProcess = StartBackgroundProcess(nodeExe, string.Format("\"{0}\"", backendScript), "backend.log");
             }
 
             // 2. Customer Web Kiosk
             if (!IsPortInUse(customerPort))
             {
                 string customerServer = Path.Combine(projectRoot, "app", "customer-web", "server.js");
-                customerProcess = StartBackgroundProcess("node", string.Format("\"{0}\"", customerServer), "customer.log");
+                customerProcess = StartBackgroundProcess(nodeExe, string.Format("\"{0}\"", customerServer), "customer.log");
             }
 
             // 3. Merchant Desktop Desk
             if (!IsPortInUse(merchantPort))
             {
                 string merchantServer = Path.Combine(projectRoot, "app", "merchant-desktop", "server.js");
-                merchantProcess = StartBackgroundProcess("node", string.Format("\"{0}\"", merchantServer), "merchant.log");
+                merchantProcess = StartBackgroundProcess(nodeExe, string.Format("\"{0}\"", merchantServer), "merchant.log");
             }
 
-            // 4. PageKite Tunnel (if configured)
+            // 4. PageKite Tunnel (if enabled)
             if (isPagekiteEnabled && !IsProcessRunning("pagekite.py"))
             {
                 string pagekiteScript = Path.Combine(projectRoot, "scripts", "pagekite.py");
                 if (File.Exists(pagekiteScript))
                 {
-                    string args = "--nossl --service_cfg=autoprint.pagekite.me:7000:xakd4af2azx229x94effe9az79262cxz 7000 autoprint.pagekite.me";
-                    pagekiteProcess = StartBackgroundProcess("python", string.Format("\"{0}\" {1}", pagekiteScript, args), "pagekite.log");
+                    string args = string.Format("--nossl --service_cfg={0}.pagekite.me:{1}:{2} {1} {0}.pagekite.me", pagekiteName, customerPort, pagekiteSecret);
+                    pagekiteProcess = StartBackgroundProcess(pythonExe, string.Format("\"{0}\" {1}", pagekiteScript, args), "pagekite.log");
                 }
             }
 
@@ -294,6 +417,7 @@ namespace AutoPrint.Launcher
                 psi.EnvironmentVariables["PORT"] = backendPort.ToString();
                 psi.EnvironmentVariables["MERCHANT_PORT"] = merchantPort.ToString();
                 psi.EnvironmentVariables["CUSTOMER_PORT"] = customerPort.ToString();
+                psi.EnvironmentVariables["AUTOPRINT_DATA_DIR"] = dataDir;
                 psi.EnvironmentVariables["NODE_ENV"] = "production";
 
                 var proc = new Process { StartInfo = psi };
@@ -371,7 +495,6 @@ namespace AutoPrint.Launcher
 
             if (!backendOk || !merchantOk || !customerOk)
             {
-                // Attempt auto-recovery
                 StartServices();
             }
         }
@@ -388,8 +511,9 @@ namespace AutoPrint.Launcher
             sb.AppendLine(string.Format("Backend API (Port {0}):\t{1}", backendPort, backendOk ? "RUNNING (Healthy)" : "STOPPED"));
             sb.AppendLine(string.Format("Merchant Desk (Port {0}):\t{1}", merchantPort, merchantOk ? "RUNNING (Healthy)" : "STOPPED"));
             sb.AppendLine(string.Format("Customer Kiosk (Port {0}):\t{1}", customerPort, customerOk ? "RUNNING (Healthy)" : "STOPPED"));
-            sb.AppendLine("PageKite Ingress:\t\thttps://autoprint.pagekite.me");
+            sb.AppendLine(string.Format("PageKite Ingress:\t\thttps://{0}.pagekite.me", pagekiteName));
             sb.AppendLine();
+            sb.AppendLine(string.Format("Persistent Datastore:\t{0}", dataDir));
             sb.AppendLine(string.Format("Logs Directory:\t\t{0}", runtimeLogsDir));
 
             MessageBox.Show(sb.ToString(), "AutoPrint System Status", MessageBoxButtons.OK, MessageBoxIcon.Information);

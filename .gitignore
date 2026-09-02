@@ -5,11 +5,13 @@ node_modules/
 # Build Output
 dist/
 **/dist/
+dist-installer/
 build/
 **/build/
 out/
 release/
 .next/
+*.old.exe
 
 # Environment Secrets
 .env
