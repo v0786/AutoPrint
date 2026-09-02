@@ -6,7 +6,7 @@ cls
 
 echo ===============================================================================
 echo    AUTOPRINT / QRPRINT -- PRODUCTION SERVICE LAUNCHER v2.0
-echo    Automated Print Shop Management, Dynamic Ingress ^& Verification
+echo    Automated Print Shop Management, Dynamic Ingress and Verification
 echo ===============================================================================
 echo.
 
@@ -32,17 +32,17 @@ if exist ".env" (
     )
 )
 
-echo [1/4] Starting AutoPrint Backend REST API Engine (Port %BACKEND_PORT%)...
-start "AutoPrint Backend (:5000)" /B node app\backend\dist\server.js > runtime\logs\backend.log 2>&1
+echo [1/3] Starting AutoPrint Backend REST API Engine (Port %BACKEND_PORT%)...
+start "AutoPrint Backend" /B node app\backend\dist\server.js > runtime\logs\backend.log 2>&1
 
-echo [2/4] Starting Customer Web Kiosk & API Reverse Proxy (Port %CUSTOMER_PORT%)...
-start "AutoPrint Customer Kiosk (:7000)" /B node app\customer-web\server.js > runtime\logs\customer.log 2>&1
+echo [2/3] Starting Customer Web Kiosk (Port %CUSTOMER_PORT%)...
+start "AutoPrint Customer Kiosk" /B node app\customer-web\server.js > runtime\logs\customer.log 2>&1
 
-echo [3/4] Starting Merchant Desktop Desk Server (Port %MERCHANT_PORT%)...
-start "AutoPrint Merchant Desk (:6000)" /B npx vite preview --port %MERCHANT_PORT% --host 0.0.0.0 --outDir app\merchant-desktop\dist > runtime\logs\merchant.log 2>&1
+echo [3/3] Starting Merchant Desktop Desk (Port %MERCHANT_PORT%)...
+start "AutoPrint Merchant Desk" /B node app\merchant-desktop\server.js > runtime\logs\merchant.log 2>&1
 
-echo [4/4] Waiting for services to initialize...
-timeout /t 3 /nobreak > nul
+echo Waiting for services to initialize...
+powershell -NoProfile -Command "Start-Sleep -Seconds 3" > nul 2>&1
 
 cls
 echo ===============================================================================
