@@ -11,7 +11,8 @@
     "build:backend": "npm run build --prefix app/backend",
     "build:merchant": "npm run build --prefix app/merchant-desktop",
     "build:customer": "npm run build --prefix app/customer-web",
-    "build:all": "npm run build:backend && npm run build:merchant && npm run build:customer",
+    "build:launcher": "cmd /c src-launcher\\build-launcher.cmd",
+    "build:all": "npm run build:backend && npm run build:merchant && npm run build:customer && npm run build:launcher",
     "test:backend": "npm test --prefix app/backend",
     "test:all": "npm test --prefix app/backend && npm run lint --prefix app/merchant-desktop && npm run lint --prefix app/customer-web",
     "start:backend": "npm start --prefix app/backend"
