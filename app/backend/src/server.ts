@@ -14,6 +14,8 @@ import { upload } from './middleware/upload';
 import { JobController } from './controllers/jobController';
 import { VerificationController } from './controllers/verificationController';
 import { PaymentController } from './controllers/paymentController';
+import { MerchantController } from './controllers/merchantController';
+import { SystemController } from './controllers/systemController';
 import { ConfigController } from './controllers/configController';
 import { PrinterService } from './services/printerService';
 import { tunnelService } from './services/tunnelService';
@@ -107,8 +109,25 @@ api.post('/verification/collect-cash', VerificationController.processCashCollect
 api.post('/verification/handover', VerificationController.confirmHandover);
 api.get('/verification/audit-logs', VerificationController.getAuditLogs);
 
-// Digital Payment Gateway Attempt Routes
+// Merchant Auth & Management Routes
+api.get('/merchant/auth/check', MerchantController.checkAuth);
+api.post('/merchant/auth/onboard', MerchantController.onboard);
+api.post('/merchant/auth/login', MerchantController.login);
+api.post('/merchant/auth/logout', MerchantController.logout);
+api.get('/merchant/profile', MerchantController.getProfile);
+api.put('/merchant/profile', MerchantController.updateProfile);
+api.get('/merchant/public-profile', MerchantController.getPublicProfile);
+api.post('/merchant/payment-receiver', MerchantController.updatePaymentReceiver);
+api.post('/merchant/printer', MerchantController.updatePrinter);
+api.post('/merchant/toggle-online', MerchantController.toggleOnline);
+
+// Digital Payment Gateway Routes
+api.post('/payment/create-order', PaymentController.createOrder);
+api.post('/payment/verify-razorpay', PaymentController.verifyRazorpay);
 api.post('/payment/digital-attempt', PaymentController.recordDigitalAttempt);
+
+// System Workload & Dynamic Queue Routes
+api.get('/system/workload', SystemController.getWorkload);
 
 // System Configuration & QR Ingress Routes
 api.get('/config/public', ConfigController.getPublicConfig);

@@ -1,7 +1,7 @@
 /**
  * Print Job Context
  * Global state management for the customer kiosk workflow.
- * Integrated with the persistent AutoPrint backend API.
+ * Directly integrated with the real AutoPrint backend and live merchant status.
  */
 
 import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
@@ -17,7 +17,6 @@ import {
   UpiAppId,
   UploadedFileDetails,
 } from '../types';
-import { DEFAULT_SHOP_ID, resolveShopFromUrl, SHOPS_DATABASE } from '../data/shops';
 import { calculatePricing } from '../utils/pricing';
 import { parseCustomPageRange } from '../utils/helpers';
 import { CustomerApiClient } from '../services/apiClient';
@@ -25,6 +24,9 @@ import { CustomerApiClient } from '../services/apiClient';
 interface PrintJobContextType {
   currentStep: AppStep;
   currentShop: ShopInfo;
+  isShopOnline: boolean;
+  shopStatusMessage: string;
+  queueMessage: string | null;
   uploadedFile: UploadedFileDetails | null;
   specs: PrintSpecifications;
   pricing: PriceBreakdown;
@@ -39,8 +41,8 @@ interface PrintJobContextType {
 
   // Actions
   setStep: (step: AppStep) => void;
-  switchShop: (shopId: string) => void;
   setUploadedFile: (file: UploadedFileDetails | null) => void;
+  handleFileUpload: (file: File) => Promise<void>;
   updateSpecs: (partial: Partial<PrintSpecifications>) => void;
   setPageRangeString: (rangeStr: string) => void;
   initiatePayment: (method: PaymentMethod, upiApp?: UpiAppId) => void;
@@ -49,6 +51,7 @@ interface PrintJobContextType {
   setShopModalOpen: (open: boolean) => void;
   setQrModalOpen: (open: boolean) => void;
   setPreviewModalOpen: (open: boolean) => void;
+  refreshShopStatus: () => Promise<void>;
 }
 
 const DEFAULT_SPECS: PrintSpecifications = {
@@ -69,11 +72,47 @@ const DEFAULT_PAYMENT: PaymentDetails = {
   paymentVerified: false,
 };
 
+const DEFAULT_OFFLINE_SHOP: ShopInfo = {
+  id: 'offline',
+  name: 'No shop is selected',
+  branch: 'Offline Counter',
+  address: 'Shop is currently offline or unconfigured.',
+  kioskNumber: 'Counter #00',
+  status: 'maintenance',
+  activePrinters: [],
+  queueLength: 0,
+  averageWaitMins: 0,
+  rates: {
+    bwSingle: 2.0,
+    bwDoublePerSide: 1.5,
+    colorSingle: 10.0,
+    colorDoublePerSide: 8.0,
+    photoGlossy: 25.0,
+    a3Multiplier: 2.0,
+    legalMultiplier: 1.25,
+    letterMultiplier: 1.0,
+    finishing: {
+      staple: 5.0,
+      spiral: 40.0,
+      hardcover: 150.0,
+      laminationPerSheet: 20.0,
+    },
+  },
+  upiDetails: {
+    vpa: '',
+    payeeName: '',
+  },
+};
+
 const PrintJobContext = createContext<PrintJobContextType | undefined>(undefined);
 
 export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentStep, setStep] = useState<AppStep>('splash');
-  const [currentShop, setCurrentShop] = useState<ShopInfo>(() => resolveShopFromUrl());
+  const [currentShop, setCurrentShop] = useState<ShopInfo>(DEFAULT_OFFLINE_SHOP);
+  const [isShopOnline, setIsShopOnline] = useState<boolean>(false);
+  const [shopStatusMessage, setShopStatusMessage] = useState<string>('Checking shop status...');
+  const [queueMessage, setQueueMessage] = useState<string | null>(null);
+
   const [uploadedFile, setUploadedFile] = useState<UploadedFileDetails | null>(null);
   const [specs, setSpecs] = useState<PrintSpecifications>(DEFAULT_SPECS);
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails>(DEFAULT_PAYMENT);
@@ -89,15 +128,101 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isQrModalOpen, setQrModalOpen] = useState(false);
   const [isPreviewModalOpen, setPreviewModalOpen] = useState(false);
 
-  // Sync shop when URL parameter changes
+  // Fetch real merchant online profile & system workload
+  const refreshShopStatus = async () => {
+    try {
+      const res = await fetch('/api/merchant/public-profile');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.ok && json.isAvailable && json.data) {
+          const profile = json.data;
+          setIsShopOnline(true);
+          setShopStatusMessage('Online');
+          setCurrentShop({
+            id: profile.id,
+            name: profile.name,
+            branch: profile.branch || 'Main Counter',
+            address: profile.address || 'Verified Shop Counter',
+            kioskNumber: profile.kioskNumber || 'Counter #01',
+            status: 'online',
+            activePrinters: profile.selectedPrinter ? [profile.selectedPrinter] : ['AutoPrint Spooler'],
+            queueLength: 0,
+            averageWaitMins: 2,
+            rates: {
+              ...DEFAULT_OFFLINE_SHOP.rates,
+              bwSingle: profile.rates?.bwSingle || 2.0,
+              colorSingle: profile.rates?.colorSingle || 10.0,
+            },
+            upiDetails: {
+              vpa: profile.upiDetails?.vpa || profile.paymentConfig?.upiId || '',
+              payeeName: profile.upiDetails?.payeeName || profile.name,
+            },
+          });
+        } else {
+          setIsShopOnline(false);
+          setShopStatusMessage('No shop is selected');
+          setCurrentShop(DEFAULT_OFFLINE_SHOP);
+        }
+      } else {
+        setIsShopOnline(false);
+        setShopStatusMessage('No shop is selected');
+        setCurrentShop(DEFAULT_OFFLINE_SHOP);
+      }
+
+      // Check system workload
+      const workloadRes = await fetch('/api/system/workload').catch(() => null);
+      if (workloadRes && workloadRes.ok) {
+        const wJson = await workloadRes.json();
+        if (wJson.ok && wJson.data?.queueMessage) {
+          setQueueMessage(wJson.data.queueMessage);
+        } else {
+          setQueueMessage(null);
+        }
+      }
+    } catch {
+      setIsShopOnline(false);
+      setShopStatusMessage('No shop is selected');
+      setCurrentShop(DEFAULT_OFFLINE_SHOP);
+    }
+  };
+
   useEffect(() => {
-    const handlePopState = () => {
-      const resolved = resolveShopFromUrl();
-      setCurrentShop(resolved);
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    refreshShopStatus();
+    const interval = setInterval(refreshShopStatus, 8000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Handle Real File Upload with Object URL generation
+  const handleFileUpload = async (file: File) => {
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isImage = file.type.startsWith('image/');
+    const previewUrl = URL.createObjectURL(file);
+
+    // Approximate page count
+    let estimatedPages = 1;
+    if (isPdf) {
+      estimatedPages = Math.max(1, Math.ceil(file.size / (120 * 1024)));
+    }
+
+    const uploaded: UploadedFileDetails = {
+      name: file.name,
+      size: file.size,
+      type: file.type || 'application/octet-stream',
+      totalPages: estimatedPages,
+      rawFile: file,
+      previewUrl,
+      isPdf,
+      isImage,
+      uploadTimestamp: Date.now(),
+    };
+
+    setUploadedFile(uploaded);
+    setSpecs((prev) => ({
+      ...prev,
+      selectedPagesCount: estimatedPages,
+      orientation: 'portrait',
+    }));
+  };
 
   // Update selectedPagesCount when uploaded file totalPages changes or custom range changes
   useEffect(() => {
@@ -116,21 +241,10 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [uploadedFile, specs.pageRangeType, specs.customPageRange]);
 
-  // Recalculate pricing
+  // Recalculate pricing based on real merchant rates
   const pricing = useMemo(() => {
     return calculatePricing(specs, currentShop);
   }, [specs, currentShop]);
-
-  const switchShop = (shopId: string) => {
-    const targetShop = SHOPS_DATABASE[shopId];
-    if (targetShop) {
-      setCurrentShop(targetShop);
-      const url = new URL(window.location.href);
-      url.searchParams.set('shop', shopId);
-      window.history.pushState({}, '', url.toString());
-    }
-    setShopModalOpen(false);
-  };
 
   const updateSpecs = (partial: Partial<PrintSpecifications>) => {
     setSpecs((prev) => {
@@ -179,7 +293,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         paymentMethod: backendPaymentMethod,
         amountMinorUnits,
         currency: 'INR',
-        printerName: currentShop.activePrinters[0],
+        printerName: currentShop.activePrinters[0] || 'AutoPrint Spooler',
       });
 
       const now = new Date();
@@ -251,6 +365,11 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const resetJob = () => {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    if (uploadedFile?.previewUrl) {
+      try {
+        URL.revokeObjectURL(uploadedFile.previewUrl);
+      } catch {}
+    }
     setUploadedFile(null);
     setSpecs(DEFAULT_SPECS);
     setPaymentDetails(DEFAULT_PAYMENT);
@@ -265,6 +384,9 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       value={{
         currentStep,
         currentShop,
+        isShopOnline,
+        shopStatusMessage,
+        queueMessage,
         uploadedFile,
         specs,
         pricing,
@@ -277,8 +399,8 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isSubmitting,
         submissionError,
         setStep,
-        switchShop,
         setUploadedFile,
+        handleFileUpload,
         updateSpecs,
         setPageRangeString,
         initiatePayment,
@@ -287,6 +409,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setShopModalOpen,
         setQrModalOpen,
         setPreviewModalOpen,
+        refreshShopStatus,
       }}
     >
       {children}
@@ -294,10 +417,8 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 };
 
-export function usePrintJob(): PrintJobContextType {
+export const usePrintJob = () => {
   const context = useContext(PrintJobContext);
-  if (!context) {
-    throw new Error('usePrintJob must be used within a PrintJobProvider');
-  }
+  if (!context) throw new Error('usePrintJob must be used within a PrintJobProvider');
   return context;
-}
+};

@@ -149,9 +149,8 @@ export class PageKiteConnector extends EventEmitter {
 
       this.process.stderr?.on('data', (data: Buffer) => {
         const errText = data.toString();
-        if (errText.toLowerCase().includes('error') && !errText.includes('signal handler')) {
+        if (errText.toLowerCase().includes('error') && !errText.includes('signal handler') && !errText.includes('/bin/sh')) {
           this.state.error = errText.trim();
-          this.emit('error', this.state.error);
         }
       });
 

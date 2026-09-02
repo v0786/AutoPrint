@@ -4,7 +4,7 @@
  */
 
 import Database from 'better-sqlite3';
-import { PATHS, ensureDataDirectories } from '../config/environment.js';
+import { PATHS, ensureDataDirectories } from '../config/environment';
 
 let _db: Database.Database | null = null;
 
@@ -23,7 +23,6 @@ export function initDatabase(): void {
       ? (msg: unknown) => {
           if (typeof msg === 'string' && msg.length < 500) {
             // Only log short statements to avoid flooding console
-            // console.debug('[SQL]', msg);
           }
         }
       : undefined,
@@ -49,7 +48,7 @@ export function closeDatabase(): void {
 
 // ─── Schema Migration ─────────────────────────────────────────────────────────
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 function runMigrations(db: Database.Database): void {
   // Create migration tracking table
@@ -64,13 +63,22 @@ function runMigrations(db: Database.Database): void {
     db.prepare('SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
   )?.version ?? 0;
 
-  if (currentVersion < SCHEMA_VERSION) {
-    const migrate = db.transaction(() => {
+  if (currentVersion < 1) {
+    const migrate1 = db.transaction(() => {
       runMigration1(db);
-      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(SCHEMA_VERSION);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(1);
     });
-    migrate();
-    console.log(`[DB] Applied migrations 1→${SCHEMA_VERSION}`);
+    migrate1();
+    console.log('[DB] Applied migration 1');
+  }
+
+  if (currentVersion < 2) {
+    const migrate2 = db.transaction(() => {
+      runMigration2(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(2);
+    });
+    migrate2();
+    console.log('[DB] Applied migration 2 (Merchant Onboarding, Sessions, Payment Config)');
   }
 }
 
@@ -183,5 +191,60 @@ function runMigration1(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_audit_code ON audit_logs(verification_code);
     CREATE INDEX IF NOT EXISTS idx_audit_job  ON audit_logs(job_id);
     CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_logs(timestamp DESC);
+  `);
+}
+
+function runMigration2(db: Database.Database): void {
+  db.exec(`
+    -- Merchants Profile & Credentials Table
+    CREATE TABLE IF NOT EXISTS merchants (
+      id                   TEXT PRIMARY KEY,
+      shop_name            TEXT NOT NULL,
+      owner_name           TEXT NOT NULL,
+      email                TEXT UNIQUE NOT NULL,
+      phone                TEXT,
+      password_hash        TEXT NOT NULL,
+      password_salt        TEXT NOT NULL,
+      address              TEXT NOT NULL DEFAULT '',
+      branch               TEXT NOT NULL DEFAULT 'Main Counter',
+      kiosk_number         TEXT NOT NULL DEFAULT 'Counter #01',
+      upi_id               TEXT,
+      upi_qr_data_url      TEXT,
+      selected_printer     TEXT NOT NULL DEFAULT 'AutoPrint Virtual Spooler',
+      color_price_per_page INTEGER NOT NULL DEFAULT 1000, -- 10.00 INR
+      bw_price_per_page    INTEGER NOT NULL DEFAULT 200,  -- 2.00 INR
+      is_onboarded         INTEGER NOT NULL DEFAULT 1,
+      is_online            INTEGER NOT NULL DEFAULT 1,
+      created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_merchant_email ON merchants(email);
+
+    -- Merchant Persistent Sessions Table ("Keep me signed in")
+    CREATE TABLE IF NOT EXISTS merchant_sessions (
+      token                TEXT PRIMARY KEY,
+      merchant_id          TEXT NOT NULL,
+      created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at           TEXT NOT NULL,
+      FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sessions_merchant ON merchant_sessions(merchant_id);
+
+    -- Payment Receiver Configuration (UPI, Custom QR, Razorpay / Gateway)
+    CREATE TABLE IF NOT EXISTS payment_config (
+      id                   TEXT PRIMARY KEY,
+      merchant_id          TEXT,
+      provider             TEXT NOT NULL DEFAULT 'UPI_DIRECT',
+      upi_id               TEXT,
+      upi_payee_name       TEXT,
+      upi_qr_data_url      TEXT,
+      razorpay_key_id      TEXT,
+      razorpay_key_secret  TEXT,
+      is_active            INTEGER NOT NULL DEFAULT 1,
+      created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 }

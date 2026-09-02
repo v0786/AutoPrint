@@ -46,7 +46,10 @@ export interface UploadedFileDetails {
   type: string;
   totalPages: number;
   rawFile?: File;
-  mockThumbnails?: string[];
+  previewUrl?: string;
+  isPdf?: boolean;
+  isImage?: boolean;
+  imagePreviewUrl?: string;
   uploadTimestamp: number;
 }
 

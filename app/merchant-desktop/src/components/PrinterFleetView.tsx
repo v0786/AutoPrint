@@ -1,289 +1,260 @@
-import React, { useState } from 'react';
-import {
-  PrinterDevice,
-  PrinterStatus,
-  PrintJob,
-} from '../types/printer';
+import React, { useState, useEffect } from 'react';
 import {
   Printer,
   HardDrive,
-  Scissors,
-  Zap,
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
+  Star,
+  Zap,
+  Info,
   Sliders,
-  Sparkles,
-  Wifi,
-  Usb,
-  Cpu,
-  Layers,
-  HelpCircle,
-  FileCheck,
+  Check,
 } from 'lucide-react';
 
-interface PrinterFleetViewProps {
-  printers: PrinterDevice[];
-  onTriggerTestPrint: (printerId: string, testType: 'diagnostic' | 'alignment' | 'density' | 'receipt') => Promise<PrintJob>;
-  onSetPrinterStatus: (printerId: string, status: PrinterStatus, faultDetails?: { paperLevel?: number; tonerLevel?: number }) => Promise<boolean>;
-  onRefreshPrinters: () => void;
+export interface SystemPrinter {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  isOnline: boolean;
+  driverName?: string;
+  portName?: string;
 }
 
-export const PrinterFleetView: React.FC<PrinterFleetViewProps> = ({
-  printers,
-  onTriggerTestPrint,
-  onSetPrinterStatus,
-  onRefreshPrinters,
-}) => {
-  const [selectedPrinter, setSelectedPrinter] = useState<PrinterDevice | null>(printers[0] || null);
-  const [testingId, setTestingId] = useState<string | null>(null);
-  const [testSuccess, setTestSuccess] = useState<string | null>(null);
+export const PrinterFleetView: React.FC = () => {
+  const [printers, setPrinters] = useState<SystemPrinter[]>([]);
+  const [activePrinterName, setActivePrinterName] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleTestPrint = async (printerId: string, testType: 'diagnostic' | 'alignment' | 'density' | 'receipt') => {
-    setTestingId(`${printerId}-${testType}`);
+  // Fetch real printers from backend Win32 spooler
+  const fetchPrinters = async () => {
+    setLoading(true);
+    setErrorMessage(null);
     try {
-      await onTriggerTestPrint(printerId, testType);
-      setTestSuccess(`Diagnostic job queued for ${printerId}`);
-      setTimeout(() => setTestSuccess(null), 3500);
-    } catch (e) {
-      console.error(e);
+      const [printerRes, profileRes] = await Promise.all([
+        fetch('/api/printers'),
+        fetch('/api/merchant/profile'),
+      ]);
+
+      const pData = await printerRes.json();
+      const profData = await profileRes.json();
+
+      if (pData.ok && Array.isArray(pData.data)) {
+        setPrinters(pData.data);
+
+        // Determine currently active printer
+        const configuredPrinter = profData.data?.selectedPrinter;
+        if (configuredPrinter) {
+          setActivePrinterName(configuredPrinter);
+        } else if (pData.data.length > 0) {
+          const def = pData.data.find((p: any) => p.isDefault) || pData.data[0];
+          setActivePrinterName(def.name);
+        }
+      } else {
+        setPrinters([]);
+      }
+    } catch {
+      setErrorMessage('Failed to connect to backend printer spooler.');
+      setPrinters([]);
     } finally {
-      setTestingId(null);
+      setLoading(false);
     }
   };
 
-  const getStatusBadge = (status: PrinterStatus) => {
-    switch (status) {
-      case 'ready':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            ONLINE / READY
-          </span>
-        );
-      case 'printing':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-600 text-white animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-white" />
-            PRINTING
-          </span>
-        );
-      case 'out_of_paper':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
-            <AlertTriangle className="w-3 h-3" />
-            OUT OF PAPER
-          </span>
-        );
-      case 'paper_jam':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
-            <AlertTriangle className="w-3 h-3" />
-            PAPER JAM
-          </span>
-        );
-      case 'offline':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-            OFFLINE / DISCONNECTED
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-            {status.toUpperCase()}
-          </span>
-        );
+  useEffect(() => {
+    fetchPrinters();
+  }, []);
+
+  const handleSelectActivePrinter = async (printerName: string) => {
+    setSaving(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+
+    try {
+      const res = await fetch('/api/merchant/printer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ printerName }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || 'Failed to update active printer.');
+      }
+
+      setActivePrinterName(printerName);
+      setSuccessMessage(`Active printer set to: ${printerName}`);
+      setTimeout(() => setSuccessMessage(null), 3500);
+    } catch (e: any) {
+      setErrorMessage(e.message || 'Failed to select printer.');
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner & Quick Refresh */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white rounded-3xl p-5 border border-slate-200 shadow-xs">
+    <div className="p-6 sm:p-8 max-w-5xl mx-auto space-y-6 font-sans">
+      
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <HardDrive className="w-4 h-4 text-blue-600" />
-            <span>Merchant Printer Hardware Fleet ({printers.length} Devices)</span>
-          </h3>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Direct spooler access over USB, Network Raw Port (9100), and OS WinSpool/CUPS interfaces.
+          <h2 className="text-xl font-bold text-slate-900">Hardware & Printer Fleet</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Real Windows OS printers detected on this computer. Selected printer will process customer jobs.
           </p>
         </div>
 
         <button
-          id="btn-refresh-printers"
-          onClick={onRefreshPrinters}
-          className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-slate-200 transition-all shadow-2xs cursor-pointer"
+          onClick={fetchPrinters}
+          disabled={loading}
+          className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Rescan Hardware</span>
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh / Re-scan</span>
         </button>
       </div>
 
-      {testSuccess && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-800 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-          <span>{testSuccess}</span>
+      {/* Success / Error Alerts */}
+      {successMessage && (
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2.5 shadow-sm">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          <span>{successMessage}</span>
         </div>
       )}
 
-      {/* Grid of Printer Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {printers.map((printer) => {
-          const isSelected = selectedPrinter?.id === printer.id;
-          return (
-            <div
-              key={printer.id}
-              id={`printer-card-${printer.id}`}
-              className={`bg-white rounded-3xl border p-5 space-y-4 shadow-xs transition-all duration-150 relative flex flex-col justify-between ${
-                printer.isDefault ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-200'
-              }`}
-            >
-              <div>
-                {/* Header: Title + Status */}
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      {printer.isDefault && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-600 text-white">
-                          DEFAULT
+      {errorMessage && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2.5 shadow-sm">
+          <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {/* PRINTERS LIST */}
+      {loading ? (
+        <div className="bg-white rounded-3xl p-12 border border-slate-200 text-center space-y-3 shadow-xs">
+          <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
+          <p className="text-sm font-bold text-slate-800">Scanning local Windows printers...</p>
+          <p className="text-xs text-slate-400">Querying Windows Print Spooler (Win32_Printer)</p>
+        </div>
+      ) : printers.length === 0 ? (
+        /* NO PRINTER DETECTED STATE */
+        <div className="bg-white rounded-3xl p-12 border border-slate-200 text-center space-y-4 shadow-sm">
+          <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-black text-slate-900">No printer detected</h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+              No physical or virtual printers were found in the Windows print spooler. Please ensure your printer is powered on, connected via USB/Network, and installed in Windows Settings.
+            </p>
+          </div>
+          <button
+            onClick={fetchPrinters}
+            className="px-6 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-lg shadow-blue-600/20 inline-flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Re-scan Local Printers</span>
+          </button>
+        </div>
+      ) : (
+        /* PRINTER CARDS GRID */
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {printers.map((printer) => {
+            const isActive = activePrinterName === printer.name;
+
+            return (
+              <div
+                key={printer.id}
+                className={`bg-white rounded-3xl p-6 border transition-all relative flex flex-col justify-between shadow-xs ${
+                  isActive
+                    ? 'border-blue-600 ring-2 ring-blue-600/20 shadow-md'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold flex-shrink-0 ${
+                          isActive ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        <Printer className="w-6 h-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold text-slate-900 truncate" title={printer.name}>
+                          {printer.name}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {printer.isDefault && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                              OS Default
+                            </span>
+                          )}
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              printer.isOnline
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            {printer.isOnline ? 'Online' : 'Offline / Idle'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isActive && (
+                      <span className="flex items-center gap-1 text-[11px] font-bold px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0">
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Active Target</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 text-xs text-slate-500 pt-2 border-t border-slate-100">
+                    {printer.driverName && (
+                      <div className="flex justify-between">
+                        <span>Driver:</span>
+                        <span className="font-mono text-slate-800 truncate max-w-[200px]">
+                          {printer.driverName}
                         </span>
-                      )}
-                      <span className="text-[10px] font-mono font-bold text-slate-400">
-                        {printer.port}
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-sm text-slate-900 leading-snug">
-                      {printer.displayName}
-                    </h4>
-                    <p className="text-[11px] text-slate-500 font-medium mt-0.5 flex items-center gap-1">
-                      {printer.connectionType === 'usb' ? (
-                        <Usb className="w-3 h-3 text-slate-600" />
-                      ) : printer.connectionType === 'network' ? (
-                        <Wifi className="w-3 h-3 text-blue-600" />
-                      ) : (
-                        <Cpu className="w-3 h-3 text-slate-500" />
-                      )}
-                      <span>{printer.location}</span>
-                    </p>
-                  </div>
-                  <div className="shrink-0">{getStatusBadge(printer.status)}</div>
-                </div>
-
-                {/* Paper & Head Consumable Gauges */}
-                <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200 space-y-2.5 my-3">
-                  <div>
-                    <div className="flex justify-between text-[10px] font-bold text-slate-600 mb-1">
-                      <span>Paper Supply ({printer.paperFormat})</span>
-                      <span className={printer.paperLevelPercent < 20 ? 'text-red-600 font-extrabold' : 'text-slate-700'}>
-                        {printer.paperLevelPercent}%
-                      </span>
-                    </div>
-                    {/* Progress bar in Red */}
-                    <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-red-600 rounded-full transition-all duration-300"
-                        style={{ width: `${printer.paperLevelPercent}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-[10px] font-bold text-slate-600 mb-1">
-                      <span>Thermal Head / Toner</span>
-                      <span className="text-slate-700">{printer.tonerLevelPercent}%</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-red-500/80 rounded-full transition-all duration-300"
-                        style={{ width: `${printer.tonerLevelPercent}%` }}
-                      />
-                    </div>
+                      </div>
+                    )}
+                    {printer.portName && (
+                      <div className="flex justify-between">
+                        <span>Port:</span>
+                        <span className="font-mono text-slate-800 truncate max-w-[200px]">
+                          {printer.portName}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Features Badges */}
-                <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-slate-600">
-                  <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700">
-                    {printer.dpi} DPI
+                <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400">
+                    {isActive ? 'Target for incoming print jobs' : 'Available for selection'}
                   </span>
-                  {printer.supportedFeatures.autoCut && (
-                    <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1">
-                      <Scissors className="w-2.5 h-2.5" /> Auto-Cut
-                    </span>
-                  )}
-                  {printer.supportedFeatures.cashDrawerKick && (
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1">
-                      <Zap className="w-2.5 h-2.5" /> Cash Drawer
-                    </span>
-                  )}
-                  {printer.supportedFeatures.duplex && (
-                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">Duplex</span>
+
+                  {!isActive && (
+                    <button
+                      onClick={() => handleSelectActivePrinter(printer.name)}
+                      disabled={saving}
+                      className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-blue-600 text-white text-xs font-bold transition-all cursor-pointer shadow-sm disabled:opacity-50"
+                    >
+                      Use as Active Printer
+                    </button>
                   )}
                 </div>
               </div>
-
-              {/* Hardware Diagnostic & Fault Simulation Buttons */}
-              <div className="pt-3 border-t border-slate-100 space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    id={`btn-diag-${printer.id}`}
-                    disabled={testingId === `${printer.id}-receipt`}
-                    onClick={() => handleTestPrint(printer.id, 'receipt')}
-                    className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs shadow-emerald-700/20 transition-all disabled:opacity-50 cursor-pointer active:scale-[0.98]"
-                  >
-                    <FileCheck className="w-3.5 h-3.5 text-white" />
-                    <span>Test Print</span>
-                  </button>
-
-                  <button
-                    id={`btn-align-${printer.id}`}
-                    disabled={testingId === `${printer.id}-diagnostic`}
-                    onClick={() => handleTestPrint(printer.id, 'diagnostic')}
-                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-slate-200"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Self-Diag</span>
-                  </button>
-                </div>
-
-                {/* Fault Simulation Controls for Merchant Testing */}
-                <div className="flex items-center justify-between gap-1 pt-1 text-[10px]">
-                  <span className="font-bold text-slate-400 uppercase">Simulate:</span>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() =>
-                        onSetPrinterStatus(printer.id, 'ready', { paperLevel: 90, tonerLevel: 95 })
-                      }
-                      className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg border border-emerald-200 cursor-pointer"
-                      title="Set Ready"
-                    >
-                      Ready
-                    </button>
-                    <button
-                      onClick={() =>
-                        onSetPrinterStatus(printer.id, 'out_of_paper', { paperLevel: 0 })
-                      }
-                      className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-lg border border-red-200 cursor-pointer"
-                      title="Trigger Out of Paper"
-                    >
-                      No Paper
-                    </button>
-                    <button
-                      onClick={() => onSetPrinterStatus(printer.id, 'paper_jam')}
-                      className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-lg border border-red-200 cursor-pointer"
-                      title="Trigger Paper Jam"
-                    >
-                      Jam
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

@@ -1,79 +1,7 @@
 /**
  * AutoPrint Merchant Desktop Application
- *
- * Purpose:
- *   Staff interface for verifying print orders, handling payment,
- *   and confirming document handover to customers.
- *   Runs as Electron app on Windows for desktop usage.
- *
- * Key Views:
- *   1. Active Queue
- *      ├─ List all pending print jobs
- *      └─ Shows job details, customer name, amount
- *
- *   2. Staff Verification (PRIMARY VIEW)
- *      ├─ Search by 8-digit code
- *      ├─ Display payment status (UPI_SUCCESS, CASH_REQUIRED, CASH_LOCKED)
- *      ├─ Open cash collection dialog if needed
- *      ├─ Calculate change due
- *      └─ Confirm handover
- *
- *   3. Printer Fleet
- *      ├─ View connected printers
- *      └─ Printer status & metrics
- *
- *   4. Telemetry
- *      ├─ Queue metrics
- *      └─ System performance
- *
- *   5. Job Dispatch Studio
- *      └─ Advanced job management
- *
- * Workflow (Staff Perspective):
- *   1. Customer arrives with printed document
- *   2. Customer shows 8-digit verification code
- *   3. Staff enters code in "Staff Verification" view
- *   4. System displays:
- *      ├─ Job details (document, amount, color mode, copies)
- *      └─ Payment status
- *   5. If UPI_SUCCESS:
- *      └─ Click "Confirm Handover" → prints released
- *   6. If CASH_REQUIRED or CASH_LOCKED:
- *      ├─ Cash dialog opens
- *      ├─ Staff enters cash tendered amount
- *      ├─ System calculates change
- *      └─ Click "Confirm Handover" → prints released
- *
- * Data Flow:
- *   1. Staff enters code → GET /api/verification/lookup/:code
- *   2. Display record details from response
- *   3. If cash needed → POST /api/verification/collect-cash
- *   4. Confirm handover → POST /api/verification/handover
- *   5. View audit logs → GET /api/verification/audit-logs?code=...
- *
- * Technology:
- *   - Electron (desktop app runtime)
- *   - React 19 + TypeScript
- *   - Vite
- *   - TailwindCSS
- *
- * Environment:
- *   API Target: http://localhost:5000
- *   Port: 5000 (Electron app + frontend server)
- *
- * Build:
- *   npm run dev      # Development
- *   npm run build    # Production Electron build
- *
- * State Management:
- *   - Local React state for UI
- *   - HTTP calls to backend for persistent data
- *   - Real-time subscriptions via verificationService
- */
-
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
+ * Operational staff interface for verifying print orders, cash collection,
+ * physical document handover, live printer discovery, and payment receiver configuration.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -83,39 +11,27 @@ import {
   SpoolerMetrics,
   SpoolerLog,
   DocumentType,
-  PrinterStatus,
 } from './types/printer';
 import { spoolerService } from './services/electronBridge';
-import {
-  renderReceiptHtml,
-  renderLabelHtml,
-  renderInvoiceHtml,
-  renderReportHtml,
-} from './utils/documentTemplates';
-
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ActiveQueueView } from './components/ActiveQueueView';
-import { JobDispatchStudio } from './components/JobDispatchStudio';
 import { StaffVerificationView } from './components/StaffVerificationView';
 import { CustomerPaymentScreenModal } from './components/CustomerPaymentScreenModal';
 import { PrinterFleetView } from './components/PrinterFleetView';
+import { PaymentSettingsView } from './components/PaymentSettingsView';
 import { SpoolerTelemetryView } from './components/SpoolerTelemetryView';
-import { ArchitectureInspectorView } from './components/ArchitectureInspectorView';
 import { DocumentPreviewModal } from './components/DocumentPreviewModal';
 import { QuickNewJobModal } from './components/QuickNewJobModal';
-import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
-import { localPersistenceService } from './services/localPersistenceService';
-import { verificationService } from './services/verificationService';
-import { CollectionVerificationRecord } from './types/verification';
+import { MerchantAuthModal } from './components/auth/MerchantAuthModal';
 
 export default function App() {
-  const [isOnboardingActive, setIsOnboardingActive] = useState<boolean>(() => {
-    // Check if onboarding was previously completed in local storage
-    return !localPersistenceService.isOnboardingCompleted();
-  });
+  const [authChecking, setAuthChecking] = useState<boolean>(true);
+  const [isOnboarded, setIsOnboarded] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [merchantProfile, setMerchantProfile] = useState<any>(null);
 
-  const [currentView, setCurrentView] = useState<string>('queue');
+  const [currentView, setCurrentView] = useState<string>('verification');
   const [printers, setPrinters] = useState<PrinterDevice[]>([]);
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [logs, setLogs] = useState<SpoolerLog[]>([]);
@@ -129,7 +45,7 @@ export default function App() {
     uptimeSeconds: 0,
   });
 
-  // Modal states
+  // Modals
   const [isQuickJobModalOpen, setIsQuickJobModalOpen] = useState<boolean>(false);
   const [previewModal, setPreviewModal] = useState<{
     isOpen: boolean;
@@ -144,7 +60,38 @@ export default function App() {
     docType: 'receipt',
   });
 
-  // Load initial printer and job state
+  // Verify auth session against backend SQLite
+  const checkAuth = useCallback(async () => {
+    setAuthChecking(true);
+    try {
+      const token = localStorage.getItem('autoprint_merchant_session_token');
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch('/api/merchant/auth/check', { headers });
+      const data = await res.json();
+
+      if (data.ok && data.data) {
+        setIsOnboarded(data.data.isOnboarded);
+        setIsAuthenticated(data.data.isAuthenticated);
+        if (data.data.merchant) {
+          setMerchantProfile(data.data.merchant);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to verify merchant session', e);
+    } finally {
+      setAuthChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  // Load spooler jobs and metrics
   const refreshData = useCallback(async () => {
     try {
       const [printersList, jobsList, initialLogs, currentMetrics] = await Promise.all([
@@ -163,338 +110,183 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    refreshData();
+    if (isAuthenticated) {
+      refreshData();
 
-    // Subscribe to Spooler Event Stream
-    const unsubJob = spoolerService.onJobUpdate((updatedJob) => {
-      setJobs((prevJobs) => {
-        const idx = prevJobs.findIndex((j) => j.id === updatedJob.id);
-        if (idx >= 0) {
-          const newArr = [...prevJobs];
-          newArr[idx] = updatedJob;
-          return newArr;
-        }
-        return [updatedJob, ...prevJobs];
+      const unsubJob = spoolerService.onJobUpdate((updatedJob) => {
+        setJobs((prevJobs) => {
+          const idx = prevJobs.findIndex((j) => j.id === updatedJob.id);
+          if (idx >= 0) {
+            const newArr = [...prevJobs];
+            newArr[idx] = updatedJob;
+            return newArr;
+          }
+          return [updatedJob, ...prevJobs];
+        });
+        spoolerService.getMetrics().then(setMetrics);
       });
 
-      // Update metrics
-      spoolerService.getMetrics().then(setMetrics);
-    });
+      const unsubLog = spoolerService.onTelemetryLog((newLog) => {
+        setLogs((prev) => [newLog, ...prev.slice(0, 199)]);
+      });
 
-    const unsubPrinter = spoolerService.onPrinterStatusUpdate((updatedPrinter) => {
-      setPrinters((prev) =>
-        prev.map((p) => (p.id === updatedPrinter.id ? updatedPrinter : p))
-      );
-    });
-
-    const unsubLog = spoolerService.onTelemetryLog((newLog) => {
-      setLogs((prev) => [newLog, ...prev.slice(0, 199)]);
-    });
-
-    const unsubQueue = spoolerService.onQueueStateChange((isPaused) => {
-      setMetrics((m) => ({ ...m, isQueuePaused: isPaused }));
-    });
-
-    return () => {
-      unsubJob();
-      unsubPrinter();
-      unsubLog();
-      unsubQueue();
-    };
-  }, [refreshData]);
-
-  // Handler: Toggle pause/resume queue
-  const handleTogglePause = async () => {
-    const newPausedState = !metrics.isQueuePaused;
-    await spoolerService.pauseQueue(newPausedState);
-    setMetrics((m) => ({ ...m, isQueuePaused: newPausedState }));
-  };
-
-  // Handler: Cancel / Delete Job
-  const handleCancelJob = async (jobId: string) => {
-    await spoolerService.cancelJob(jobId);
-    setJobs((prev) => prev.filter((j) => j.id !== jobId));
-    const newMetrics = await spoolerService.getMetrics();
-    setMetrics(newMetrics);
-  };
-
-  // Handler: Retry Failed Job
-  const handleRetryJob = async (jobId: string) => {
-    const updated = await spoolerService.retryJob(jobId);
-    if (updated) {
-      setJobs((prev) => prev.map((j) => (j.id === jobId ? updated : j)));
+      return () => {
+        unsubJob();
+        unsubLog();
+      };
     }
-  };
+  }, [isAuthenticated, refreshData]);
 
-  // Handler: Reorder Queue
-  const handleReorderJobs = async (jobIds: string[]) => {
-    const reordered = await spoolerService.reorderQueue(jobIds);
-    setJobs(reordered);
-  };
-
-  // Handler: Purge Completed / Failed History
-  const handlePurgeCompleted = async () => {
-    await spoolerService.purgeCompletedJobs();
-    const currentJobs = await spoolerService.getJobs();
-    setJobs(currentJobs);
-  };
-
-  // Handler: Submit new Job from Studio or Modal
-  const handleSubmitJob = async (jobData: any): Promise<PrintJob> => {
-    const createdJob = await spoolerService.submitPrintJob(jobData);
-    setJobs((prev) => [createdJob, ...prev]);
-    const newMetrics = await spoolerService.getMetrics();
-    setMetrics(newMetrics);
-    return createdJob;
-  };
-
-  // Handler: Instant Fast AutoPrint Receipt (1-click merchant test)
-  const handleTriggerFastReceipt = async () => {
-    const defaultPrinter = printers.find((p) => p.isDefault) || printers[0];
-    const orderNo = `ORD-${Math.floor(Math.random() * 9000 + 1000)}`;
-    const fastReceiptData = {
-      merchantName: 'BLUE HARBOR ARTISAN ROASTERY',
-      storeAddress: '742 Evergreen Terrace, Seattle, WA',
-      phone: '(206) 555-0194',
-      taxId: 'WA-992019-A',
-      cashier: 'Quick Station (Register 1)',
-      registerId: 'REG-01',
-      orderNumber: orderNo,
-      orderType: 'Takeout',
-      date: new Date().toLocaleString(),
-      items: [
-        { id: '1', name: 'Nitro Cold Brew (Venti)', qty: 1, unitPrice: 5.75, options: 'Sweet cream cap' },
-        { id: '2', name: 'Fresh Blueberry Danish', qty: 1, unitPrice: 4.25 },
-      ],
-      subtotal: 10.0,
-      tax: 1.0,
-      discount: 0,
-      total: 11.0,
-      paymentMethod: 'Apple Pay Contactless',
-      cardLast4: '7102',
-      barcodeValue: `BH-${orderNo}`,
-      footerMessage: 'Thank you for your visit! Follow us @blueharbor',
-      autoCut: true,
-      openDrawer: true,
-    };
-
-    await handleSubmitJob({
-      title: `Quick AutoPrint Receipt - ${orderNo}`,
-      documentType: 'receipt',
-      printerId: defaultPrinter ? defaultPrinter.id : 'printer-pos-80',
-      printerName: defaultPrinter ? defaultPrinter.displayName : 'Thermal Receipt 80mm',
-      priority: 'rush',
-      copies: 1,
-      totalPages: 1,
-      bytesTotal: 3800,
-      content: { receiptData: fastReceiptData },
-      silentPrint: true,
-    });
-  };
-
-  // Handler: Diagnostic Self-Print
-  const handleTriggerTestPrint = async (
-    printerId: string,
-    testType: 'diagnostic' | 'alignment' | 'density' | 'receipt'
-  ): Promise<PrintJob> => {
-    const job = await spoolerService.triggerTestPrint(printerId, testType);
-    setJobs((prev) => [job, ...prev]);
-    return job;
-  };
-
-  // Handler: Set Printer Status & Fault simulation
-  const handleSetPrinterStatus = async (
-    printerId: string,
-    status: PrinterStatus,
-    faultDetails?: { paperLevel?: number; tonerLevel?: number }
-  ) => {
-    const ok = await spoolerService.setPrinterStatus(printerId, status, faultDetails);
-    const updatedPrinters = await spoolerService.getPrinters();
-    setPrinters(updatedPrinters);
-    return ok;
-  };
-
-  // Handler: Render and open preview for existing job
-  const handlePreviewDocument = (job: PrintJob) => {
-    let html = '';
-    if (job.content?.receiptData) {
-      html = renderReceiptHtml(job.content.receiptData);
-    } else if (job.content?.labelData) {
-      html = renderLabelHtml(job.content.labelData);
-    } else if (job.content?.invoiceData) {
-      html = renderInvoiceHtml(job.content.invoiceData);
-    } else if (job.content?.reportData) {
-      html = renderReportHtml(job.content.reportData);
-    } else if (job.content?.rawEscPos) {
-      html = `<pre style="font-family: monospace; padding: 20px; white-space: pre-wrap;">${job.content.rawEscPos}</pre>`;
-    } else {
-      html = `<div style="padding: 30px; font-family: sans-serif;"><h2>${job.title}</h2><p>Job #${job.jobNo} • ${job.printerName}</p></div>`;
-    }
-
-    setPreviewModal({
-      isOpen: true,
-      title: job.title,
-      html,
-      docType: job.documentType,
-      activeJob: job,
-    });
-  };
-
-  // Handler: Open custom HTML preview from Studio
-  const handlePreviewHtml = (title: string, html: string, docType: DocumentType) => {
-    setPreviewModal({
-      isOpen: true,
-      title,
-      html,
-      docType,
-    });
-  };
-
-  // Handler: Physical OS print popup
-  const handleExecutePhysicalPrint = (job?: PrintJob) => {
-    const targetJob = job || previewModal.activeJob;
-    let html = previewModal.html;
-
-    if (targetJob && !html) {
-      if (targetJob.content?.receiptData) {
-        html = renderReceiptHtml(targetJob.content.receiptData);
-      } else if (targetJob.content?.labelData) {
-        html = renderLabelHtml(targetJob.content.labelData);
-      } else if (targetJob.content?.invoiceData) {
-        html = renderInvoiceHtml(targetJob.content.invoiceData);
+  // Toggle Online/Offline
+  const handleToggleOnline = async () => {
+    if (!merchantProfile) return;
+    const nextState = !merchantProfile.isOnline;
+    try {
+      const res = await fetch('/api/merchant/toggle-online', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isOnline: nextState }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setMerchantProfile((prev: any) => ({ ...prev, isOnline: nextState }));
       }
-    }
-
-    const printWin = window.open('', '_blank', 'width=700,height=900');
-    if (printWin) {
-      printWin.document.open();
-      printWin.document.write(html || '<h3>Document Ready for Print</h3>');
-      printWin.document.close();
-      setTimeout(() => {
-        printWin.focus();
-        printWin.print();
-      }, 300);
+    } catch (e) {
+      console.error('Toggle online error', e);
     }
   };
 
-  const defaultPrinter = printers.find((p) => p.isDefault) || printers[0];
+  const handleLogout = async () => {
+    const token = localStorage.getItem('autoprint_merchant_session_token');
+    if (token) {
+      fetch('/api/merchant/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      }).catch(() => {});
+    }
+    localStorage.removeItem('autoprint_merchant_session_token');
+    setIsAuthenticated(false);
+    setMerchantProfile(null);
+  };
 
-  // If onboarding is active (first run or triggered by user), render the full-screen onboarding wizard
-  if (isOnboardingActive) {
+  const handleAuthenticated = (token: string, merchant: any) => {
+    setIsOnboarded(true);
+    setIsAuthenticated(true);
+    setMerchantProfile(merchant);
+  };
+
+  if (authChecking) {
     return (
-      <OnboardingWizard
-        onComplete={() => {
-          setIsOnboardingActive(false);
-          refreshData();
-        }}
+      <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white font-sans">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-bold text-slate-300">Loading AutoPrint Merchant Desk...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If not onboarded or not authenticated, present the Auth / Onboarding Gate
+  if (!isOnboarded || !isAuthenticated) {
+    return (
+      <MerchantAuthModal
+        isOnboarded={isOnboarded}
+        onAuthenticated={handleAuthenticated}
       />
     );
   }
 
   return (
-    <div className="flex h-screen w-screen bg-[#F0F5FA] text-slate-800 font-sans overflow-hidden antialiased selection:bg-blue-200 selection:text-blue-950">
-      {/* Left Navigation Sidebar */}
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
+      
+      {/* Sidebar Navigation */}
       <Sidebar
         currentView={currentView}
         onSelectView={setCurrentView}
         metrics={metrics}
-        defaultPrinter={defaultPrinter}
-        onPauseResumeQueue={handleTogglePause}
-        onPurgeCompleted={handlePurgeCompleted}
-        onOpenNewJobModal={() => setIsQuickJobModalOpen(true)}
-        onOpenOnboarding={() => setIsOnboardingActive(true)}
+        isOnline={Boolean(merchantProfile?.isOnline)}
+        merchantName={merchantProfile?.ownerName}
+        shopName={merchantProfile?.shopName}
+        onToggleOnline={handleToggleOnline}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto h-screen p-6 sm:p-8">
-        <div className="max-w-7xl w-full mx-auto pb-12">
-          {/* Header Bar */}
-          <Header
-            currentView={currentView}
-            metrics={metrics}
-            onPauseResume={handleTogglePause}
-            onOpenNewJobModal={() => setIsQuickJobModalOpen(true)}
-            onTriggerFastReceipt={handleTriggerFastReceipt}
-            defaultPrinter={defaultPrinter}
-          />
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <Header
+          metrics={metrics}
+          onOpenNewJobModal={() => setIsQuickJobModalOpen(true)}
+          defaultPrinter={printers.find((p) => p.isDefault) || printers[0]}
+          onTriggerTestPrint={async (printerId, testType) => {
+            return spoolerService.triggerTestJob(printerId, testType);
+          }}
+          onOpenOnboarding={() => {}}
+        />
 
-          {/* Dynamic Main View */}
-          {currentView === 'verification' && (
-            <StaffVerificationView
-              onOpenDocumentPreview={(jobId) => {
-                const targetJob = jobs.find((j) => j.id === jobId);
-                if (targetJob) handlePreviewDocument(targetJob);
-              }}
-            />
-          )}
+        <div className="flex-1 overflow-y-auto p-6 sm:p-8">
+          {currentView === 'verification' && <StaffVerificationView />}
 
           {currentView === 'queue' && (
             <ActiveQueueView
               jobs={jobs}
               printers={printers}
-              onCancelJob={handleCancelJob}
-              onRetryJob={handleRetryJob}
-              onReorderJobs={handleReorderJobs}
-              onPreviewDocument={handlePreviewDocument}
-              onExecutePhysicalPrint={(job) => {
-                handlePreviewDocument(job);
-                setTimeout(() => handleExecutePhysicalPrint(job), 100);
+              metrics={metrics}
+              onCancelJob={(jobId) => spoolerService.cancelJob(jobId)}
+              onRetryJob={(jobId) => spoolerService.retryJob(jobId)}
+              onReorderJobs={(jobIds) => spoolerService.reorderQueue(jobIds)}
+              onPauseResumeQueue={async () => {
+                await spoolerService.pauseQueue(!metrics.isQueuePaused);
+                setMetrics((m) => ({ ...m, isQueuePaused: !m.isQueuePaused }));
+              }}
+              onPurgeCompleted={() => spoolerService.purgeCompletedJobs()}
+              onPreviewJobDoc={(job) => {
+                setPreviewModal({
+                  isOpen: true,
+                  title: job.title,
+                  html: `<h3>${job.title}</h3><p>Customer: ${job.customerName}</p>`,
+                  docType: 'receipt',
+                  activeJob: job,
+                });
               }}
               onOpenNewJobModal={() => setIsQuickJobModalOpen(true)}
             />
           )}
 
-          {currentView === 'dispatch' && (
-            <JobDispatchStudio
-              printers={printers}
-              onSubmitJob={handleSubmitJob}
-              onPreviewHtml={handlePreviewHtml}
-              defaultPrinterId={defaultPrinter?.id}
-            />
-          )}
+          {currentView === 'fleet' && <PrinterFleetView />}
 
-          {currentView === 'fleet' && (
-            <PrinterFleetView
-              printers={printers}
-              onTriggerTestPrint={handleTriggerTestPrint}
-              onSetPrinterStatus={handleSetPrinterStatus}
-              onRefreshPrinters={refreshData}
-            />
-          )}
+          {currentView === 'payment' && <PaymentSettingsView />}
 
           {currentView === 'telemetry' && (
             <SpoolerTelemetryView
               logs={logs}
               metrics={metrics}
-              onClearLogs={() => spoolerService.clearLogs().then(() => setLogs([]))}
-            />
-          )}
-
-          {currentView === 'architecture' && (
-            <ArchitectureInspectorView
-              metrics={metrics}
-              onBenchmarkIpc={() => spoolerService.benchmarkIpcLatency()}
+              onClearLogs={() => spoolerService.clearLogs()}
             />
           )}
         </div>
       </main>
 
-      {/* Document Full-Fidelity Preview Modal */}
-      <DocumentPreviewModal
-        isOpen={previewModal.isOpen}
-        onClose={() => setPreviewModal((prev) => ({ ...prev, isOpen: false }))}
-        title={previewModal.title}
-        htmlContent={previewModal.html}
-        docType={previewModal.docType}
-        onExecutePhysicalPrint={() => handleExecutePhysicalPrint()}
-      />
-
-      {/* Quick Print Job Modal */}
+      {/* Modals */}
       <QuickNewJobModal
         isOpen={isQuickJobModalOpen}
         onClose={() => setIsQuickJobModalOpen(false)}
         printers={printers}
-        onSubmitJob={handleSubmitJob}
+        onSubmitJob={async (jobData) => {
+          const created = await spoolerService.submitPrintJob(jobData);
+          setJobs((prev) => [created, ...prev]);
+          setIsQuickJobModalOpen(false);
+          return created;
+        }}
+      />
+
+      <DocumentPreviewModal
+        isOpen={previewModal.isOpen}
+        onClose={() => setPreviewModal((prev) => ({ ...prev, isOpen: false }))}
+        title={previewModal.title}
+        html={previewModal.html}
+        docType={previewModal.docType}
+        activeJob={previewModal.activeJob}
       />
     </div>
   );
