@@ -215,7 +215,7 @@ export class MerchantController {
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.body?.token as string);
     if (token) {
-      MerchantRepository.deleteSession(token);
+      MerchantRepository.invalidateSession(token);
     }
     res.json({ ok: true, message: 'Logged out successfully.' });
   }

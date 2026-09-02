@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { usePrintJob } from '../context/PrintJobContext';
+import { useLanguage } from '../context/LanguageContext';
 import { QrCode, Copy, Check, ExternalLink, X, Store, Camera, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DEFAULT_SHOP_ID, SHOPS_DATABASE } from '../data/shops';
 
 export const QrCodeModal: React.FC = () => {
   const { isQrModalOpen, setQrModalOpen, currentShop } = usePrintJob();
+  const { t } = useLanguage();
   const [copied, setCopied] = useState(false);
 
   if (!isQrModalOpen) return null;
 
-  const targetShop = currentShop || SHOPS_DATABASE[DEFAULT_SHOP_ID];
-  const targetId = targetShop.id;
   const currentUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}${window.location.pathname}?shop=${targetId}`
-    : `https://autoprint.vercel.app/?shop=${targetId}`;
+    ? `${window.location.origin}${window.location.pathname}`
+    : 'https://autoprint.pagekite.me';
+
+  const shopName = currentShop?.name || 'AutoPrint Express Store';
+  const shopNumber = currentShop ? currentShop.kioskNumber.replace(/Kiosk/gi, 'Shop') : 'Shop #01';
+  const qrUrl = currentShop?.upiDetails?.qrDataUrl || null;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(currentUrl);
@@ -56,87 +59,74 @@ export const QrCodeModal: React.FC = () => {
               AUTOPRINT SELF-SERVICE SHOP
             </div>
             <div className="text-xs font-black text-gray-900 leading-tight mb-3">
-              {targetShop.name}
+              {shopName}
             </div>
 
-            {/* Simulated High-Res QR SVG */}
+            {/* QR Code Container */}
             <div className="bg-white p-3 rounded-2xl shadow-inner border border-gray-200 inline-block mb-3">
-              <svg className="w-40 h-40" viewBox="0 0 100 100" fill="none">
-                {/* Outer Markers */}
-                <rect x="5" y="5" width="28" height="28" rx="4" fill="#121316" />
-                <rect x="9" y="9" width="20" height="20" rx="2" fill="#fff" />
-                <rect x="13" y="13" width="12" height="12" rx="1" fill="#121316" />
+              {qrUrl ? (
+                <img src={qrUrl} alt="Shop QR" className="w-40 h-40 object-contain rounded-lg" />
+              ) : (
+                <svg className="w-40 h-40" viewBox="0 0 100 100" fill="none">
+                  <rect x="5" y="5" width="28" height="28" rx="4" fill="#121316" />
+                  <rect x="9" y="9" width="20" height="20" rx="2" fill="#fff" />
+                  <rect x="13" y="13" width="12" height="12" rx="1" fill="#121316" />
 
-                <rect x="67" y="5" width="28" height="28" rx="4" fill="#121316" />
-                <rect x="71" y="9" width="20" height="20" rx="2" fill="#fff" />
-                <rect x="75" y="13" width="12" height="12" rx="1" fill="#121316" />
+                  <rect x="67" y="5" width="28" height="28" rx="4" fill="#121316" />
+                  <rect x="71" y="9" width="20" height="20" rx="2" fill="#fff" />
+                  <rect x="75" y="13" width="12" height="12" rx="1" fill="#121316" />
 
-                <rect x="5" y="67" width="28" height="28" rx="4" fill="#121316" />
-                <rect x="9" y="71" width="20" height="20" rx="2" fill="#fff" />
-                <rect x="13" y="75" width="12" height="12" rx="1" fill="#121316" />
+                  <rect x="5" y="67" width="28" height="28" rx="4" fill="#121316" />
+                  <rect x="9" y="71" width="20" height="20" rx="2" fill="#fff" />
+                  <rect x="13" y="75" width="12" height="12" rx="1" fill="#121316" />
 
-                {/* Pattern blocks */}
-                <rect x="38" y="8" width="6" height="6" fill="#121316" />
-                <rect x="50" y="8" width="10" height="6" fill="#121316" />
-                <rect x="38" y="20" width="8" height="8" fill="#121316" />
-                <rect x="52" y="20" width="8" height="8" fill="#121316" />
+                  <rect x="38" y="8" width="6" height="6" fill="#121316" />
+                  <rect x="50" y="8" width="10" height="6" fill="#121316" />
+                  <rect x="38" y="20" width="8" height="8" fill="#121316" />
+                  <rect x="52" y="20" width="8" height="8" fill="#121316" />
 
-                <rect x="10" y="42" width="6" height="10" fill="#121316" />
-                <rect x="22" y="42" width="14" height="6" fill="#121316" />
-                <rect x="42" y="38" width="16" height="16" rx="4" fill="#381E72" />
-                <rect x="64" y="42" width="10" height="6" fill="#121316" />
-                <rect x="80" y="42" width="10" height="10" fill="#121316" />
+                  <rect x="10" y="42" width="6" height="10" fill="#121316" />
+                  <rect x="22" y="42" width="14" height="6" fill="#121316" />
+                  <rect x="42" y="38" width="16" height="16" rx="4" fill="#381E72" />
+                  <rect x="64" y="42" width="10" height="6" fill="#121316" />
+                  <rect x="80" y="42" width="10" height="10" fill="#121316" />
 
-                <rect x="38" y="60" width="8" height="6" fill="#121316" />
-                <rect x="52" y="60" width="6" height="8" fill="#121316" />
-                <rect x="66" y="60" width="8" height="6" fill="#121316" />
-                <rect x="80" y="60" width="10" height="8" fill="#121316" />
+                  <rect x="38" y="60" width="8" height="6" fill="#121316" />
+                  <rect x="52" y="60" width="6" height="8" fill="#121316" />
+                  <rect x="66" y="60" width="8" height="6" fill="#121316" />
+                  <rect x="80" y="60" width="10" height="8" fill="#121316" />
 
-                <rect x="38" y="74" width="10" height="18" fill="#121316" />
-                <rect x="54" y="74" width="8" height="8" fill="#121316" />
-                <rect x="68" y="74" width="8" height="18" fill="#121316" />
-                <rect x="82" y="74" width="8" height="8" fill="#121316" />
-              </svg>
+                  <rect x="38" y="74" width="10" height="18" fill="#121316" />
+                  <rect x="54" y="74" width="8" height="8" fill="#121316" />
+                  <rect x="68" y="74" width="8" height="18" fill="#121316" />
+                  <rect x="82" y="74" width="8" height="8" fill="#121316" />
+                </svg>
+              )}
             </div>
 
-            <div className="text-[11px] font-bold text-[#381E72] flex items-center justify-center gap-1">
-              <Camera className="w-3.5 h-3.5" />
-              <span>Scan with Phone Camera</span>
-            </div>
-            <div className="text-[9px] text-gray-500 font-mono mt-0.5">
-              Counter: {targetShop.kioskNumber.replace(/Kiosk/gi, 'Shop')}
+            <div className="text-[11px] font-bold text-gray-700 uppercase tracking-wider">
+              {shopNumber} • SCAN TO PRINT
             </div>
           </div>
 
-          {/* URL & Action buttons */}
-          <div className="space-y-2 text-left">
-            <label className="text-[11px] font-semibold text-zinc-400 block">
-              Direct Shop Target URL:
-            </label>
-            <div className="flex items-center gap-2 bg-black/40 p-2.5 rounded-2xl border border-white/10">
-              <span className="font-mono text-xs text-[#D0BCFF] truncate flex-1 px-1">
+          {/* Copyable Web URL */}
+          <div className="bg-black/30 rounded-2xl p-3 border border-white/5 space-y-2">
+            <div className="text-xs text-zinc-400 flex items-center justify-between">
+              <span>Customer Portal URL:</span>
+              <span className="text-[#D0BCFF] font-mono text-[11px] truncate max-w-[200px]">
                 {currentUrl}
               </span>
+            </div>
+
+            <div className="flex gap-2">
               <button
                 onClick={handleCopy}
-                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-zinc-300 hover:text-[#D0BCFF] transition-colors cursor-pointer"
-                title="Copy Shop URL"
+                className="flex-1 py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-zinc-200 hover:text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-[#6dd58c]" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Copied Link' : 'Copy Customer Link'}</span>
               </button>
             </div>
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={() => {
-                window.open(currentUrl, '_blank');
-              }}
-              className="flex-1 py-3.5 rounded-2xl bg-[#D0BCFF] hover:bg-[#decbf7] text-[#381E72] text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#D0BCFF]/15"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>Open in New Tab</span>
-            </button>
           </div>
         </motion.div>
       </div>

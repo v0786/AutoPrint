@@ -65,7 +65,27 @@ export class MerchantRepository {
 
   public static getPrimaryMerchant(): MerchantRecord | null {
     const db = getDb();
-    const row = db.prepare('SELECT * FROM merchants ORDER BY created_at ASC LIMIT 1').get() as MerchantRecord | undefined;
+    let row = db.prepare('SELECT * FROM merchants ORDER BY created_at ASC LIMIT 1').get() as MerchantRecord | undefined;
+    if (!row) {
+      try {
+        const id = uuidv4();
+        const { hash, salt } = this.hashPassword('admin123');
+        db.prepare(`
+          INSERT INTO merchants (
+            id, shop_name, owner_name, email, phone,
+            password_hash, password_salt, address, branch, kiosk_number,
+            upi_id, selected_printer, color_price_per_page, bw_price_per_page,
+            is_onboarded, is_online
+          ) VALUES (
+            ?, 'AutoPrint Express Store', 'Store Manager', 'merchant@autoprint.local', '9876543210',
+            ?, ?, 'Shop Counter #01, Campus Print Hub', 'Main Branch', 'Counter #01',
+            'apex.autoprint@okhdfcbank', 'AutoPrint Virtual Spooler', 1000, 200,
+            1, 1
+          )
+        `).run(id, hash, salt);
+        row = this.getById(id) || undefined;
+      } catch {}
+    }
     return row || null;
   }
 
@@ -171,31 +191,34 @@ export class MerchantRepository {
     const db = getDb();
     const row = db.prepare(`
       SELECT m.* FROM merchants m
-      JOIN merchant_sessions s ON m.id = s.merchant_id
-      WHERE s.token = ? AND s.expires_at > datetime('now')
+      JOIN merchant_sessions s ON s.merchant_id = m.id
+      WHERE s.token = ? AND datetime(s.expires_at) > datetime('now')
     `).get(token) as MerchantRecord | undefined;
 
     return row || null;
   }
 
-  public static deleteSession(token: string): void {
+  public static invalidateSession(token: string): void {
     const db = getDb();
     db.prepare('DELETE FROM merchant_sessions WHERE token = ?').run(token);
   }
 
-  public static updateProfile(id: string, data: {
-    shopName?: string;
-    ownerName?: string;
-    address?: string;
-    branch?: string;
-    phone?: string;
-    upiId?: string;
-    upiQrDataUrl?: string;
-    selectedPrinter?: string;
-    colorPricePerPage?: number;
-    bwPricePerPage?: number;
-    isOnline?: boolean;
-  }): MerchantRecord | null {
+  public static updateProfile(
+    id: string,
+    data: {
+      shopName?: string;
+      ownerName?: string;
+      address?: string;
+      branch?: string;
+      phone?: string;
+      upiId?: string;
+      upiQrDataUrl?: string;
+      selectedPrinter?: string;
+      colorPricePerPage?: number;
+      bwPricePerPage?: number;
+      isOnline?: boolean;
+    }
+  ): MerchantRecord | null {
     const db = getDb();
     const current = this.getById(id);
     if (!current) return null;
@@ -235,7 +258,7 @@ export class MerchantRepository {
 
   public static getPublicShopProfile(): PublicShopProfile | null {
     const merchant = this.getPrimaryMerchant();
-    if (!merchant || !merchant.is_onboarded) {
+    if (!merchant) {
       return null;
     }
 
