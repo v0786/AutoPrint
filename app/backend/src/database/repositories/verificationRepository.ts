@@ -286,6 +286,9 @@ export const verificationRepository = {
     handoverAt: string;
   }): void {
     const db = getDb();
+    const ver = this.getByCode(params.code);
+    const now = new Date().toISOString();
+
     db.prepare(`
       UPDATE verification_records
       SET handover_status = 'COLLECTED',
@@ -299,8 +302,20 @@ export const verificationRepository = {
       handoverAt: params.handoverAt,
       staffId: params.staffId,
       staffName: params.staffName,
-      now: new Date().toISOString(),
+      now,
     });
+
+    if (ver && ver.jobId) {
+      db.prepare(`
+        UPDATE print_jobs
+        SET status = 'COLLECTED',
+            updated_at = @now
+        WHERE id = @jobId
+      `).run({
+        jobId: ver.jobId,
+        now,
+      });
+    }
   },
 
   updateTrayReady(jobId: string): void {

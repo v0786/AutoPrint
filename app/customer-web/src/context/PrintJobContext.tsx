@@ -5,7 +5,7 @@
  * dynamic printer capacity workload calculations, and multilingual translations.
  */
 
-import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   AppStep,
   FinishingOption,
@@ -50,6 +50,7 @@ interface PrintJobContextType {
   disconnectShop: () => void;
   setUploadedFile: (file: UploadedFileDetails | null) => void;
   handleFileUpload: (file: File) => Promise<void>;
+  updateUploadedFilePageCount: (count: number) => void;
   updateSpecs: (partial: Partial<PrintSpecifications>) => void;
   setPageRangeString: (rangeStr: string) => void;
   initiatePayment: (method: PaymentMethod, details?: Partial<PaymentDetails>) => void;
@@ -108,11 +109,28 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Fetch real merchant online profile & dynamic printer-capacity workload from backend
   const refreshShopStatus = async () => {
     try {
-      const res = await fetch('/api/merchant/public-profile');
-      if (res.ok) {
+      const [res, workloadRes] = await Promise.all([
+        fetch('/api/merchant/public-profile').catch(() => null),
+        fetch('/api/system/workload').catch(() => null),
+      ]);
+
+      let workloadData: any = null;
+      if (workloadRes && workloadRes.ok) {
+        const wJson = await workloadRes.json().catch(() => null);
+        if (wJson?.ok && wJson.data) {
+          workloadData = wJson.data;
+          setIsHeavyWorkload(Boolean(wJson.data.isHighWorkload));
+          setQueueWorkloadMessage(wJson.data.queueMessage || null);
+        }
+      }
+
+      if (res && res.ok) {
         const json = await res.json();
         if (json.ok && json.isAvailable && json.data) {
           const profile = json.data;
+          const activeJobsCount = workloadData?.activeJobs ?? workloadData?.pendingJobs ?? 0;
+          const waitMins = workloadData?.estimatedWaitMinutes ?? 2;
+
           setIsShopOnline(true);
           setShopStatusMessage('Online');
           setCurrentShop({
@@ -124,19 +142,31 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             status: 'online',
             isMerchantConfigured: true,
             activePrinters: profile.selectedPrinter ? [profile.selectedPrinter] : ['AutoPrint Spooler'],
-            queueLength: 0,
-            averageWaitMins: 2,
+            queueLength: activeJobsCount,
+            averageWaitMins: waitMins,
             rates: {
-              ...DEFAULT_OFFLINE_SHOP.rates,
-              bwSingle: profile.rates?.bwSingle || 2.0,
-              colorSingle: profile.rates?.colorSingle || 10.0,
+              bwSingle: profile.rates?.bwSingle ?? 2.0,
+              bwDoublePerSide: profile.rates?.bwDoublePerSide ?? 1.5,
+              colorSingle: profile.rates?.colorSingle ?? 10.0,
+              colorDoublePerSide: profile.rates?.colorDoublePerSide ?? 8.0,
+              photoGlossy: profile.rates?.photoGlossy ?? 25.0,
+              a3Multiplier: profile.rates?.a3Multiplier ?? 2.0,
+              legalMultiplier: profile.rates?.legalMultiplier ?? 1.25,
+              letterMultiplier: profile.rates?.letterMultiplier ?? 1.0,
+              finishing: {
+                staple: profile.rates?.finishing?.staple ?? 5.0,
+                spiral: profile.rates?.finishing?.spiral ?? 40.0,
+                hardcover: profile.rates?.finishing?.hardcover ?? 150.0,
+                laminationPerSheet: profile.rates?.finishing?.laminationPerSheet ?? 20.0,
+              },
             },
             upiDetails: {
               vpa: profile.upiDetails?.vpa || profile.paymentConfig?.upiId || '',
               payeeName: profile.upiDetails?.payeeName || profile.name,
+              qrDataUrl: profile.upiDetails?.qrDataUrl || profile.paymentConfig?.upiQrDataUrl || null,
             },
             paymentGateways: {
-              razorpayEnabled: Boolean(profile.paymentConfig?.hasRazorpay),
+              razorpayEnabled: Boolean(profile.paymentConfig?.razorpayKeyId || profile.paymentConfig?.hasRazorpay),
               razorpayKeyId: profile.paymentConfig?.razorpayKeyId,
               juspayEnabled: false,
             },
@@ -150,19 +180,6 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setIsShopOnline(false);
         setShopStatusMessage('No shop is selected');
         setCurrentShop(null);
-      }
-
-      // Check system workload based on connected printer capacity
-      const workloadRes = await fetch('/api/system/workload').catch(() => null);
-      if (workloadRes && workloadRes.ok) {
-        const wJson = await workloadRes.json();
-        if (wJson.ok && wJson.data) {
-          setIsHeavyWorkload(Boolean(wJson.data.isHighWorkload));
-          setQueueWorkloadMessage(wJson.data.queueMessage || null);
-          if (wJson.data.activeJobs !== undefined && currentShop) {
-            setCurrentShop((prev) => (prev ? { ...prev, queueLength: wJson.data.pendingJobs || 0 } : prev));
-          }
-        }
       }
     } catch {
       setIsShopOnline(false);
@@ -223,6 +240,20 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       orientation: 'portrait',
     }));
   };
+
+  const updateUploadedFilePageCount = useCallback((num: number) => {
+    if (!num || num < 1) return;
+    setUploadedFile((prev) => {
+      if (!prev || prev.totalPages === num) return prev;
+      return { ...prev, totalPages: num };
+    });
+    setSpecs((prev) => {
+      if (prev.pageRangeType === 'all') {
+        return { ...prev, selectedPagesCount: num };
+      }
+      return prev;
+    });
+  }, []);
 
   // Update selectedPagesCount when uploaded file totalPages changes or custom range changes
   useEffect(() => {
@@ -425,6 +456,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         disconnectShop,
         setUploadedFile,
         handleFileUpload,
+        updateUploadedFilePageCount,
         updateSpecs,
         setPageRangeString,
         initiatePayment,

@@ -160,6 +160,15 @@ export class AutoPrintService {
     return this.mapRowToResponse(row, verification);
   }
 
+  public static updateJobStatus(id: string, status: any): PrintJobResponse | null {
+    jobRepository.updateStatus(id, status);
+    return this.getJobById(id);
+  }
+
+  public static deleteJob(id: string): void {
+    jobRepository.delete(id);
+  }
+
   private static mapRowToResponse(
     row: PrintJobRow,
     verification?: any

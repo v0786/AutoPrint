@@ -71,6 +71,11 @@ export const jobRepository = {
     `).run({ id, path: processedPath, now: new Date().toISOString() });
   },
 
+  delete(id: string): void {
+    const db = getDb();
+    db.prepare('DELETE FROM print_jobs WHERE id = ?').run(id);
+  },
+
   getNextJobNumber(): string {
     return nextJobNumber();
   },

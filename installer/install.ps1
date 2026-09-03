@@ -74,11 +74,36 @@ Write-InstallerLog "Target Installation Root : $installDir" -Level "INFO"
 Write-InstallerLog "Target Datastore Root    : $dataDir" -Level "INFO"
 
 # =============================================================================
+# 3. STATION ROLE / INSTALLATION MODE
+# =============================================================================
+Write-Host ""
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "  STEP 3: Installation Profile & Station Role" -ForegroundColor Cyan
+Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host ""
+Write-Host "  Select the station role for this Windows computer:" -ForegroundColor White
+Write-Host "    [1] Full Print Station (Merchant Desktop + Local Kiosk + Spooler) [Default]" -ForegroundColor Green
+Write-Host "    [2] Merchant PC (Operator Counter Desk, Pickup Verification & Spooler)" -ForegroundColor White
+Write-Host "    [3] Customer Standalone Kiosk (Touchscreen Document Upload Terminal)" -ForegroundColor White
+Write-Host ""
+
+$stationModeChoice = Read-Host "  Select Station Role [1/2/3, Default: 1]"
+if ([string]::IsNullOrWhiteSpace($stationModeChoice)) { $stationModeChoice = "1" }
+
+$stationRole = switch ($stationModeChoice) {
+    "2" { "merchant_pc" }
+    "3" { "local_kiosk" }
+    Default { "full_station" }
+}
+
+Write-InstallerLog "Configured Station Role: $stationRole" -Level "SUCCESS"
+
+# =============================================================================
 # 4. PORT CONFIGURATION
 # =============================================================================
 Write-Host ""
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
-Write-Host "  STEP 3: Network Port Configuration" -ForegroundColor Cyan
+Write-Host "  STEP 4: Network Port Configuration" -ForegroundColor Cyan
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host ""
 Write-Host "  Default Port Configuration:" -ForegroundColor White

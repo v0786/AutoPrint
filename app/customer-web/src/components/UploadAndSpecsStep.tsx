@@ -7,30 +7,26 @@ import {
   FinishingOption,
   PaperSize,
 } from '../types';
-import { formatBytes, parseCustomPageRange } from '../utils/helpers';
+import { parseCustomPageRange } from '../utils/helpers';
 import {
   Upload,
-  FileText,
-  FileCheck,
-  Eye,
-  Trash2,
   Sparkles,
-  Layers,
-  Scissors,
-  Check,
   AlertCircle,
   ArrowRight,
   Sliders,
   AlertTriangle,
-  Image as ImageIcon,
+  Eye,
+  CheckCircle2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { DocumentPreview } from './DocumentPreview';
 
 export const UploadAndSpecsStep: React.FC = () => {
   const {
     uploadedFile,
     setUploadedFile,
     handleFileUpload,
+    updateUploadedFilePageCount,
     specs,
     updateSpecs,
     setPageRangeString,
@@ -40,6 +36,7 @@ export const UploadAndSpecsStep: React.FC = () => {
     isHeavyWorkload,
     queueWorkloadMessage,
     setPreviewModalOpen,
+    setStep,
   } = usePrintJob();
   const { t } = useLanguage();
 
@@ -93,18 +90,13 @@ export const UploadAndSpecsStep: React.FC = () => {
     }
 
     setValidationError(null);
-    // Open mandatory document preview for customer review before payment
-    setPreviewModalOpen(true);
+    // Proceed to Payment / Order Summary Step
+    setStep('payment');
   };
 
-  const isBw = specs.colorMode === 'bw';
-  const isColor = specs.colorMode === 'color';
-  const isPhoto = specs.colorMode === 'photo';
-
   return (
-    <div className="max-w-4xl mx-auto px-4 pb-32 sm:px-6 pt-2 space-y-6 font-sans">
-      
-      {/* Offline Shop Alert Banner */}
+    <div className="max-w-4xl mx-auto px-4 pb-36 sm:px-6 pt-2 space-y-6 font-sans">
+      {/* 1. Offline Shop Alert Banner */}
       {!isShopOnline && (
         <div className="p-4 rounded-3xl bg-amber-500/15 border border-amber-500/30 text-amber-200 flex items-start gap-3.5 shadow-lg">
           <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
@@ -115,7 +107,7 @@ export const UploadAndSpecsStep: React.FC = () => {
         </div>
       )}
 
-      {/* Validation Error Alert Banner */}
+      {/* 2. Validation Error Alert Banner */}
       <AnimatePresence>
         {validationError && (
           <motion.div
@@ -127,6 +119,7 @@ export const UploadAndSpecsStep: React.FC = () => {
             <AlertCircle className="w-5 h-5 flex-shrink-0 text-[#ffb4ab]" />
             <span className="flex-1">{validationError}</span>
             <button
+              type="button"
               onClick={() => setValidationError(null)}
               className="text-xs underline hover:text-white cursor-pointer"
             >
@@ -136,7 +129,7 @@ export const UploadAndSpecsStep: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Dynamic Queue Workload Banner — ONLY displayed when queue genuinely exceeds printer capacity */}
+      {/* 3. Dynamic Queue Workload Banner */}
       {isHeavyWorkload && queueWorkloadMessage && (
         <div className="p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex items-center gap-3.5 text-xs text-amber-300">
           <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
@@ -144,9 +137,9 @@ export const UploadAndSpecsStep: React.FC = () => {
         </div>
       )}
 
-      {/* SECTION 1: DOCUMENT UPLOAD */}
-      <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/40 space-y-5">
-        <div className="flex items-center justify-between">
+      {/* 4. DOCUMENT UPLOAD & AUTOMATIC LIVE PREVIEW SECTION */}
+      {!uploadedFile ? (
+        <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/40 space-y-5">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-2xl bg-[#D0BCFF]/15 text-[#D0BCFF] flex items-center justify-center border border-[#D0BCFF]/30">
               <Upload className="w-4 h-4" />
@@ -156,18 +149,7 @@ export const UploadAndSpecsStep: React.FC = () => {
               <p className="text-xs text-zinc-400">{t('supportedFiles')}</p>
             </div>
           </div>
-          {uploadedFile && (
-            <button
-              onClick={() => setPreviewModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-md text-xs font-semibold text-[#D0BCFF] hover:border-[#D0BCFF]/30 transition-all cursor-pointer shadow-sm"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span>{t('previewDoc')}</span>
-            </button>
-          )}
-        </div>
 
-        {!uploadedFile ? (
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -176,10 +158,10 @@ export const UploadAndSpecsStep: React.FC = () => {
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-3xl p-6 sm:p-8 text-center cursor-pointer transition-all ${
+            className={`border-2 border-dashed rounded-3xl p-8 sm:p-12 text-center cursor-pointer transition-all ${
               isDragging
                 ? 'border-[#D0BCFF] bg-[#D0BCFF]/10'
-                : 'border-white/10 hover:border-[#D0BCFF]/50 bg-black/30 hover:bg-white/[0.02]'
+                : 'border-white/15 hover:border-[#D0BCFF]/50 bg-black/30 hover:bg-white/[0.02]'
             }`}
           >
             <input
@@ -195,72 +177,33 @@ export const UploadAndSpecsStep: React.FC = () => {
               }}
             />
 
-            <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-[#D0BCFF] shadow-inner">
-              <Upload className="w-6 h-6 animate-bounce" />
+            <div className="w-14 h-14 mx-auto mb-3.5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-[#D0BCFF] shadow-inner">
+              <Upload className="w-7 h-7 animate-bounce" />
             </div>
-            <p className="text-sm font-bold text-white mb-1">
+            <p className="text-base font-bold text-white mb-1">
               {t('tapToUpload')}
             </p>
-            <p className="text-xs text-zinc-400 mb-3">
+            <p className="text-xs text-zinc-400 mb-4">
               {t('supportedFiles')}
             </p>
 
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] text-zinc-300">
-              <Sparkles className="w-3 h-3 text-[#D0BCFF]" />
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-xs text-zinc-300">
+              <Sparkles className="w-3.5 h-3.5 text-[#D0BCFF]" />
               <span>{t('encryptedUpload')}</span>
             </div>
           </div>
-        ) : (
-          /* Uploaded File Active Card */
-          <div className="bg-black/30 rounded-2xl p-4 border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="w-12 h-12 rounded-2xl bg-[#D0BCFF]/15 text-[#D0BCFF] flex items-center justify-center flex-shrink-0 border border-[#D0BCFF]/30 shadow-md">
-                {uploadedFile.fileCategory === 'image' ? (
-                  <ImageIcon className="w-6 h-6" />
-                ) : (
-                  <FileCheck className="w-6 h-6" />
-                )}
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-white truncate">
-                    {uploadedFile.name}
-                  </h3>
-                  <span className="px-2.5 py-0.5 rounded-full bg-[#6dd58c]/15 text-[#6dd58c] text-[10px] font-bold border border-[#6dd58c]/30">
-                    Ready
-                  </span>
-                </div>
-                <div className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2">
-                  <span>{formatBytes(uploadedFile.size)}</span>
-                  <span>•</span>
-                  <span className="text-[#D0BCFF] font-semibold">
-                    {uploadedFile.totalPages} {uploadedFile.totalPages === 1 ? t('page') : t('pages')}
-                  </span>
-                </div>
-              </div>
-            </div>
+        </div>
+      ) : (
+        /* AUTOMATIC DOCUMENT PREVIEW AFTER UPLOAD */
+        <DocumentPreview
+          uploadedFile={uploadedFile}
+          onRemove={() => setUploadedFile(null)}
+          onExpand={() => setPreviewModalOpen(true)}
+          onPageCountExtracted={updateUploadedFilePageCount}
+        />
+      )}
 
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <button
-                onClick={() => setPreviewModalOpen(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-zinc-300 hover:text-[#D0BCFF] flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>{t('previewDoc')}</span>
-              </button>
-              <button
-                onClick={() => setUploadedFile(null)}
-                className="p-1.5 rounded-xl bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400/40 text-zinc-400 hover:text-red-300 transition-all cursor-pointer"
-                title="Remove file"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* SECTION 2: PRINT SPECIFICATIONS */}
+      {/* 5. PRINT SPECIFICATIONS CONFIGURATION */}
       <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/40 space-y-6">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-2xl bg-[#D0BCFF]/15 text-[#D0BCFF] flex items-center justify-center border border-[#D0BCFF]/30">
@@ -302,6 +245,7 @@ export const UploadAndSpecsStep: React.FC = () => {
               const selected = specs.colorMode === opt.id;
               return (
                 <button
+                  type="button"
                   key={opt.id}
                   onClick={() => updateSpecs({ colorMode: opt.id })}
                   className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
@@ -330,6 +274,7 @@ export const UploadAndSpecsStep: React.FC = () => {
             <div className="grid grid-cols-3 gap-2">
               {(['a4', 'a3', 'legal'] as PaperSize[]).map((size) => (
                 <button
+                  type="button"
                   key={size}
                   onClick={() => updateSpecs({ paperSize: size })}
                   className={`py-2.5 px-3 rounded-xl border text-xs font-bold uppercase transition-all cursor-pointer ${
@@ -354,6 +299,7 @@ export const UploadAndSpecsStep: React.FC = () => {
                 { id: 'double' as DuplexMode, label: t('doubleSided') },
               ].map((d) => (
                 <button
+                  type="button"
                   key={d.id}
                   onClick={() => updateSpecs({ duplex: d.id })}
                   className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
@@ -369,7 +315,7 @@ export const UploadAndSpecsStep: React.FC = () => {
           </div>
         </div>
 
-        {/* 3. Copies and Page Selection */}
+        {/* 3. Copies and Page Range Selection */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-white/5">
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
@@ -377,6 +323,7 @@ export const UploadAndSpecsStep: React.FC = () => {
             </label>
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={() => updateSpecs({ copies: Math.max(1, specs.copies - 1) })}
                 className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-base flex items-center justify-center cursor-pointer"
               >
@@ -386,6 +333,7 @@ export const UploadAndSpecsStep: React.FC = () => {
                 {specs.copies}
               </span>
               <button
+                type="button"
                 onClick={() => updateSpecs({ copies: specs.copies + 1 })}
                 className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-base flex items-center justify-center cursor-pointer"
               >
@@ -400,6 +348,7 @@ export const UploadAndSpecsStep: React.FC = () => {
             </label>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => updateSpecs({ pageRangeType: 'all' })}
                 className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                   specs.pageRangeType === 'all'
@@ -410,6 +359,7 @@ export const UploadAndSpecsStep: React.FC = () => {
                 {t('allPages')} ({uploadedFile?.totalPages || 1})
               </button>
               <button
+                type="button"
                 onClick={() => updateSpecs({ pageRangeType: 'custom' })}
                 className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                   specs.pageRangeType === 'custom'
@@ -449,6 +399,7 @@ export const UploadAndSpecsStep: React.FC = () => {
               const selected = specs.finishing === f.id;
               return (
                 <button
+                  type="button"
                   key={f.id}
                   onClick={() => updateSpecs({ finishing: f.id })}
                   className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
@@ -466,7 +417,7 @@ export const UploadAndSpecsStep: React.FC = () => {
         </div>
       </div>
 
-      {/* SECTION 3: PRICING SUMMARY CARD */}
+      {/* 6. PRICING SUMMARY CARD */}
       <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/40 space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-bold text-white">{t('orderSummary')}</span>
@@ -482,25 +433,20 @@ export const UploadAndSpecsStep: React.FC = () => {
           </div>
 
           <div className="flex justify-between items-center">
-            <span>{t('subtotal')}</span>
-            <span className="text-white font-mono">₹{pricing.subtotal.toFixed(2)}</span>
-          </div>
-
-          <div className="flex justify-between items-center text-zinc-500">
-            <span>{t('gst')} (5%)</span>
-            <span className="font-mono">₹{pricing.gstAmount.toFixed(2)}</span>
+            <span>{t('copies')}</span>
+            <span className="text-white font-mono">{specs.copies}</span>
           </div>
         </div>
 
         <div className="flex items-center justify-between pt-1">
-          <span className="text-base font-bold text-white">{t('total')}</span>
+          <span className="text-base font-bold text-white">Total Amount</span>
           <span className="text-2xl font-black text-[#D0BCFF] font-mono">
             ₹{pricing.totalAmount.toFixed(2)}
           </span>
         </div>
       </div>
 
-      {/* STICKY BOTTOM BAR */}
+      {/* 7. STICKY BOTTOM BAR */}
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-[#0F0F12]/90 backdrop-blur-xl border-t border-white/10 p-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
           <div>
@@ -534,7 +480,6 @@ export const UploadAndSpecsStep: React.FC = () => {
           </div>
         </div>
       </div>
-
     </div>
   );
 };

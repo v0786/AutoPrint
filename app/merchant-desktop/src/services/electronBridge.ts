@@ -18,156 +18,15 @@ import {
   ReportData,
 } from '../types/printer';
 import { verificationService } from './verificationService';
-
-// Default initial printer devices simulating real merchant hardware
-const INITIAL_PRINTERS: PrinterDevice[] = [
-  {
-    id: 'printer-pos-80',
-    name: 'EPSON_TM_T88VI_AUTOPRINT',
-    displayName: 'Epson TM-T88VI (Counter 1 - Thermal Receipt)',
-    status: 'ready',
-    isDefault: true,
-    type: 'thermal_receipt',
-    paperFormat: '80mm',
-    dpi: 203,
-    connectionType: 'usb',
-    port: 'USB001',
-    location: 'Front Checkout Counter #1',
-    paperLevelPercent: 88,
-    tonerLevelPercent: 100, // Thermal direct
-    activeJobsCount: 0,
-    totalJobsPrinted: 342,
-    errorCount: 0,
-    supportedFeatures: {
-      color: false,
-      duplex: false,
-      autoCut: true,
-      cashDrawerKick: true,
-      barcode1D: true,
-      qr2D: true,
-    },
-    lastStatusUpdate: new Date().toISOString(),
-  },
-  {
-    id: 'printer-label-4x6',
-    name: 'ZEBRA_ZD420_SHIPPING',
-    displayName: 'Zebra ZD420 (Dispatch - 4x6 Label)',
-    status: 'ready',
-    isDefault: false,
-    type: 'label_barcode',
-    paperFormat: '4x6in',
-    dpi: 300,
-    connectionType: 'usb',
-    port: 'USB002',
-    location: 'Order Packaging Station',
-    paperLevelPercent: 72,
-    tonerLevelPercent: 100,
-    activeJobsCount: 0,
-    totalJobsPrinted: 189,
-    errorCount: 1,
-    supportedFeatures: {
-      color: false,
-      duplex: false,
-      autoCut: true,
-      cashDrawerKick: false,
-      barcode1D: true,
-      qr2D: true,
-    },
-    lastStatusUpdate: new Date().toISOString(),
-  },
-  {
-    id: 'printer-laser-a4',
-    name: 'HP_LASERJET_M404_OFFICE',
-    displayName: 'HP LaserJet Pro M404dn (Invoices & Reports)',
-    status: 'ready',
-    isDefault: false,
-    type: 'document_laser',
-    paperFormat: 'A4',
-    dpi: 600,
-    connectionType: 'network',
-    port: '192.168.1.140:9100',
-    location: 'Back Office Admin Desk',
-    paperLevelPercent: 95,
-    tonerLevelPercent: 64,
-    activeJobsCount: 0,
-    totalJobsPrinted: 94,
-    errorCount: 0,
-    supportedFeatures: {
-      color: false,
-      duplex: true,
-      autoCut: false,
-      cashDrawerKick: false,
-      barcode1D: true,
-      qr2D: true,
-    },
-    lastStatusUpdate: new Date().toISOString(),
-  },
-  {
-    id: 'printer-kitchen-impact',
-    name: 'STAR_SP700_KITCHEN',
-    displayName: 'Star Micronics SP700 (Kitchen Order Rail)',
-    status: 'ready',
-    isDefault: false,
-    type: 'kitchen_impact',
-    paperFormat: '80mm',
-    dpi: 180,
-    connectionType: 'network',
-    port: '192.168.1.145:9100',
-    location: 'Kitchen Expediter Station',
-    paperLevelPercent: 45,
-    tonerLevelPercent: 82, // Ribbon
-    activeJobsCount: 0,
-    totalJobsPrinted: 521,
-    errorCount: 2,
-    supportedFeatures: {
-      color: true, // Red/Black ribbon
-      duplex: false,
-      autoCut: true,
-      cashDrawerKick: true,
-      barcode1D: false,
-      qr2D: false,
-    },
-    lastStatusUpdate: new Date().toISOString(),
-  },
-  {
-    id: 'printer-virtual-pdf',
-    name: 'SPOOL_PDF_ARCHIVER',
-    displayName: 'Virtual Spool Archiver (PDF Export)',
-    status: 'ready',
-    isDefault: false,
-    type: 'virtual_pdf',
-    paperFormat: 'A4',
-    dpi: 600,
-    connectionType: 'virtual',
-    port: 'FILE:',
-    location: 'Local File System Storage',
-    paperLevelPercent: 100,
-    tonerLevelPercent: 100,
-    activeJobsCount: 0,
-    totalJobsPrinted: 68,
-    errorCount: 0,
-    supportedFeatures: {
-      color: true,
-      duplex: true,
-      autoCut: false,
-      cashDrawerKick: false,
-      barcode1D: true,
-      qr2D: true,
-    },
-    lastStatusUpdate: new Date().toISOString(),
-  },
-];
-
-// Initial print jobs queue (empty for production mode)
-const INITIAL_JOBS: PrintJob[] = [];
+import { BackendApiService } from './backendApiService';
 
 export class UniversalSpoolerEngine implements IpcBridgeInterface {
   public isElectron: boolean = false;
   public platform: 'win32' | 'darwin' | 'linux' | 'browser' = 'browser';
   public spoolerBackend: 'winspool' | 'cups' | 'browser_native' | 'mock_spooler' = 'browser_native';
 
-  private printers: PrinterDevice[] = [...INITIAL_PRINTERS];
-  private jobs: PrintJob[] = [...INITIAL_JOBS];
+  private printers: PrinterDevice[] = [];
+  private jobs: PrintJob[] = [];
   private logs: SpoolerLog[] = [];
   private metrics: SpoolerMetrics = {
     totalJobsSubmitted: 0,
@@ -199,25 +58,7 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
       this.isElectron = false;
       this.platform = 'browser';
       this.spoolerBackend = 'browser_native';
-      this.seedInitialLogs();
     }
-  }
-
-  private seedInitialLogs() {
-    this.addLog({
-      level: 'info',
-      message: 'Desktop Print Spooler Engine initialized (v2.4.1)',
-      details: { backend: this.spoolerBackend, platform: this.platform, bufferSize: '1024KB' },
-    });
-    this.addLog({
-      level: 'success',
-      message: 'Detected 5 local hardware ports (USB001, USB002, 9100 Raw, FILE:)',
-    });
-    this.addLog({
-      level: 'info',
-      message: 'Default AutoPrint destination set to Epson TM-T88VI (USB001)',
-      printerName: 'Epson TM-T88VI (Counter 1 - Thermal Receipt)',
-    });
   }
 
   private initElectronListeners() {
@@ -240,6 +81,41 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
     if (this.isElectron && window.electronAPI) {
       return await window.electronAPI.getPrinters();
     }
+    try {
+      const realPrinters = await BackendApiService.getPrinters();
+      if (Array.isArray(realPrinters) && realPrinters.length > 0) {
+        const mapped: PrinterDevice[] = realPrinters.map((p: any, idx: number) => ({
+          id: p.id || `win-printer-${idx}`,
+          name: p.name,
+          displayName: p.displayName || p.name,
+          status: p.status === 'offline' ? 'offline' : p.status === 'error' ? 'error' : 'ready',
+          isDefault: Boolean(p.isDefault),
+          type: 'virtual_pdf',
+          paperFormat: 'A4',
+          dpi: 300,
+          connectionType: 'usb',
+          port: p.port || 'USB001',
+          location: 'Front Counter',
+          paperLevelPercent: 95,
+          tonerLevelPercent: 90,
+          activeJobsCount: p.activeJobsCount || 0,
+          totalJobsPrinted: p.totalJobsPrinted || 120,
+          errorCount: 0,
+          supportedFeatures: {
+            color: true,
+            duplex: true,
+            autoCut: true,
+            cashDrawerKick: false,
+            barcode1D: true,
+            qr2D: true,
+          },
+          lastStatusUpdate: new Date().toISOString(),
+        }));
+        this.printers = mapped;
+      }
+    } catch {
+      // fallback
+    }
     return [...this.printers];
   }
 
@@ -247,10 +123,86 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
     if (this.isElectron && window.electronAPI) {
       return await window.electronAPI.getJobs();
     }
+    try {
+      const backendJobs = await BackendApiService.getAllJobs();
+      if (Array.isArray(backendJobs) && backendJobs.length > 0) {
+        const mappedJobs: PrintJob[] = backendJobs.map((bj: any) => {
+          const statusLower = (bj.status || '').toLowerCase();
+          const jobStatus =
+            statusLower === 'created' || statusLower === 'queued'
+              ? 'queued'
+              : statusLower === 'printing'
+              ? 'printing'
+              : statusLower === 'printed' || statusLower === 'ready_for_handover' || statusLower === 'completed'
+              ? 'completed'
+              : statusLower === 'failed'
+              ? 'failed'
+              : 'queued';
+
+          const mappedJob: PrintJob = {
+            id: bj.id,
+            jobNo: bj.jobNo || '#1000',
+            title: bj.title || bj.fileName,
+            documentType: 'invoice',
+            printerId: 'printer-pos-80',
+            printerName: bj.printerName || 'AutoPrint Spooler',
+            status: jobStatus,
+            priority: 'normal',
+            copies: 1,
+            submittedAt: bj.createdAt || new Date().toISOString(),
+            totalPages: 1,
+            pagesPrinted: 1,
+            bytesTotal: 2048,
+            bytesSpooled: 2048,
+            content: { plainText: bj.fileName },
+            retryCount: 0,
+            maxRetries: 3,
+            silentPrint: true,
+            spoolSpeedKbps: 512,
+            latencyMs: 14,
+            totalCost: bj.amountTotal || 0,
+            verificationCode: bj.verification?.verificationCode,
+            formattedVerificationCode: bj.verification?.formattedCode,
+            paymentStatus: bj.verification?.paymentStatus || 'PENDING',
+            isCashLocked: bj.verification?.isCashLocked || false,
+            customerName: bj.customerName || 'Walk-In Customer',
+          };
+          return mappedJob;
+        });
+        this.jobs = mappedJobs;
+      } else {
+        this.jobs = [];
+      }
+    } catch {
+      // fallback
+    }
     return [...this.jobs];
   }
 
   public async getLogs(): Promise<SpoolerLog[]> {
+    try {
+      const auditLogs = await BackendApiService.getAuditLogs();
+      if (Array.isArray(auditLogs) && auditLogs.length > 0) {
+        const mappedLogs: SpoolerLog[] = auditLogs.map((l: any) => ({
+          id: l.id,
+          timestamp: l.timestamp,
+          level: l.action?.includes('FAIL')
+            ? 'error'
+            : l.action?.includes('WARN')
+            ? 'warn'
+            : l.action?.includes('COMPLETE') ||
+              l.action?.includes('SUCCESS') ||
+              l.action?.includes('HANDED_OVER') ||
+              l.action?.includes('COLLECT')
+            ? 'success'
+            : 'info',
+          message: `${(l.action || '').replace(/_/g, ' ')} — ${l.details?.message || l.details?.reason || `Order ${l.jobNo || l.verificationCode || ''}`}`,
+          jobNo: l.jobNo,
+          details: l.details,
+        }));
+        this.logs = mappedLogs;
+      }
+    } catch {}
     return [...this.logs];
   }
 
@@ -258,7 +210,20 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
     if (this.isElectron && window.electronAPI) {
       return await window.electronAPI.getMetrics();
     }
-    return { ...this.metrics };
+    const completed = this.jobs.filter((j) => j.status === 'completed').length;
+    const failed = this.jobs.filter((j) => j.status === 'failed').length;
+    const active = this.jobs.filter((j) => ['queued', 'spooling', 'printing'].includes(j.status)).length;
+    return {
+      totalJobsSubmitted: this.jobs.length,
+      totalJobsCompleted: completed,
+      totalJobsFailed: failed,
+      activeJobs: active,
+      avgLatencyMs: 14,
+      queueBandwidthKbps: 512,
+      totalBytesPrinted: completed * 1024 * 64,
+      uptimeSeconds: 3600,
+      isQueuePaused: this.metrics.isQueuePaused,
+    };
   }
 
   public async submitPrintJob(
@@ -290,7 +255,7 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
     let isCashLocked = jobData.isCashLocked || false;
 
     if (!verificationCode) {
-      const mockJobRef: PrintJob = {
+      const jobRef: PrintJob = {
         ...jobData,
         id: jobId,
         jobNo,
@@ -304,10 +269,10 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
       };
 
       const record = verificationService.createVerificationRecord({
-        job: mockJobRef,
+        job: jobRef,
         customerName: jobData.customerName || 'Customer Walk-In',
         amountTotal: totalCost,
-        currency: 'USD',
+        currency: 'INR',
         initialMethod: isCashLocked ? 'CASH' : paymentStatus === 'UPI_SUCCESS' ? 'UPI' : undefined,
       });
 

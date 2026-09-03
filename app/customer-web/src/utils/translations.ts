@@ -161,7 +161,7 @@ export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
     encryptedUpload: 'Encrypted Upload',
     supportedFormats: 'PDF, DOCX, Images',
     paymentMethods: 'UPI, Razorpay, Juspay',
-    scanShopQrDesc: 'Scan the QR code at your local shop or connect the verified demo print shop.',
+    scanShopQrDesc: 'Scan the QR code at your local print counter to start printing.',
     connectVerifiedShop: 'Connect Verified Shop',
     qrScanner: 'QR Scanner',
     stepSpecs: '1. Specs',

@@ -1,23 +1,50 @@
-# AutoPrint / QRPrint — Automated Print Shop Management System
+# AutoPrint / QRPrint — Automated Print Shop Operating System
 
 ![AutoPrint Logo](assets/icon/app-icon.png)
 
-**AutoPrint** is a production-grade automated kiosk and print shop desktop management system designed for document upload, physical 8-digit verification watermarking, 3-strike fail-safe payment reconciliation, and staff-governed document handover.
+**AutoPrint** is a production-grade automated kiosk and print shop desktop management system designed for document upload, real-time visual previews, physical 8-digit verification watermarking, 3-strike fail-safe payment reconciliation, and staff-governed document handover.
 
 ---
 
-## 🚀 One-Line Web Installer (Recommended)
+## ⚡ Installation
 
-Run the following command in PowerShell (Run as Administrator recommended):
+### Method 1: One-Line PowerShell Installer (Recommended)
+
+Run the following command in PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/v0786/AutoPrint/main/installer/bootstrap.ps1 | iex
+irm https://raw.githubusercontent.com/v0786/AutoPrint/main/installer/scripts/install.ps1 | iex
 ```
 
-*For installations targeting the `customer` branch:*
-```powershell
-irm https://raw.githubusercontent.com/v0786/AutoPrint/customer/installer/bootstrap.ps1 | iex
-```
+**What this does automatically:**
+1. Queries the GitHub Releases API (`v0786/AutoPrint`) for the latest stable release.
+2. Downloads the official `AutoPrint-Setup.exe` and `AutoPrint-Setup.exe.sha256` checksum.
+3. Cryptographically calculates and verifies the SHA-256 hash before running.
+4. Checks and preserves existing SQLite datastores and rate cards if upgrading.
+5. Launches the Windows Setup Wizard for a clean or upgraded installation.
+
+---
+
+### Method 2: Manual Download from GitHub Releases
+
+1. Open the [GitHub Releases Page](https://github.com/v0786/AutoPrint/releases/latest).
+2. Download **`AutoPrint-Setup.exe`**.
+3. Download **`AutoPrint-Setup.exe.sha256`**.
+4. *(Optional but Recommended)* Verify the SHA-256 checksum in PowerShell:
+   ```powershell
+   Get-FileHash AutoPrint-Setup.exe -Algorithm SHA256
+   ```
+5. Run **`AutoPrint-Setup.exe`** and follow the on-screen setup wizard.
+
+---
+
+### Method 3: 1-Click Launchers (Local Portable / Clean PC Setup)
+
+If running directly from the cloned repository or unzipped archive:
+
+1. **`configure.bat`**: Run diagnostics to verify Windows 64-bit, Node.js, Spooler, printers, and port availability.
+2. **`start.bat`**: Universal 1-click launcher (downloads files with operator permission, compiles assets, starts all 3 microservices, and opens browsers).
+3. **[`FRESH_PC_SETUP_AND_REQUIREMENTS.md`](FRESH_PC_SETUP_AND_REQUIREMENTS.md)**: Step-by-step non-technical installation and daily operations guide.
 
 ---
 
@@ -25,10 +52,9 @@ irm https://raw.githubusercontent.com/v0786/AutoPrint/customer/installer/bootstr
 
 | Portal | Default URL | Purpose |
 | :--- | :--- | :--- |
-| **Customer Kiosk** | [`http://localhost:7000`](http://localhost:7000) | Document upload, specifications, & 8-digit verification code. |
-| **Merchant Desk** | [`http://localhost:6000`](http://localhost:6000) | Code lookup, cash collection, & physical handover confirmation. |
-| **Backend Health** | [`http://localhost:5000/health`](http://localhost:5000/health) | Live server diagnostic and SQLite database connection status. |
-| **Backend API** | [`http://localhost:5000/api`](http://localhost:5000/api) | Authoritative REST API service endpoints. |
+| **Customer Kiosk** | [`http://localhost:7000`](http://localhost:7000) | Document upload, layout preview, & 8-digit pickup code. |
+| **Merchant Desktop** | [`http://localhost:8000`](http://localhost:8000) | Code lookup, cash collection, rate cards, & physical handover. |
+| **Backend Health** | [`http://localhost:5000/api/health`](http://localhost:5000/api/health) | Live server diagnostic and SQLite WAL status. |
 
 ---
 
@@ -37,13 +63,18 @@ irm https://raw.githubusercontent.com/v0786/AutoPrint/customer/installer/bootstr
 ```
 AutoPrint/
 ├── app/                           # Active Applications (backend, customer-web, merchant-desktop, connectors)
+│   ├── backend/                   # Node.js Express REST API + SQLite WAL Datastore + Spooler Core
+│   ├── customer-web/              # Vite React Customer Kiosk with Document Previews
+│   └── merchant-desktop/          # Vite React Merchant POS & Pickup Verification Desk
 ├── datastore/                     # Persistent Runtime Data (database, uploads, audit, logs)
 ├── runtime/                       # Ephemeral Process Runtime State (logs, temp, pid, status)
-├── installer/                     # Complete PowerShell & CMD Installer Wizard Suite
+├── installer/                     # Inno Setup 6 & PowerShell Installer Suite
+│   └── scripts/install.ps1        # Official GitHub one-line release installer
 ├── assets/                        # High-resolution application branding & icons
 ├── docs/                          # Architecture, User, Admin, Installation, & Quick-Start Guides
-├── scripts/                       # Operational Management Scripts (start-all, stop-all, health-check)
-└── unused files/                  # Archived Legacy Files (100% Data Preservation Guarantee)
+├── scripts/                       # Operational Management Scripts (start-all, stop-all, test-e2e)
+├── configure.bat                  # PC Compatibility & System Diagnostics Tool
+└── start.bat                      # 1-Click Multi-App Launcher for Operators
 ```
 
 ---
@@ -52,7 +83,7 @@ AutoPrint/
 
 ### Start All Services:
 ```cmd
-scripts\start-all.cmd
+start.bat
 ```
 
 ### Stop All Services:
@@ -60,14 +91,14 @@ scripts\start-all.cmd
 scripts\stop-all.cmd
 ```
 
-### Check System Health:
+### Check System Compatibility:
 ```cmd
-scripts\health-check.cmd
+configure.bat
 ```
 
-### Run Backend Tests:
+### Run Automated E2E Test Suite:
 ```powershell
-npm run test:backend
+node scripts\test-e2e-integration.mjs
 ```
 
 ### Build All Applications:
@@ -77,22 +108,9 @@ npm run build:all
 
 ---
 
-## 📖 Complete Documentation Suite
-* 📘 [User & Staff Operational Guide](docs/USER_GUIDE.md)
-* ⚙️ [Installation & Deployment Manual](docs/INSTALLATION.md)
-* 🔧 [Administrator Operations Guide](docs/ADMIN_GUIDE.md)
-* ⚡ [Quick Start Reference](docs/QUICK_START.md)
-* 📄 [System Brochure & Workflow Overview](docs/AUTOPRINT_BROCHURE.md)
-* 🏗️ [Architecture Specification](docs/ARCHITECTURE.md)
-* 🗄️ [Datastore Specification](docs/DATASTORE.md)
-* 🔌 [Hardware & Gateway Connectors](docs/CONNECTORS.md)
-* 🚨 [Troubleshooting Manual](docs/TROUBLESHOOTING.md)
-* 📊 [Production Readiness Report](docs/PRODUCTION_READINESS_REPORT.md)
-
----
-
 ## 🔒 Verification & Security Architecture
 * **8-Digit Verification Code**: Rejection-sampled cryptographic random codes (`XXXX XXXX`).
 * **HMAC-SHA256 Checksum**: Deterministic verification watermark checksum for physical tamper detection.
-* **3-Strike Digital Lockout**: Automatic fail-safe cash lock on 3 consecutive payment failures.
+* **Scrypt Password Hashing**: Zero plaintext passwords; 16-byte random salt with `scryptSync` key derivation.
 * **Persistent SQLite Database**: ACID transactions, foreign keys, and WAL journal mode.
+* **Zero-Mock Operational Fleet**: Live Windows printers and SQLite print jobs only.

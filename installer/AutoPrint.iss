@@ -37,6 +37,18 @@ RestartApplications=no
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Types]
+Name: "full"; Description: "Full Print Station (Merchant PC + Local Kiosk + Spooler Engine)"
+Name: "merchant"; Description: "Merchant PC (Operator Counter Desk, Pickup Verification & Spooler)"
+Name: "kiosk"; Description: "Customer Standalone Kiosk (Touchscreen Upload Terminal)"
+Name: "custom"; Description: "Custom Installation Options"; Flags: iscustom
+
+[Components]
+Name: "core"; Description: "AutoPrint Core Backend & SQLite Datastore"; Types: full merchant kiosk custom; Flags: fixed
+Name: "merchant"; Description: "Merchant Desktop (Cash Desk, Rate Cards, Verification Desk)"; Types: full merchant custom
+Name: "kiosk"; Description: "Customer Kiosk (Instant Document Upload & Preview)"; Types: full kiosk custom
+Name: "spooler"; Description: "Universal Windows Spooler & Hardware Integration"; Types: full merchant custom
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "startwithwindows"; Description: "Start AutoPrint automatically when Windows starts"; GroupDescription: "Windows Startup Options:"

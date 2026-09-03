@@ -8,6 +8,20 @@ export const QrCodeModal: React.FC = () => {
   const { isQrModalOpen, setQrModalOpen, currentShop } = usePrintJob();
   const { t } = useLanguage();
   const [copied, setCopied] = useState(false);
+  const [portalQrUrl, setPortalQrUrl] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (isQrModalOpen) {
+      fetch('/api/config/public')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json) => {
+          if (json?.data?.qrCodeDataUrl) {
+            setPortalQrUrl(json.data.qrCodeDataUrl);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isQrModalOpen]);
 
   if (!isQrModalOpen) return null;
 
@@ -17,7 +31,7 @@ export const QrCodeModal: React.FC = () => {
 
   const shopName = currentShop?.name || 'AutoPrint Express Store';
   const shopNumber = currentShop ? currentShop.kioskNumber.replace(/Kiosk/gi, 'Shop') : 'Shop #01';
-  const qrUrl = currentShop?.upiDetails?.qrDataUrl || null;
+  const qrUrl = portalQrUrl || currentShop?.upiDetails?.qrDataUrl || '/api/config/qr-code';
 
   const handleCopy = () => {
     navigator.clipboard.writeText(currentUrl);

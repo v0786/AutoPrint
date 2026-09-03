@@ -4,6 +4,8 @@
  */
 
 import Database from 'better-sqlite3';
+import crypto from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
 import { PATHS, ensureDataDirectories } from '../config/environment';
 
 let _db: Database.Database | null = null;
@@ -48,7 +50,7 @@ export function closeDatabase(): void {
 
 // ─── Schema Migration ─────────────────────────────────────────────────────────
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 4;
 
 function runMigrations(db: Database.Database): void {
   // Create migration tracking table
@@ -79,6 +81,24 @@ function runMigrations(db: Database.Database): void {
     });
     migrate2();
     console.log('[DB] Applied migration 2 (Merchant Onboarding, Sessions, Payment Config)');
+  }
+
+  if (currentVersion < 3) {
+    const migrate3 = db.transaction(() => {
+      runMigration3(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(3);
+    });
+    migrate3();
+    console.log('[DB] Applied migration 3 (Photo Rates & Custom Rate Specifications)');
+  }
+
+  if (currentVersion < 4) {
+    const migrate4 = db.transaction(() => {
+      runMigration4(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(4);
+    });
+    migrate4();
+    console.log('[DB] Applied migration 4 (Admin Credentials, User Management & RBAC)');
   }
 }
 
@@ -247,4 +267,35 @@ function runMigration2(db: Database.Database): void {
       updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+}
+
+function runMigration3(db: Database.Database): void {
+  // Add photo_price_per_page and rates_json columns to merchants table if not existing
+  const columns = db.prepare("PRAGMA table_info(merchants)").all() as Array<{ name: string }>;
+  const colNames = new Set(columns.map((c) => c.name));
+
+  if (!colNames.has('photo_price_per_page')) {
+    db.exec(`ALTER TABLE merchants ADD COLUMN photo_price_per_page INTEGER NOT NULL DEFAULT 2500;`);
+  }
+  if (!colNames.has('rates_json')) {
+    db.exec(`ALTER TABLE merchants ADD COLUMN rates_json TEXT;`);
+  }
+}
+
+function runMigration4(db: Database.Database): void {
+  // 1. Add username, role, is_active to merchants table
+  const columns = db.prepare("PRAGMA table_info(merchants)").all() as Array<{ name: string }>;
+  const colNames = new Set(columns.map((c) => c.name));
+
+  if (!colNames.has('username')) {
+    db.exec(`ALTER TABLE merchants ADD COLUMN username TEXT;`);
+  }
+  if (!colNames.has('role')) {
+    db.exec(`ALTER TABLE merchants ADD COLUMN role TEXT NOT NULL DEFAULT 'staff';`);
+  }
+  if (!colNames.has('is_active')) {
+    db.exec(`ALTER TABLE merchants ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;`);
+  }
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_merchants_username ON merchants(username);`);
 }

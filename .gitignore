@@ -1,11 +1,17 @@
+# ===============================================================================
+#   AUTOPRINT / QRPRINT — PRODUCTION GITIGNORE
+# ===============================================================================
+
 # Dependencies
 node_modules/
 **/node_modules/
+.venv/
 
-# Build Output
+# Build and Packaging Output
 dist/
 **/dist/
 dist-installer/
+dist-electron/
 build/
 **/build/
 out/
@@ -13,20 +19,21 @@ release/
 .next/
 *.old.exe
 
-# Environment Secrets
+# Environment & Secrets (Preserve templates only)
 .env
+.env.*
 .env.local
 .env.*.local
 !.env.example
 
-# Local Databases & SQLite
+# Local SQLite Databases & WAL Journal files
 *.db
 *.db-wal
 *.db-shm
 *.sqlite
 *.sqlite3
 
-# Datastore Persistent Data
+# Datastore Persistent Storage (Keep directory structures only)
 datastore/customer/uploads/*
 !datastore/customer/uploads/.gitkeep
 datastore/customer/documents/*
@@ -41,8 +48,10 @@ datastore/backups/*
 !datastore/backups/.gitkeep
 datastore/temp/*
 !datastore/temp/.gitkeep
+uploads/*
+!uploads/.gitkeep
 
-# Runtime Ephemeral Data
+# Runtime Ephemeral Data & Logs
 runtime/logs/*
 !runtime/logs/.gitkeep
 runtime/temp/*
@@ -51,14 +60,22 @@ runtime/pid/*
 !runtime/pid/.gitkeep
 runtime/status/*
 !runtime/status/.gitkeep
+logs/
+temp/
+tmp/
 
-# System & Editor
-.DS_Store
-Thumbs.db
-desktop.ini
+# Log Files & Debuggers
 *.log
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+
+# System & OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+
+# IDE & Editor Settings
 .vscode/
 .idea/

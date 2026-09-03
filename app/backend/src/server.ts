@@ -105,9 +105,13 @@ api.get('/health', healthHandler);
 api.post('/jobs', upload.single('file'), JobController.submitJob);
 api.get('/jobs', JobController.getAllJobs);
 api.get('/jobs/:id', JobController.getJobById);
+api.patch('/jobs/:id/status', JobController.updateJobStatus);
+api.post('/jobs/:id/cancel', JobController.cancelJob);
+api.delete('/jobs/:id', JobController.deleteJob);
 
 // Verification & Staff Desk Routes
 api.get('/verification/lookup/:code', VerificationController.lookupByCode);
+api.get('/verification/:code', VerificationController.lookupByCode);
 api.post('/verification/lookup', VerificationController.lookupByCode);
 api.post('/verification/collect-cash', VerificationController.processCashCollection);
 api.post('/verification/handover', VerificationController.confirmHandover);
@@ -117,13 +121,21 @@ api.get('/verification/audit-logs', VerificationController.getAuditLogs);
 api.get('/merchant/auth/check', MerchantController.checkAuth);
 api.post('/merchant/auth/onboard', MerchantController.onboard);
 api.post('/merchant/auth/login', MerchantController.login);
+api.post('/merchant/auth/signup', MerchantController.signup);
 api.post('/merchant/auth/logout', MerchantController.logout);
 api.get('/merchant/profile', MerchantController.getProfile);
 api.put('/merchant/profile', MerchantController.updateProfile);
+api.post('/merchant/profile', MerchantController.updateProfile);
 api.get('/merchant/public-profile', MerchantController.getPublicProfile);
 api.post('/merchant/payment-receiver', MerchantController.updatePaymentReceiver);
 api.post('/merchant/printer', MerchantController.updatePrinter);
 api.post('/merchant/toggle-online', MerchantController.toggleOnline);
+
+// Admin User Management Routes (RBAC Protected)
+api.get('/merchant/users', MerchantController.getUsers);
+api.post('/merchant/users', MerchantController.addUser);
+api.delete('/merchant/users/:id', MerchantController.deleteUser);
+api.post('/merchant/users/:id/reset-password', MerchantController.resetUserPassword);
 
 // Digital Payment Gateway Routes
 api.post('/payment/create-order', PaymentController.createOrder);

@@ -101,4 +101,42 @@ export class JobController {
       next(err);
     }
   }
+
+  public static updateJobStatus(req: Request, res: Response, next: NextFunction): void {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      if (!status) {
+        throw new AppError('Status is required.', 400);
+      }
+      const updated = AutoPrintService.updateJobStatus(id, status);
+      if (!updated) {
+        res.status(404).json({ ok: false, error: 'Job not found' });
+        return;
+      }
+      res.json({ ok: true, data: updated });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public static cancelJob(req: Request, res: Response, next: NextFunction): void {
+    try {
+      const { id } = req.params;
+      const updated = AutoPrintService.updateJobStatus(id, 'CANCELLED');
+      res.json({ ok: true, message: 'Job cancelled successfully', data: updated });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public static deleteJob(req: Request, res: Response, next: NextFunction): void {
+    try {
+      const { id } = req.params;
+      AutoPrintService.deleteJob(id);
+      res.json({ ok: true, message: 'Job deleted successfully' });
+    } catch (err) {
+      next(err);
+    }
+  }
 }

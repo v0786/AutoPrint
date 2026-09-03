@@ -1,14 +1,16 @@
 import React from 'react';
 import {
-  Printer,
+  LayoutDashboard,
+  ShieldCheck,
   ListOrdered,
   HardDrive,
+  History,
   Terminal,
-  ShieldCheck,
-  CreditCard,
+  Settings,
+  Printer,
   LogOut,
   Power,
-  Store,
+  Users,
 } from 'lucide-react';
 import { SpoolerMetrics } from '../types/printer';
 
@@ -18,6 +20,8 @@ interface SidebarProps {
   metrics: SpoolerMetrics;
   isOnline: boolean;
   merchantName?: string;
+  username?: string;
+  userRole?: 'admin' | 'staff';
   shopName?: string;
   onToggleOnline: () => void;
   onLogout: () => void;
@@ -29,96 +33,79 @@ export const Sidebar: React.FC<SidebarProps> = ({
   metrics,
   isOnline,
   merchantName,
+  username,
+  userRole = 'staff',
   shopName,
   onToggleOnline,
   onLogout,
 }) => {
-  const navItems = [
+  const primaryNavItems = [
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: LayoutDashboard,
+      badge: undefined,
+    },
     {
       id: 'verification',
-      label: 'Staff Verification',
+      label: 'Verification Desk',
       icon: ShieldCheck,
-      badge: 'Fail-Safe',
-      badgeColor: 'bg-emerald-100 text-emerald-800',
+      badge: 'Counter',
+      badgeColor: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
     },
     {
       id: 'queue',
-      label: 'Active Queue',
+      label: 'Print Queue',
       icon: ListOrdered,
-      badge: metrics.activeJobs > 0 ? metrics.activeJobs : undefined,
-      badgeColor: 'bg-red-500 text-white',
+      badge: metrics.activeJobs > 0 ? String(metrics.activeJobs) : undefined,
+      badgeColor: 'bg-blue-500 text-white',
     },
     {
       id: 'fleet',
-      label: 'Printer Fleet',
+      label: 'Printers',
       icon: HardDrive,
-      badge: 'Live',
-      badgeColor: 'bg-slate-100 text-slate-700',
+      badge: 'Win32',
+      badgeColor: 'bg-white/10 text-zinc-300',
     },
     {
-      id: 'payment',
-      label: 'Payment Receiver',
-      icon: CreditCard,
-      badge: 'UPI / QR',
-      badgeColor: 'bg-purple-100 text-purple-800',
+      id: 'history',
+      label: 'Activity & History',
+      icon: History,
+      badge: undefined,
     },
     {
-      id: 'telemetry',
-      label: 'Spooler Logs',
+      id: 'diagnostics',
+      label: 'System Diagnostics',
       icon: Terminal,
-      badge: 'System',
-      badgeColor: 'bg-slate-100 text-slate-700',
+      badge: 'Spooler',
+      badgeColor: 'bg-white/10 text-zinc-300',
     },
   ];
 
   return (
-    <aside className="w-72 bg-white border-r border-slate-200 flex flex-col p-6 select-none shrink-0 h-screen overflow-y-auto shadow-xs font-sans justify-between">
-      <div>
-        {/* Brand Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/20 text-white">
+    <aside className="w-64 bg-[#141419] border-r border-white/10 flex flex-col p-5 select-none shrink-0 h-screen justify-between font-sans text-white z-30">
+      <div className="space-y-6">
+        {/* Brand & Store Header */}
+        <div className="flex items-center gap-3 px-1">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20 text-white shrink-0">
             <Printer className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <h1 className="font-bold text-base tracking-tight text-slate-900">AutoPrint</h1>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+              <span className="font-black text-sm tracking-tight text-white">AutoPrint</span>
+              <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
                 DESK
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 font-medium truncate max-w-[140px]">
-              {shopName || 'Merchant Station'}
+            <p className="text-[11px] text-zinc-400 font-medium truncate max-w-[130px] mt-0.5">
+              {shopName || 'AutoPrint Express Store'}
             </p>
           </div>
         </div>
 
-        {/* Shop Online / Offline Toggle Card */}
-        <div className="mb-6 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className={`w-2.5 h-2.5 rounded-full ${
-                isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
-              }`}
-            />
-            <div className="text-xs font-bold text-slate-800">
-              {isOnline ? 'Orders Active' : 'Orders Paused'}
-            </div>
-          </div>
-          <button
-            onClick={onToggleOnline}
-            className={`px-3 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
-              isOnline
-                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-            }`}
-          >
-            {isOnline ? 'Online' : 'Offline'}
-          </button>
-        </div>
-
-        {/* Navigation Items */}
-        <nav className="space-y-1.5">
-          {navItems.map((item) => {
+        {/* Primary Navigation Menu */}
+        <nav className="space-y-1">
+          {primaryNavItems.map((item) => {
             const Icon = item.icon;
             const active = currentView === item.id;
 
@@ -126,19 +113,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 onClick={() => onSelectView(item.id)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
                   active
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 ${active ? 'text-white' : 'text-slate-500'}`} />
+                  <Icon className={`w-4 h-4 ${active ? 'text-white' : 'text-zinc-400'}`} />
                   <span>{item.label}</span>
                 </div>
+
                 {item.badge && (
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
                       active ? 'bg-white/20 text-white' : item.badgeColor
                     }`}
                   >
@@ -151,21 +139,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Footer / Account / Logout */}
-      <div className="pt-4 border-t border-slate-100 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="min-w-0">
-            <div className="text-xs font-bold text-slate-800 truncate">
-              {merchantName || 'Duty Cashier'}
-            </div>
-            <div className="text-[10px] text-slate-400">Authenticated Staff</div>
+      {/* Footer Navigation: Settings & Profile */}
+      <div className="space-y-3 pt-4 border-t border-white/10">
+        <button
+          onClick={() => onSelectView('settings')}
+          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+            currentView === 'settings'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+              : 'text-zinc-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Settings className="w-4 h-4" />
+            <span>Settings</span>
           </div>
+          {userRole === 'admin' && (
+            <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              Admin
+            </span>
+          )}
+        </button>
+
+        {/* Compact Operator Card */}
+        <div className="p-3 bg-black/40 rounded-2xl border border-white/5 flex items-center justify-between">
+          <div className="min-w-0 pr-2">
+            <div className="flex items-center gap-1.5 leading-none">
+              <span className="text-xs font-bold text-white truncate max-w-[90px]">
+                {merchantName || 'Operator'}
+              </span>
+              {userRole === 'admin' ? (
+                <span className="text-[8px] font-black uppercase px-1 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+                  Admin
+                </span>
+              ) : (
+                <span className="text-[8px] font-bold uppercase px-1 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
+                  Staff
+                </span>
+              )}
+            </div>
+            <div className="text-[10px] text-zinc-500 font-mono mt-1">
+              @{username || 'staff'}
+            </div>
+          </div>
+
           <button
             onClick={onLogout}
-            className="p-2 rounded-xl border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-slate-500 transition-colors cursor-pointer"
-            title="Sign out of Merchant Desk"
+            className="p-1.5 rounded-xl bg-white/5 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-300 transition-colors cursor-pointer shrink-0"
+            title="Sign out of station"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

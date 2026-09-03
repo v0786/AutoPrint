@@ -71,7 +71,42 @@
   }
 }
 
-.animate-laser {
-  animation: laserScan 2.4s ease-in-out infinite;
+.animate-laser-scan {
+  animation: laserScan 2.5s ease-in-out infinite;
 }
 
+/* ========================================================================= */
+/* DOCX Preview Document Container Styles                                    */
+/* ========================================================================= */
+.docx-wrapper {
+  background: transparent !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+.docx-wrapper > section.docx {
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3) !important;
+  border-radius: 4px !important;
+  margin-bottom: 24px !important;
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.docx-wrapper > section.docx:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Paged mode: show only active page */
+.docx-wrapper.paged-mode > section.docx {
+  display: none !important;
+}
+
+.docx-wrapper.paged-mode > section.docx.active-page {
+  display: block !important;
+}

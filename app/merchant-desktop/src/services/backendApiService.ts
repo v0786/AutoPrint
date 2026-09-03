@@ -122,6 +122,52 @@ export class BackendApiService {
   }
 
   /**
+   * Retrieves real hardware printers from backend.
+   */
+  public static async getPrinters(): Promise<any[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/printers`);
+      if (!response.ok) return [];
+      const json = await response.json();
+      return json.data || [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Updates job status on the backend.
+   */
+  public static async updateJobStatus(jobId: string, status: string): Promise<any> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      const json = await response.json();
+      return json.data;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Cancels a job on the backend.
+   */
+  public static async cancelJob(jobId: string): Promise<any> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}`, {
+        method: 'DELETE',
+      });
+      const json = await response.json();
+      return json.data;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Records a digital payment attempt.
    */
   public static async recordDigitalAttempt(params: {

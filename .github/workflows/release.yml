@@ -1,0 +1,128 @@
+name: AutoPrint Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build, Test & Package Windows Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Inno Setup 6
+        run: |
+          choco install innosetup -y --no-progress
+          echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
+
+      - name: Install Dependencies (All Workspaces)
+        run: |
+          npm ci || npm install
+          cd app/backend && (npm ci || npm install) && cd ../..
+          cd app/customer-web && (npm ci || npm install) && cd ../..
+          cd app/merchant-desktop && (npm ci || npm install) && cd ../..
+
+      - name: TypeScript Type Validation
+        run: |
+          echo "=== Validating Backend TypeScript ==="
+          cd app/backend && npx tsc --noEmit && cd ../..
+          echo "=== Validating Customer Web TypeScript ==="
+          cd app/customer-web && npx tsc --noEmit && cd ../..
+          echo "=== Validating Merchant Desktop TypeScript ==="
+          cd app/merchant-desktop && npx tsc --noEmit && cd ../..
+
+      - name: Compile Production Builds
+        run: |
+          echo "=== Building Backend ==="
+          cd app/backend && npm run build && cd ../..
+          echo "=== Building Customer Web ==="
+          cd app/customer-web && npm run build && cd ../..
+          echo "=== Building Merchant Desktop ==="
+          cd app/merchant-desktop && npm run build && cd ../..
+
+      - name: Run Automated Test Suite
+        run: |
+          echo "=== Running Backend Tests ==="
+          cd app/backend && npm test && cd ../..
+          echo "=== Running End-to-End Test Suite ==="
+          node scripts/test-e2e-integration.mjs
+
+      - name: Stage Payload for Inno Setup
+        run: |
+          $distDir = "dist-installer"
+          $payloadDir = "$distDir/payload"
+          if (Test-Path $payloadDir) { Remove-Item $payloadDir -Recurse -Force }
+          New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
+
+          # Copy core executables and scripts
+          Copy-Item "AutoPrint.exe" $payloadDir -Force -ErrorAction SilentlyContinue
+          Copy-Item "start.bat" $payloadDir -Force
+          Copy-Item "configure.bat" $payloadDir -Force
+          Copy-Item "FRESH_PC_SETUP_AND_REQUIREMENTS.md" $payloadDir -Force
+          Copy-Item "package.json" $payloadDir -Force
+          Copy-Item ".env.example" $payloadDir -Force
+
+          # Copy app directories
+          $targetAppDir = "$payloadDir/app"
+          New-Item -ItemType Directory -Path "$targetAppDir/backend/dist" -Force | Out-Null
+          Copy-Item "app/backend/dist/*" "$targetAppDir/backend/dist" -Recurse -Force
+          Copy-Item "app/backend/package.json" "$targetAppDir/backend" -Force
+          if (Test-Path "app/backend/node_modules") {
+            Copy-Item "app/backend/node_modules" "$targetAppDir/backend" -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Path "$targetAppDir/customer-web/dist" -Force | Out-Null
+          Copy-Item "app/customer-web/dist/*" "$targetAppDir/customer-web/dist" -Recurse -Force
+          Copy-Item "app/customer-web/server.js" "$targetAppDir/customer-web" -Force
+          Copy-Item "app/customer-web/package.json" "$targetAppDir/customer-web" -Force
+
+          New-Item -ItemType Directory -Path "$targetAppDir/merchant-desktop/dist" -Force | Out-Null
+          Copy-Item "app/merchant-desktop/dist/*" "$targetAppDir/merchant-desktop/dist" -Recurse -Force
+          Copy-Item "app/merchant-desktop/server.js" "$targetAppDir/merchant-desktop" -Force
+          Copy-Item "app/merchant-desktop/package.json" "$targetAppDir/merchant-desktop" -Force
+
+          # Copy assets, scripts, docs
+          Copy-Item "assets" $payloadDir -Recurse -Force
+          Copy-Item "scripts" $payloadDir -Recurse -Force
+          Copy-Item "docs" $payloadDir -Recurse -Force
+
+      - name: Build Windows Installer (Inno Setup)
+        run: |
+          iscc installer/AutoPrint.iss
+
+      - name: Generate SHA-256 Checksum
+        run: |
+          $installerPath = "dist-installer/AutoPrint-Setup.exe"
+          if (-not (Test-Path $installerPath)) {
+            Write-Error "AutoPrint-Setup.exe not found in dist-installer!"
+            exit 1
+          }
+          $hash = (Get-FileHash -Path $installerPath -Algorithm SHA256).Hash.ToLower()
+          "$hash  AutoPrint-Setup.exe" | Out-File -FilePath "dist-installer/AutoPrint-Setup.exe.sha256" -Encoding ascii -NoNewline
+          Write-Host "Generated SHA-256: $hash"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-installer/AutoPrint-Setup.exe
+            dist-installer/AutoPrint-Setup.exe.sha256
+          name: AutoPrint Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true

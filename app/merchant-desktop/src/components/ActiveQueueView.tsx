@@ -1,64 +1,58 @@
 import React, { useState } from 'react';
-import { CustomerAccessBanner } from './CustomerAccessBanner';
 import {
   PrintJob,
   JobStatus,
   JobPriority,
   PrinterDevice,
+  SpoolerMetrics,
 } from '../types/printer';
 import {
   Printer,
-  FileText,
-  Tag,
-  Receipt,
-  FileSpreadsheet,
+  ListOrdered,
   CheckCircle2,
   Clock,
   AlertCircle,
-  PauseCircle,
-  PlayCircle,
+  Pause,
+  Play,
   RefreshCw,
   Trash2,
   Eye,
   ArrowUp,
   ArrowDown,
+  Search,
   Zap,
   HardDrive,
-  FileCode,
-  Sparkles,
-  Search,
-  Filter,
-  PlusCircle,
+  X,
 } from 'lucide-react';
 
 interface ActiveQueueViewProps {
   jobs: PrintJob[];
   printers: PrinterDevice[];
+  metrics: SpoolerMetrics;
   onCancelJob: (jobId: string) => void;
   onRetryJob: (jobId: string) => void;
   onReorderJobs: (jobIds: string[]) => void;
-  onPreviewDocument: (job: PrintJob) => void;
-  onExecutePhysicalPrint: (job: PrintJob) => void;
+  onPauseResumeQueue: () => void;
+  onPurgeCompleted: () => void;
+  onPreviewJobDoc: (job: PrintJob) => void;
   onOpenNewJobModal: () => void;
 }
 
 export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
   jobs,
   printers,
+  metrics,
   onCancelJob,
   onRetryJob,
   onReorderJobs,
-  onPreviewDocument,
-  onExecutePhysicalPrint,
+  onPauseResumeQueue,
+  onPurgeCompleted,
+  onPreviewJobDoc,
   onOpenNewJobModal,
 }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Active or Currently printing job
-  const currentActiveJob = jobs.find((j) => ['printing', 'spooling'].includes(j.status));
-
-  // Filtered jobs
   const filteredJobs = jobs.filter((job) => {
     if (filterStatus === 'active') {
       if (!['queued', 'spooling', 'printing', 'paused'].includes(job.status)) return false;
@@ -66,8 +60,8 @@ export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
       if (job.status !== 'completed') return false;
     } else if (filterStatus === 'failed') {
       if (job.status !== 'failed') return false;
-    } else if (filterStatus === 'rush') {
-      if (job.priority !== 'rush') return false;
+    } else if (filterStatus === 'paused') {
+      if (job.status !== 'paused') return false;
     }
 
     if (searchQuery.trim()) {
@@ -75,112 +69,14 @@ export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
       return (
         job.title.toLowerCase().includes(q) ||
         job.jobNo.toLowerCase().includes(q) ||
-        job.printerName.toLowerCase().includes(q) ||
-        job.documentType.toLowerCase().includes(q)
+        (job.customerName && job.customerName.toLowerCase().includes(q)) ||
+        job.printerName.toLowerCase().includes(q)
       );
     }
     return true;
   });
 
-  const getDocIcon = (type: string) => {
-    switch (type) {
-      case 'receipt':
-        return <Receipt className="w-4 h-4 text-blue-600" />;
-      case 'label':
-        return <Tag className="w-4 h-4 text-emerald-600" />;
-      case 'invoice':
-        return <FileSpreadsheet className="w-4 h-4 text-blue-700" />;
-      case 'report':
-        return <FileText className="w-4 h-4 text-slate-700" />;
-      default:
-        return <FileCode className="w-4 h-4 text-slate-500" />;
-    }
-  };
-
-  const getStatusBadge = (status: JobStatus) => {
-    switch (status) {
-      case 'completed':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <CheckCircle2 className="w-3 h-3" />
-            COMPLETED
-          </span>
-        );
-      case 'printing':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-500 text-white animate-pulse shadow-xs">
-            <Printer className="w-3 h-3" />
-            PRINTING
-          </span>
-        );
-      case 'spooling':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-            <RefreshCw className="w-3 h-3 animate-spin" />
-            SPOOLING
-          </span>
-        );
-      case 'queued':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-            <Clock className="w-3 h-3" />
-            QUEUED
-          </span>
-        );
-      case 'failed':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
-            <AlertCircle className="w-3 h-3" />
-            FAILED
-          </span>
-        );
-      case 'paused':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-            <PauseCircle className="w-3 h-3" />
-            PAUSED
-          </span>
-        );
-      case 'cancelled':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
-            CANCELLED
-          </span>
-        );
-    }
-  };
-
-  const getPriorityBadge = (priority: JobPriority) => {
-    switch (priority) {
-      case 'rush':
-        return (
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-600 text-white tracking-wide shadow-2xs">
-            RUSH
-          </span>
-        );
-      case 'high':
-        return (
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-200">
-            HIGH
-          </span>
-        );
-      case 'normal':
-        return (
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
-            NORMAL
-          </span>
-        );
-      case 'low':
-        return (
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white text-slate-500 border border-slate-200">
-            LOW
-          </span>
-        );
-    }
-  };
-
-  // Reordering helpers
-  const handleMoveJob = (index: number, direction: 'up' | 'down') => {
+  const handleMove = (index: number, direction: 'up' | 'down') => {
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
     if (targetIdx < 0 || targetIdx >= jobs.length) return;
 
@@ -191,359 +87,291 @@ export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
     onReorderJobs(newJobs.map((j) => j.id));
   };
 
+  const getStatusBadge = (status: JobStatus) => {
+    switch (status) {
+      case 'printing':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-500/20 text-blue-300 border border-blue-500/30 animate-pulse">
+            <Printer className="w-3 h-3" />
+            Printing
+          </span>
+        );
+      case 'spooling':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            <RefreshCw className="w-3 h-3 animate-spin" />
+            Spooling
+          </span>
+        );
+      case 'queued':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-zinc-800 text-zinc-300 border border-white/5">
+            <Clock className="w-3 h-3" />
+            Queued
+          </span>
+        );
+      case 'paused':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            <Pause className="w-3 h-3" />
+            Paused
+          </span>
+        );
+      case 'completed':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <CheckCircle2 className="w-3 h-3" />
+            Completed
+          </span>
+        );
+      case 'failed':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
+            <AlertCircle className="w-3 h-3" />
+            Failed
+          </span>
+        );
+      case 'cancelled':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-zinc-800 text-zinc-500">
+            Cancelled
+          </span>
+        );
+    }
+  };
+
+  const getPriorityBadge = (priority: JobPriority) => {
+    switch (priority) {
+      case 'rush':
+        return (
+          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-rose-600 text-white tracking-wider">
+            RUSH
+          </span>
+        );
+      case 'high':
+        return (
+          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+            HIGH
+          </span>
+        );
+      case 'normal':
+        return (
+          <span className="text-[9px] font-medium uppercase px-2 py-0.5 rounded bg-white/5 text-zinc-400">
+            NORMAL
+          </span>
+        );
+      case 'low':
+        return (
+          <span className="text-[9px] font-medium uppercase px-2 py-0.5 rounded bg-black/40 text-zinc-500">
+            LOW
+          </span>
+        );
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Live Customer Portal & Dynamic QR Standee Banner */}
-      <CustomerAccessBanner />
-
-      {/* Spotlight Card: Live Spooling / Active Job */}
-      {currentActiveJob ? (
-        <section className="bg-white rounded-3xl shadow-sm border border-blue-100 p-6 sm:p-7 relative overflow-hidden transition-all duration-200">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
-            <div className="flex items-start gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 shrink-0 mt-0.5">
-                {getDocIcon(currentActiveJob.documentType)}
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="inline-block px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                    {currentActiveJob.status === 'printing' ? 'Active Print Spool' : 'Rasterizing Buffer'}
-                  </span>
-                  <span className="text-xs font-mono font-bold text-slate-500">
-                    {currentActiveJob.jobNo}
-                  </span>
-                </div>
-                <h3 className="text-lg sm:text-xl font-bold text-slate-900">
-                  {currentActiveJob.title}
-                </h3>
-                <p className="text-xs text-slate-500 font-medium flex items-center gap-2 mt-0.5">
-                  <span>Target: <strong className="text-slate-800">{currentActiveJob.printerName}</strong></span>
-                  <span>•</span>
-                  <span>{currentActiveJob.copies} Copy</span>
-                  <span>•</span>
-                  <span>{currentActiveJob.bytesTotal} Bytes</span>
-                </p>
-              </div>
-            </div>
-
-            {/* Progress Percentage & Stats */}
-            <div className="text-left sm:text-right flex sm:flex-col items-baseline sm:items-end justify-between w-full sm:w-auto gap-2">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-bold text-red-600 tracking-tight">
-                  {Math.round((currentActiveJob.pagesPrinted / currentActiveJob.totalPages) * 100) ||
-                    (currentActiveJob.status === 'printing' ? 85 : 45)}
-                  %
-                </span>
-              </div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Page {currentActiveJob.pagesPrinted} of {currentActiveJob.totalPages} Printed
-              </p>
-            </div>
+    <div className="space-y-6 max-w-7xl mx-auto font-sans pb-12">
+      {/* Header & Global Queue Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#1e1f26] p-6 rounded-3xl border border-white/10 shadow-xl">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-600/30">
+            <ListOrdered className="w-6 h-6" />
           </div>
-
-          {/* Animated RED Progress Bar */}
-          <div className="w-full h-3 bg-red-100 rounded-full overflow-hidden mb-5 border border-red-200">
-            <div
-              className="h-full bg-red-600 rounded-full transition-all duration-300 relative overflow-hidden"
-              style={{
-                width: `${
-                  Math.round((currentActiveJob.pagesPrinted / currentActiveJob.totalPages) * 100) ||
-                  (currentActiveJob.status === 'printing' ? 85 : 45)
-                }%`,
-              }}
-            >
-              <div className="absolute inset-0 bg-white/20 animate-pulse" />
-            </div>
-          </div>
-
-          {/* Bottom Metas & Actions */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-100">
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-xs text-slate-600">
-              <div className="flex items-center gap-1.5">
-                <span className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center font-bold text-[10px] text-blue-700">
-                  OS
-                </span>
-                <span className="font-semibold text-xs text-slate-800">Native Spooler Direct</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-6 h-6 rounded-md bg-emerald-50 flex items-center justify-center font-bold text-[10px] text-emerald-700">
-                  ⚡
-                </span>
-                <span className="font-semibold text-xs text-slate-800">
-                  {currentActiveJob.latencyMs}ms Latency
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center font-bold text-[10px] text-blue-700">
-                  KB
-                </span>
-                <span className="font-semibold text-xs text-slate-800">
-                  {currentActiveJob.spoolSpeedKbps} KB/s Stream
-                </span>
-              </div>
-            </div>
-
-            {/* Actions with Green buttons */}
+          <div>
             <div className="flex items-center gap-2">
-              <button
-                id="btn-active-job-preview"
-                onClick={() => onPreviewDocument(currentActiveJob)}
-                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
-              >
-                <Eye className="w-3.5 h-3.5 text-emerald-600" />
-                <span>View Preview</span>
-              </button>
-              <button
-                id="btn-active-job-cancel"
-                onClick={() => onCancelJob(currentActiveJob.id)}
-                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Cancel Print</span>
-              </button>
-            </div>
-          </div>
-        </section>
-      ) : (
-        <section className="bg-white border border-blue-100 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
-          <div className="flex items-center gap-3.5 text-center sm:text-left">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="font-bold text-sm text-slate-900">Spooler Queue Idle & Ready</h4>
-              <p className="text-xs text-slate-500 font-medium">
-                No active print buffer stream pending. All merchant ports ready for sub-millisecond dispatch.
-              </p>
-            </div>
-          </div>
-          <button
-            id="btn-empty-new-job"
-            onClick={onOpenNewJobModal}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-emerald-700/20 transition-all shrink-0 active:scale-[0.98]"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>Create Print Job</span>
-          </button>
-        </section>
-      )}
-
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-blue-100 shadow-xs">
-        {/* Status Filters */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
-          {[
-            { id: 'all', label: 'All Jobs', count: jobs.length },
-            {
-              id: 'active',
-              label: 'Active / Queued',
-              count: jobs.filter((j) => ['queued', 'spooling', 'printing', 'paused'].includes(j.status)).length,
-            },
-            {
-              id: 'completed',
-              label: 'Completed',
-              count: jobs.filter((j) => j.status === 'completed').length,
-            },
-            {
-              id: 'failed',
-              label: 'Errors',
-              count: jobs.filter((j) => j.status === 'failed').length,
-            },
-            {
-              id: 'rush',
-              label: 'Rush Priority',
-              count: jobs.filter((j) => j.priority === 'rush').length,
-            },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              id={`filter-tab-${tab.id}`}
-              onClick={() => setFilterStatus(tab.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-                filterStatus === tab.id
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                  filterStatus === tab.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-100 text-slate-600'
-                }`}
-              >
-                {tab.count}
+              <h1 className="text-xl font-bold text-white">Active Print Queue</h1>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                {jobs.length} Total Jobs
               </span>
-            </button>
-          ))}
+            </div>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Monitor transmission buffer, prioritize urgent requests, and handle driver exceptions.
+            </p>
+          </div>
         </div>
 
-        {/* Search Input */}
-        <div className="relative min-w-[200px] sm:w-64">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search jobs, #no, printer..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white shadow-2xs font-medium"
-          />
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={onPauseResumeQueue}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-xs transition-all cursor-pointer ${
+              metrics.isQueuePaused
+                ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/20'
+                : 'bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white'
+            }`}
+          >
+            {metrics.isQueuePaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+            <span>{metrics.isQueuePaused ? 'Resume Spooler' : 'Pause Spooler'}</span>
+          </button>
+
+          <button
+            onClick={onPurgeCompleted}
+            className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+            title="Purge completed/cancelled jobs from buffer"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {/* Main Queue List */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between px-2">
-          <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400">
-            Spooler Job Register ({filteredJobs.length})
-          </h4>
-          <span className="text-xs text-slate-400 italic">
-            Single-PC Merchant Queue Engine
-          </span>
+      {/* Filter and Search Bar */}
+      <div className="bg-[#141419] p-4 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search queue by title, Job #, customer..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-mono"
+          />
         </div>
 
-        {filteredJobs.length === 0 ? (
-          <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-10 text-center text-slate-400">
-            <Printer className="w-8 h-8 mx-auto mb-2 opacity-40 text-blue-600" />
-            <p className="font-bold text-sm text-slate-700">No Print Jobs Found</p>
-            <p className="text-xs mt-1">No jobs match your filter criteria or search query.</p>
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {filteredJobs.map((job, index) => {
-              const isQueued = ['queued', 'paused'].includes(job.status);
-              const isFailed = job.status === 'failed';
+        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+          {[
+            { id: 'all', label: 'All Jobs' },
+            { id: 'active', label: 'Active & Queued' },
+            { id: 'completed', label: 'Completed' },
+            { id: 'failed', label: 'Failed' },
+            { id: 'paused', label: 'Paused' },
+          ].map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFilterStatus(f.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                filterStatus === f.id
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                  : 'bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-              return (
-                <div
-                  key={job.id}
-                  id={`job-card-${job.id}`}
-                  className={`border rounded-2xl p-4 transition-all duration-150 ${
-                    job.status === 'printing'
-                      ? 'bg-white border-blue-500 shadow-sm ring-1 ring-blue-500/20'
-                      : isFailed
-                      ? 'bg-red-50/50 border-red-200'
-                      : 'bg-white hover:border-blue-200 border-slate-200 shadow-2xs'
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    {/* Left: Doc type icon + Title + Meta */}
-                    <div className="flex items-start gap-3.5">
-                      <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 shrink-0 mt-0.5">
-                        {getDocIcon(job.documentType)}
+      {/* High-Density Table View */}
+      <div className="bg-[#141419] border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-zinc-300">
+            <thead className="bg-[#1e1f26]/80 text-zinc-400 uppercase text-[10px] tracking-wider border-b border-white/10">
+              <tr>
+                <th className="py-3.5 px-4 w-12 text-center">Order</th>
+                <th className="py-3.5 px-4">Job #</th>
+                <th className="py-3.5 px-5">Document Title & Customer</th>
+                <th className="py-3.5 px-4">Target Printer</th>
+                <th className="py-3.5 px-4">Pages / Type</th>
+                <th className="py-3.5 px-4">Priority</th>
+                <th className="py-3.5 px-4">Status</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {filteredJobs.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-zinc-500">
+                    <ListOrdered className="w-8 h-8 mx-auto mb-2 opacity-30 text-zinc-400" />
+                    <p className="font-semibold text-zinc-400">No print jobs in current queue filter</p>
+                    <p className="text-[11px] text-zinc-600 mt-0.5">New print orders submitted from kiosk will appear here automatically.</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredJobs.map((job, idx) => (
+                  <tr key={job.id} className="hover:bg-white/[0.02] transition-colors">
+                    {/* Priority Move buttons */}
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <button
+                          onClick={() => handleMove(idx, 'up')}
+                          disabled={idx === 0 || job.status === 'completed'}
+                          className="text-zinc-500 hover:text-white disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                          title="Fast-track upward"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleMove(idx, 'down')}
+                          disabled={idx === jobs.length - 1 || job.status === 'completed'}
+                          className="text-zinc-500 hover:text-white disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                          title="Move downward"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <span className="font-mono text-[11px] font-bold text-slate-400">
-                            {job.jobNo}
-                          </span>
-                          {getStatusBadge(job.status)}
-                          {getPriorityBadge(job.priority)}
-                          <span className="text-[10px] font-semibold text-slate-400 uppercase">
-                            {job.documentType}
-                          </span>
-                        </div>
-                        <h5 className="font-bold text-sm text-slate-900 leading-snug">
-                          {job.title}
-                        </h5>
-                        <p className="text-xs text-slate-500 font-medium flex flex-wrap items-center gap-2 mt-0.5">
-                          <span>Target: <strong className="text-slate-800">{job.printerName}</strong></span>
-                          <span>•</span>
-                          <span>{job.totalPages} Page{job.totalPages > 1 ? 's' : ''}</span>
-                          <span>•</span>
-                          <span>{(job.bytesTotal / 1024).toFixed(1)} KB</span>
-                          <span>•</span>
-                          <span>Submitted {new Date(job.submittedAt).toLocaleTimeString()}</span>
-                        </p>
+                    </td>
 
-                        {/* Error Reason Display if failed */}
-                        {isFailed && job.errorReason && (
-                          <div className="mt-2 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1 flex items-center gap-1.5">
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                            <span>{job.errorReason}</span>
-                          </div>
+                    {/* Job # */}
+                    <td className="py-3 px-4 font-mono font-bold text-purple-300">
+                      {job.jobNo}
+                    </td>
+
+                    {/* Title & Customer */}
+                    <td className="py-3 px-5">
+                      <div className="font-bold text-white truncate max-w-[200px]">{job.title}</div>
+                      <div className="text-[10px] text-zinc-400 mt-0.5">
+                        {job.customerName || 'Walk-In'} • Code: {job.formattedVerificationCode || '—'}
+                      </div>
+                    </td>
+
+                    {/* Printer */}
+                    <td className="py-3 px-4 text-zinc-300 font-medium truncate max-w-[140px]">
+                      {job.printerName}
+                    </td>
+
+                    {/* Pages & Specs */}
+                    <td className="py-3 px-4 text-zinc-300">
+                      <div>{job.totalPages} page(s) × {job.copies || 1}</div>
+                      <div className="text-[10px] text-zinc-500 uppercase">{job.documentType}</div>
+                    </td>
+
+                    {/* Priority */}
+                    <td className="py-3 px-4">
+                      {getPriorityBadge(job.priority)}
+                    </td>
+
+                    {/* Status */}
+                    <td className="py-3 px-4">
+                      {getStatusBadge(job.status)}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => onPreviewJobDoc(job)}
+                          className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                          title="Preview document"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+
+                        {job.status === 'failed' && (
+                          <button
+                            onClick={() => onRetryJob(job.id)}
+                            className="p-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors cursor-pointer"
+                            title="Retry print job"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        {job.status !== 'completed' && job.status !== 'cancelled' && (
+                          <button
+                            onClick={() => onCancelJob(job.id)}
+                            className="p-1.5 rounded-lg bg-white/5 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-300 transition-colors cursor-pointer"
+                            title="Cancel job"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         )}
                       </div>
-                    </div>
-
-                    {/* Right: Actions with Green buttons */}
-                    <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
-                      {/* Priority Up/Down Reorder for Queued jobs */}
-                      {isQueued && (
-                        <div className="flex items-center mr-1 bg-slate-100 rounded-lg p-0.5">
-                          <button
-                            id={`btn-job-up-${job.id}`}
-                            onClick={() => handleMoveJob(index, 'up')}
-                            disabled={index === 0}
-                            className="p-1 text-slate-500 hover:text-slate-900 disabled:opacity-30 rounded hover:bg-slate-200"
-                            title="Move Up in Spool Queue"
-                          >
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            id={`btn-job-down-${job.id}`}
-                            onClick={() => handleMoveJob(index, 'down')}
-                            disabled={index === jobs.length - 1}
-                            className="p-1 text-slate-500 hover:text-slate-900 disabled:opacity-30 rounded hover:bg-slate-200"
-                            title="Move Down in Spool Queue"
-                          >
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Preview Button - Green outline */}
-                      <button
-                        id={`btn-preview-${job.id}`}
-                        onClick={() => onPreviewDocument(job)}
-                        className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors"
-                        title="View Document Layout"
-                      >
-                        <Eye className="w-4 h-4 text-emerald-600" />
-                        <span className="hidden md:inline">Preview</span>
-                      </button>
-
-                      {/* Print to Physical Printer (Native OS Dialog) - Green Primary */}
-                      <button
-                        id={`btn-physical-print-${job.id}`}
-                        onClick={() => onExecutePhysicalPrint(job)}
-                        className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-colors shadow-2xs shadow-emerald-700/20"
-                        title="Send directly to OS Print Dialog"
-                      >
-                        <Printer className="w-4 h-4 text-white" />
-                        <span className="hidden md:inline">Print OS</span>
-                      </button>
-
-                      {/* Retry Button if Failed - Green */}
-                      {isFailed && (
-                        <button
-                          id={`btn-retry-${job.id}`}
-                          onClick={() => onRetryJob(job.id)}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 transition-all"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Retry</span>
-                        </button>
-                      )}
-
-                      {/* Cancel / Delete Button */}
-                      <button
-                        id={`btn-cancel-${job.id}`}
-                        onClick={() => onCancelJob(job.id)}
-                        className="p-2 hover:bg-red-50 hover:text-red-600 text-slate-400 rounded-xl transition-colors"
-                        title="Cancel or Remove Job"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 };

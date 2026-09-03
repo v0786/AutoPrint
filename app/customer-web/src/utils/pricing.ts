@@ -1,12 +1,12 @@
 import { PriceBreakdown, PrintSpecifications, ShopInfo } from '../types';
-import { SHOPS_DATABASE, DEFAULT_SHOP_ID } from '../data/shops';
+import { DEFAULT_OFFLINE_SHOP } from '../data/shops';
 
 export function calculatePricing(
   specs: PrintSpecifications,
   shop: ShopInfo | null
 ): PriceBreakdown {
   const { colorMode, duplex, paperSize, copies, selectedPagesCount, finishing } = specs;
-  const rates = shop?.rates || SHOPS_DATABASE[DEFAULT_SHOP_ID].rates;
+  const rates = shop?.rates || DEFAULT_OFFLINE_SHOP.rates;
 
   // Base rate per page side
   let ratePerPage = 0;
@@ -52,10 +52,8 @@ export function calculatePricing(
 
   const finishingCost = finishingUnitCost * Math.max(1, copies);
 
-  const subtotal = pageTotalCost + finishingCost;
-  // GST calculation (standard 18% or rounded breakdown)
-  const gstAmount = Number((subtotal * 0.05).toFixed(2)); // 5% print service tax
-  const totalAmount = Math.max(1, Math.round(subtotal + gstAmount));
+  const subtotal = Number((pageTotalCost + finishingCost).toFixed(2));
+  const totalAmount = subtotal;
 
   return {
     ratePerPage: Number((ratePerPage * paperMultiplier).toFixed(2)),
@@ -63,8 +61,8 @@ export function calculatePricing(
     pageTotalCost: Number(pageTotalCost.toFixed(2)),
     paperSizeSurcharge: Number(paperSizeSurcharge.toFixed(2)),
     finishingCost: Number(finishingCost.toFixed(2)),
-    subtotal: Number(subtotal.toFixed(2)),
-    gstAmount,
+    subtotal,
+    gstAmount: 0,
     totalAmount,
   };
 }

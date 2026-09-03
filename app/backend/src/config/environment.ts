@@ -85,8 +85,8 @@ const RUNTIME_DIR = path.join(path.dirname(DATA_DIR), 'runtime');
 export const PATHS = {
   DATA_DIR,
   RUNTIME_DIR,
-  DB_DIR:        path.join(DATA_DIR, 'backend', 'database'),
-  DB_FILE:       path.join(DATA_DIR, 'backend', 'database', 'autoprint.db'),
+  DB_DIR:        process.env.AUTOPRINT_DB_PATH ? path.dirname(path.resolve(process.env.AUTOPRINT_DB_PATH)) : path.join(DATA_DIR, 'backend', 'database'),
+  DB_FILE:       process.env.AUTOPRINT_DB_PATH ? path.resolve(process.env.AUTOPRINT_DB_PATH) : path.join(DATA_DIR, 'backend', 'database', 'autoprint.db'),
   UPLOADS_DIR:   path.join(DATA_DIR, 'customer', 'uploads'),
   PROCESSED_DIR: path.join(DATA_DIR, 'customer', 'documents'),
   JOBS_DIR:      path.join(DATA_DIR, 'merchant', 'jobs'),

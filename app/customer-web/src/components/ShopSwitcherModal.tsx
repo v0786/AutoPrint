@@ -133,16 +133,19 @@ export const ShopSwitcherModal: React.FC = () => {
               {/* Base Rate Cards */}
               <div className="grid grid-cols-3 gap-2 pt-1 text-center">
                 <div className="p-2.5 rounded-2xl bg-black/30 border border-white/5">
-                  <div className="text-[10px] text-zinc-400 font-bold uppercase">B&W</div>
+                  <div className="text-[10px] text-zinc-400 font-bold uppercase">B&W Single</div>
                   <div className="text-xs font-bold text-white mt-0.5">₹{currentShop.rates.bwSingle.toFixed(2)}/pg</div>
+                  <div className="text-[9px] text-zinc-400 mt-0.5">Duplex: ₹{currentShop.rates.bwDoublePerSide.toFixed(2)}/side</div>
                 </div>
                 <div className="p-2.5 rounded-2xl bg-black/30 border border-white/5">
-                  <div className="text-[10px] text-zinc-400 font-bold uppercase">Color</div>
+                  <div className="text-[10px] text-zinc-400 font-bold uppercase">Color Single</div>
                   <div className="text-xs font-bold text-[#D0BCFF] mt-0.5">₹{currentShop.rates.colorSingle.toFixed(2)}/pg</div>
+                  <div className="text-[9px] text-zinc-400 mt-0.5">Duplex: ₹{currentShop.rates.colorDoublePerSide.toFixed(2)}/side</div>
                 </div>
                 <div className="p-2.5 rounded-2xl bg-black/30 border border-white/5">
-                  <div className="text-[10px] text-zinc-400 font-bold uppercase">Photo</div>
-                  <div className="text-xs font-bold text-white mt-0.5">₹{currentShop.rates.photoGlossy.toFixed(2)}/pg</div>
+                  <div className="text-[10px] text-zinc-400 font-bold uppercase">Photo Glossy</div>
+                  <div className="text-xs font-bold text-[#6dd58c] mt-0.5">₹{currentShop.rates.photoGlossy.toFixed(2)}/pg</div>
+                  <div className="text-[9px] text-zinc-400 mt-0.5">HD Quality</div>
                 </div>
               </div>
             </div>
