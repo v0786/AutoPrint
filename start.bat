@@ -14,21 +14,27 @@ set "ROOT_DIR=%~dp0"
 cd /d "%ROOT_DIR%"
 
 :: -----------------------------------------------------------------------------
-:: STEP 1: Verify Node.js Environment
+:: STEP 1: Resolve Node.js Executable (Bundled Portable or System)
 :: -----------------------------------------------------------------------------
-where node >nul 2>&1
-if %ERRORLEVEL% neq 0 (
-    color 0C
-    echo [ERROR] Node.js is not installed on this PC.
-    echo.
-    echo Please run configure.bat first to test PC compatibility or install Node.js.
-    echo.
-    set /p "RUN_CONF=Would you like to run configure.bat now? [Y/N] (Default: Y): "
-    if "!RUN_CONF!"=="" set "RUN_CONF=Y"
-    if /i "!RUN_CONF!"=="Y" (
-        call "%ROOT_DIR%configure.bat"
+set "NODE_CMD=node"
+if exist "%ROOT_DIR%runtime\node\node.exe" (
+    set "NODE_CMD=%ROOT_DIR%runtime\node\node.exe"
+    set "PATH=%ROOT_DIR%runtime\node;%PATH%"
+) else (
+    where node >nul 2>&1
+    if !ERRORLEVEL! neq 0 (
+        color 0C
+        echo [ERROR] Node.js is not installed on this PC.
+        echo.
+        echo Please run configure.bat first to test PC compatibility or install Node.js.
+        echo.
+        set /p "RUN_CONF=Would you like to run configure.bat now? [Y/N] (Default: Y): "
+        if "!RUN_CONF!"=="" set "RUN_CONF=Y"
+        if /i "!RUN_CONF!"=="Y" (
+            call "%ROOT_DIR%configure.bat"
+        )
+        exit /b 1
     )
-    exit /b 1
 )
 
 :: -----------------------------------------------------------------------------
