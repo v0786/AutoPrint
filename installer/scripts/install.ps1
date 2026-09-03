@@ -34,7 +34,7 @@ Write-Host "====================================================================
 Write-Host ""
 
 # -----------------------------------------------------------------------------
-# STEP 2: Administrator Privilege Verification & Clean Elevation
+# STEP 2: Privilege Verification
 # -----------------------------------------------------------------------------
 function Test-IsAdministrator {
     $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -42,25 +42,10 @@ function Test-IsAdministrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-if (-not (Test-IsAdministrator) -and -not $SkipElevationCheck) {
-    Write-Host "[*] AutoPrint installation requires Administrator privileges to configure" -ForegroundColor Yellow
-    Write-Host "    Windows Print Spooler integrations and system desktop shortcuts." -ForegroundColor Yellow
-    Write-Host "[*] Requesting Administrator elevation..." -ForegroundColor White
-    
-    $scriptContent = (Invoke-RestMethod -Uri "https://raw.githubusercontent.com/v0786/AutoPrint/main/installer/scripts/install.ps1" -UseBasicParsing)
-    $tempScript = Join-Path $env:TEMP "AutoPrint_Elevated_Install.ps1"
-    Set-Content -Path $tempScript -Value $scriptContent -Encoding UTF8 -Force
-    
-    try {
-        $elevArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`" -SkipElevationCheck"
-        if ($IncludePrereleases) { $elevArgs += " -IncludePrereleases" }
-        Start-Process powershell.exe -ArgumentList $elevArgs -Verb RunAs -Wait
-        Remove-Item $tempScript -Force -ErrorAction SilentlyContinue
-        exit 0
-    } catch {
-        Write-Error "Administrator elevation was declined. AutoPrint installer cannot proceed without permissions."
-        exit 1
-    }
+if (Test-IsAdministrator) {
+    Write-Host "[*] Running with Administrator privileges." -ForegroundColor Green
+} else {
+    Write-Host "[*] Standard user session detected. Windows will prompt for elevation when setup launches." -ForegroundColor Cyan
 }
 
 # -----------------------------------------------------------------------------
@@ -107,7 +92,15 @@ if ($release) {
     $shaAsset = $release.assets | Where-Object { $_.name -like "*.sha256" } | Select-Object -First 1
 
     if (-not $binaryAsset) {
-        Write-Error "No Windows installer (.exe or .zip) found in release $tagName on GitHub."
+        Write-Host ""
+        Write-Host "===============================================================================" -ForegroundColor Yellow
+        Write-Host " [ACTION REQUIRED] Release '$tagName' exists on GitHub, but no installer binary" -ForegroundColor Yellow
+        Write-Host " has been attached yet." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host " Please attach 'AutoPrint-Setup.exe' or 'AutoPrint-Setup.zip' to the release at:" -ForegroundColor White
+        Write-Host " https://github.com/$repo/releases/edit/$tagName" -ForegroundColor Cyan
+        Write-Host "===============================================================================" -ForegroundColor Yellow
+        Write-Host ""
         exit 1
     }
 
