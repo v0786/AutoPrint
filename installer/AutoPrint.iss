@@ -61,8 +61,10 @@ Source: "..\dist-installer\payload\*"; DestDir: "{app}"; Flags: ignoreversion re
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon\autoprint.ico"
 Name: "{group}\Merchant Dashboard"; Filename: "http://localhost:8000"; IconFilename: "{app}\assets\icon\autoprint.ico"
 Name: "{group}\Customer Kiosk Portal"; Filename: "http://localhost:7000"; IconFilename: "{app}\assets\icon\autoprint.ico"
+Name: "{group}\Customer Online Access (PageKite Tunnel)"; Filename: "{app}\Start-Customer-Tunnel.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon\autoprint.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\assets\icon\autoprint.ico"
+Name: "{autodesktop}\Customer Online Access (PageKite Tunnel)"; Filename: "{app}\Start-Customer-Tunnel.cmd"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\assets\icon\autoprint.ico"
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AutoPrint"; ValueData: """{app}\{#MyAppExeName}"" --startup"; Flags: uninsdeletevalue; Tasks: startwithwindows
@@ -84,7 +86,7 @@ var
   LblSubdomain, LblSecret: TLabel;
   EdtSubdomain, EdtSecret: TEdit;
 
-procedure RbPortClick(Sender: TObject);
+procedure RbPortsClick(Sender: TObject);
 begin
   EdtBackendPort.Enabled := RbCustomPorts.Checked;
   EdtMerchantPort.Enabled := RbCustomPorts.Checked;
@@ -118,11 +120,11 @@ begin
   DataDirPage.Add('');
   DataDirPage.Values[0] := ExpandConstant('{commonappdata}\AutoPrint');
 
-  // 2. Port Configuration Page
+  // 2. Service TCP Port Configuration Page
   PortConfigPage := CreateCustomPage(
     DataDirPage.ID,
-    'Network Port Configuration',
-    'Configure the local network ports used by AutoPrint services.'
+    'Service Port Configuration',
+    'Configure the TCP ports for AutoPrint internal services.'
   );
 
   RbDefaultPorts := TRadioButton.Create(PortConfigPage);
@@ -130,28 +132,28 @@ begin
   RbDefaultPorts.Top := ScaleY(10);
   RbDefaultPorts.Left := ScaleX(10);
   RbDefaultPorts.Width := PortConfigPage.SurfaceWidth - ScaleX(20);
-  RbDefaultPorts.Caption := 'Use standard default ports (Backend: 5000, Merchant Desk: 8000, Customer Kiosk: 7000)';
+  RbDefaultPorts.Caption := 'Use standard production ports (Backend: 5000, Merchant: 8000, Customer: 7000)';
   RbDefaultPorts.Checked := True;
-  RbDefaultPorts.OnClick := @RbPortClick;
+  RbDefaultPorts.OnClick := @RbPortsClick;
 
   RbCustomPorts := TRadioButton.Create(PortConfigPage);
   RbCustomPorts.Parent := PortConfigPage.Surface;
-  RbCustomPorts.Top := ScaleY(40);
+  RbCustomPorts.Top := ScaleY(35);
   RbCustomPorts.Left := ScaleX(10);
   RbCustomPorts.Width := PortConfigPage.SurfaceWidth - ScaleX(20);
-  RbCustomPorts.Caption := 'Specify custom TCP ports manually (Recommended for network environments with port conflicts)';
+  RbCustomPorts.Caption := 'Customize service TCP port bindings';
   RbCustomPorts.Checked := False;
-  RbCustomPorts.OnClick := @RbPortClick;
+  RbCustomPorts.OnClick := @RbPortsClick;
 
   LblBackendPort := TLabel.Create(PortConfigPage);
   LblBackendPort.Parent := PortConfigPage.Surface;
-  LblBackendPort.Top := ScaleY(75);
+  LblBackendPort.Top := ScaleY(70);
   LblBackendPort.Left := ScaleX(30);
-  LblBackendPort.Caption := 'Backend REST API Port:';
+  LblBackendPort.Caption := 'Backend API Port:';
 
   EdtBackendPort := TEdit.Create(PortConfigPage);
   EdtBackendPort.Parent := PortConfigPage.Surface;
-  EdtBackendPort.Top := ScaleY(72);
+  EdtBackendPort.Top := ScaleY(67);
   EdtBackendPort.Left := ScaleX(200);
   EdtBackendPort.Width := ScaleX(80);
   EdtBackendPort.Text := '5000';
@@ -159,13 +161,13 @@ begin
 
   LblMerchantPort := TLabel.Create(PortConfigPage);
   LblMerchantPort.Parent := PortConfigPage.Surface;
-  LblMerchantPort.Top := ScaleY(105);
+  LblMerchantPort.Top := ScaleY(102);
   LblMerchantPort.Left := ScaleX(30);
-  LblMerchantPort.Caption := 'Merchant Dashboard Port:';
+  LblMerchantPort.Caption := 'Merchant Desktop Port:';
 
   EdtMerchantPort := TEdit.Create(PortConfigPage);
   EdtMerchantPort.Parent := PortConfigPage.Surface;
-  EdtMerchantPort.Top := ScaleY(102);
+  EdtMerchantPort.Top := ScaleY(99);
   EdtMerchantPort.Left := ScaleX(200);
   EdtMerchantPort.Width := ScaleX(80);
   EdtMerchantPort.Text := '8000';
@@ -175,7 +177,7 @@ begin
   LblCustomerPort.Parent := PortConfigPage.Surface;
   LblCustomerPort.Top := ScaleY(135);
   LblCustomerPort.Left := ScaleX(30);
-  LblCustomerPort.Caption := 'Customer Kiosk Web Port:';
+  LblCustomerPort.Caption := 'Customer Kiosk Port:';
 
   EdtCustomerPort := TEdit.Create(PortConfigPage);
   EdtCustomerPort.Parent := PortConfigPage.Surface;
@@ -188,8 +190,8 @@ begin
   // 3. PageKite Configuration Page
   PageKitePage := CreateCustomPage(
     PortConfigPage.ID,
-    'Customer Remote Access (PageKite)',
-    'Configure PageKite to expose the customer kiosk to mobile devices over the internet.'
+    'Customer Remote Access (Optional PageKite Setup)',
+    'Configure PageKite to optionally expose the customer kiosk over the internet.'
   );
 
   ChkEnablePageKite := TCheckBox.Create(PageKitePage);
@@ -197,22 +199,23 @@ begin
   ChkEnablePageKite.Top := ScaleY(10);
   ChkEnablePageKite.Left := ScaleX(10);
   ChkEnablePageKite.Width := PageKitePage.SurfaceWidth - ScaleX(20);
-  ChkEnablePageKite.Caption := 'Enable PageKite public customer ingress tunnel (e.g. https://autoprint.pagekite.me)';
-  ChkEnablePageKite.Checked := True;
+  ChkEnablePageKite.Caption := 'Configure PageKite for Customer Online Access now (Optional)';
+  ChkEnablePageKite.Checked := False;
   ChkEnablePageKite.OnClick := @ChkPageKiteClick;
 
   LblSubdomain := TLabel.Create(PageKitePage);
   LblSubdomain.Parent := PageKitePage.Surface;
   LblSubdomain.Top := ScaleY(45);
   LblSubdomain.Left := ScaleX(30);
-  LblSubdomain.Caption := 'PageKite Subdomain Name:';
+  LblSubdomain.Caption := 'PageKite Kite Name:';
 
   EdtSubdomain := TEdit.Create(PageKitePage);
   EdtSubdomain.Parent := PageKitePage.Surface;
   EdtSubdomain.Top := ScaleY(42);
-  EdtSubdomain.Left := ScaleX(200);
+  EdtSubdomain.Left := ScaleX(230);
   EdtSubdomain.Width := ScaleX(180);
-  EdtSubdomain.Text := 'autoprint';
+  EdtSubdomain.Text := '';
+  EdtSubdomain.Enabled := False;
 
   LblSecret := TLabel.Create(PageKitePage);
   LblSecret.Parent := PageKitePage.Surface;
@@ -223,10 +226,11 @@ begin
   EdtSecret := TEdit.Create(PageKitePage);
   EdtSecret.Parent := PageKitePage.Surface;
   EdtSecret.Top := ScaleY(72);
-  EdtSecret.Left := ScaleX(200);
+  EdtSecret.Left := ScaleX(230);
   EdtSecret.Width := ScaleX(180);
-  EdtSecret.Text := 'xakd4af2azx229x94effe9az79262cxz';
+  EdtSecret.Text := '';
   EdtSecret.PasswordChar := '*';
+  EdtSecret.Enabled := False;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -253,6 +257,33 @@ begin
       MsgBox('Each service port must be unique. Backend, Merchant, and Customer ports cannot conflict.', mbError, MB_OK);
       Result := False;
       Exit;
+    end;
+  end;
+
+  if CurPageID = PageKitePage.ID then
+  begin
+    if ChkEnablePageKite.Checked then
+    begin
+      if (Trim(EdtSubdomain.Text) = '') then
+      begin
+        MsgBox('Please enter your PageKite Kite Name (e.g. myprintshop.pagekite.me).', mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+
+      if (Pos(' ', EdtSubdomain.Text) > 0) or (Pos('&', EdtSubdomain.Text) > 0) or (Pos(';', EdtSubdomain.Text) > 0) or (Pos('|', EdtSubdomain.Text) > 0) or (Pos('>', EdtSubdomain.Text) > 0) or (Pos('<', EdtSubdomain.Text) > 0) then
+      begin
+        MsgBox('PageKite Kite Name contains invalid characters or spaces.', mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+
+      if (Trim(EdtSecret.Text) = '') then
+      begin
+        MsgBox('Please enter your PageKite Secret Key.', mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
     end;
   end;
 end;
@@ -287,7 +318,7 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ConfigDir, ConfigFile, JsonContent, EnvContent, TargetDataDir: String;
-  NodeResultCode: Integer;
+  NodeResultCode, PKResultCode: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -366,6 +397,29 @@ begin
       else
         MsgBox('Notice: Global Node.js runtime or dependency setup returned code ' + IntToStr(NodeResultCode) + '.'#13#10 +
                'Please review the installation log in ProgramData\AutoPrint\logs\node-bootstrap.log if needed.', mbInformation, MB_OK);
+      end;
+    end;
+
+    // Execute optional PageKite CLI configuration if merchant opted in
+    if ChkEnablePageKite.Checked then
+    begin
+      WizardForm.StatusLabel.Caption := 'Configuring PageKite CLI and secure tunnel settings...';
+      Exec('powershell.exe',
+        '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\installer\scripts\configure-pagekite.ps1') + '" ' +
+        '-AppDir "' + ExpandConstant('{app}') + '" ' +
+        '-KiteName "' + EdtSubdomain.Text + '" ' +
+        '-SecretKey "' + EdtSecret.Text + '" ' +
+        '-CustomerPort ' + EdtCustomerPort.Text + ' -NonInteractive',
+        ExpandConstant('{app}'),
+        SW_HIDE,
+        ewWaitUntilTerminated,
+        PKResultCode
+      );
+
+      if PKResultCode <> 0 then
+      begin
+        MsgBox('Notice: PageKite configuration completed with notice code ' + IntToStr(PKResultCode) + '.'#13#10 +
+               'You can configure or re-test PageKite later by running Start-Customer-Tunnel.cmd.', mbInformation, MB_OK);
       end;
     end;
   end;

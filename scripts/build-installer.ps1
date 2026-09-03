@@ -46,11 +46,17 @@ Copy-Item (Join-Path $rootDir "AutoPrint.exe") $payloadDir -Force
 Copy-Item (Join-Path $rootDir "AutoPrint-Launcher.bat") $payloadDir -Force
 Copy-Item (Join-Path $rootDir "Launch AutoPrint.bat") $payloadDir -Force
 Copy-Item (Join-Path $rootDir "Launch AutoPrint.ps1") $payloadDir -Force
+Copy-Item (Join-Path $rootDir "Start-Customer-Tunnel.cmd") $payloadDir -Force
 Copy-Item (Join-Path $rootDir "package.json") $payloadDir -Force
 if (Test-Path (Join-Path $rootDir "package-lock.json")) {
     Copy-Item (Join-Path $rootDir "package-lock.json") $payloadDir -Force
 }
 Copy-Item (Join-Path $rootDir ".env.example") $payloadDir -Force
+
+# Copy tools directory (PageKite CLI and helper tools)
+if (Test-Path (Join-Path $rootDir "tools")) {
+    Copy-Item (Join-Path $rootDir "tools") $payloadDir -Recurse -Force
+}
 
 # Copy app subdirectories
 $targetAppDir = Join-Path $payloadDir "app"

@@ -119,6 +119,7 @@ namespace AutoPrint.Launcher
 
             contextMenu.Items.Add(itemOpen);
             contextMenu.Items.Add(itemCustomer);
+            contextMenu.Items.Add(new ToolStripMenuItem("Customer Online Access (PageKite)...", null, (s, e) => OpenCustomerTunnelTerminal()));
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add(itemStatus);
             contextMenu.Items.Add(itemPrinters);
@@ -409,18 +410,40 @@ namespace AutoPrint.Launcher
                 merchantProcess = StartBackgroundProcess(nodeExe, string.Format("\"{0}\"", merchantServer), "merchant.log");
             }
 
-            // 4. PageKite Tunnel (if enabled)
-            if (isPagekiteEnabled && !IsProcessRunning("pagekite.py"))
-            {
-                string pagekiteScript = Path.Combine(projectRoot, "scripts", "pagekite.py");
-                if (File.Exists(pagekiteScript))
-                {
-                    string args = string.Format("--nossl --service_cfg={0}.pagekite.me:{1}:{2} {1} {0}.pagekite.me", pagekiteName, customerPort, pagekiteSecret);
-                    pagekiteProcess = StartBackgroundProcess(pythonExe, string.Format("\"{0}\" {1}", pagekiteScript, args), "pagekite.log");
-                }
-            }
+            // Note: PageKite customer tunnel is manual only (never auto-started in background).
 
             trayIcon.Text = "AutoPrint Express — Online";
+        }
+
+        private void OpenCustomerTunnelTerminal()
+        {
+            try
+            {
+                string tunnelScript = Path.Combine(projectRoot, "Start-Customer-Tunnel.cmd");
+                if (!File.Exists(tunnelScript))
+                {
+                    tunnelScript = Path.Combine(projectRoot, "tools", "pagekite", "Start-Customer-Tunnel.cmd");
+                }
+
+                if (File.Exists(tunnelScript))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = string.Format("/c \"\"{0}\"\"", tunnelScript),
+                        WorkingDirectory = projectRoot,
+                        UseShellExecute = true
+                    });
+                }
+                else
+                {
+                    MessageBox.Show("Start-Customer-Tunnel.cmd was not found in: " + projectRoot, "AutoPrint", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to launch PageKite customer tunnel terminal: " + ex.Message, "AutoPrint Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private Process StartBackgroundProcess(string fileName, string arguments, string logFileName)

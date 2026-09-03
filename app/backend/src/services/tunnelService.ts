@@ -44,10 +44,7 @@ class TunnelManagementService {
     });
 
     this.computeActiveCustomerUrl();
-
-    if (pagekiteEnabled) {
-      this.connector.start();
-    }
+    // PageKite tunnel is manual only (offline by default, started via Start-Customer-Tunnel.cmd).
   }
 
   private getLocalIpAddress(): string {

@@ -47,13 +47,8 @@ start "AutoPrint Customer Kiosk" /B node app\customer-web\server.js > runtime\lo
 echo [3/4] Starting Merchant Desktop Desk (Port %MERCHANT_PORT%)...
 start "AutoPrint Merchant Desk" /B node app\merchant-desktop\server.js > runtime\logs\merchant.log 2>&1
 
-if /i "%PAGEKITE_ENABLED%"=="true" goto :start_pagekite
-echo [4/4] PageKite Tunnel is disabled in .env.
-goto :after_pagekite
-
-:start_pagekite
-echo [4/4] Starting PageKite Tunnel: https://%PAGEKITE_NAME%.pagekite.me to port %CUSTOMER_PORT%...
-start "PageKite Tunnel" /B python scripts\pagekite.py --nossl --service_cfg=%PAGEKITE_NAME%.pagekite.me:%CUSTOMER_PORT%:%PAGEKITE_SECRET% %CUSTOMER_PORT% %PAGEKITE_NAME%.pagekite.me > runtime\logs\pagekite.log 2>&1
+echo [4/4] Customer Public Tunnel (PageKite) is manual (offline by default).
+echo       To start public online customer access, run: Start-Customer-Tunnel.cmd
 
 :after_pagekite
 echo Waiting for services to initialize...
