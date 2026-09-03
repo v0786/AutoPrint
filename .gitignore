@@ -79,3 +79,5 @@ desktop.ini
 # IDE & Editor Settings
 .vscode/
 .idea/
+
+*.old.exe
