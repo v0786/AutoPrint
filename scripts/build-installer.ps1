@@ -53,8 +53,17 @@ if (Test-Path (Join-Path $rootDir "package-lock.json")) {
 }
 Copy-Item (Join-Path $rootDir ".env.example") $payloadDir -Force
 
-# Copy tools directory (PageKite CLI and helper tools)
+# Copy tools directory (PageKite CLI and helper tools) with SHA-256 integrity check
 if (Test-Path (Join-Path $rootDir "tools")) {
+    $pkScript = Join-Path $rootDir "tools\pagekite\pagekite.py"
+    if (Test-Path $pkScript) {
+        $expectedHash = "5498F591F51F0E8721A7282C662950E57110BF1A0C092261F88C4CCADC981AE0"
+        $actualHash = (Get-FileHash -Path $pkScript -Algorithm SHA256).Hash
+        if ($actualHash -ne $expectedHash) {
+            Write-Error "PageKite CLI SHA-256 integrity verification failed! Expected: $expectedHash, Got: $actualHash"
+        }
+        Write-Host "   [PASS] Verified PageKite CLI SHA-256 Checksum: $actualHash" -ForegroundColor Green
+    }
     Copy-Item (Join-Path $rootDir "tools") $payloadDir -Recurse -Force
 }
 

@@ -1,0 +1,15 @@
+# AutoPrint Bundled PageKite CLI Metadata & Integrity Specification
+# File: tools/pagekite/VERSION.txt
+
+PACKAGE_NAME="pagekite.py"
+PACKAGE_VERSION="1.5.2.260113"
+OFFICIAL_SOURCE_URL="https://pagekite.net/pk/pagekite.py"
+OFFICIAL_REPOSITORY="https://github.com/pagekite/PyPagekite"
+AUTHOR="Bjarni R. Einarsson / The Beanstalks Project ehf."
+LICENSE="GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)"
+
+# Cryptographic SHA-256 Checksum for tools/pagekite/pagekite.py
+SHA256_CHECKSUM="5498F591F51F0E8721A7282C662950E57110BF1A0C092261F88C4CCADC981AE0"
+
+# Verified CLI Execution Syntax
+VERIFIED_CLI_SYNTAX="py -3 tools/pagekite/pagekite.py --clean --service_on=http:<KITE_NAME>:localhost:<PORT>:<SECRET>"

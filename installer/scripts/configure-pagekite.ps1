@@ -1,15 +1,17 @@
 <#
 .SYNOPSIS
-    AutoPrint — Manual PageKite CLI Configuration & Security Engine
+    AutoPrint — Secure Manual PageKite CLI Configuration Engine (Windows DPAPI)
     File: installer/scripts/configure-pagekite.ps1
 
 .DESCRIPTION
     1. Detects Python 3 runtime (via `py -3` and `python`).
     2. Validates and sanitizes PageKite Kite Name (preventing command injection).
-    3. Securely writes PageKite configuration to %ProgramData%\AutoPrint\pagekite\pagekite.cfg.
-    4. Protects configuration file ACLs to current user and local administrators.
-    5. Optionally runs momentary connection verification probe.
-    6. Ensures PageKite is never configured to auto-start in background or with Windows.
+    3. Encrypts the PageKite Secret Key using Windows DPAPI (CurrentUser scope).
+    4. Stores non-secret settings in %LOCALAPPDATA%\AutoPrint\pagekite\settings.json.
+    5. Stores encrypted secret in %LOCALAPPDATA%\AutoPrint\pagekite\secret.dat.
+    6. Restricts file permissions to the current Windows user and Administrators.
+    7. Optionally runs momentary connection verification probe.
+    8. Guarantees zero background persistence or automatic startup.
 
 .DEFINED EXIT CODES
     0 = Success
@@ -17,7 +19,7 @@
     2 = Python 3 Missing or Unsupported
     3 = Invalid Kite Name (Format or Injection Detected)
     4 = Missing Secret Key
-    5 = Local Customer Web Server Offline
+    5 = Local Customer Web Server Offline (for connection test)
     6 = PageKite Probe Connection Failed
 #>
 
@@ -27,6 +29,7 @@ param(
     [string]$KiteName = "",
     [string]$SecretKey = "",
     [int]$CustomerPort = 7000,
+    [switch]$SkipTest = $false,
     [switch]$TestConnection = $false,
     [switch]$NonInteractive = $false,
     [string]$LogPath = ""
@@ -43,23 +46,33 @@ $Global:ExitCodes = @{
 }
 
 # -----------------------------------------------------------------------------
-# 1. LOGGING & INITIALIZATION
+# 1. INITIALIZATION & LOGGING
 # -----------------------------------------------------------------------------
 if (-not $AppDir) {
     $AppDir = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 }
 
-$programData = [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)
-if (-not $programData) { $programData = "C:\ProgramData" }
+$localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+if (-not $localAppData) { $localAppData = Join-Path $env:USERPROFILE "AppData\Local" }
 
-$pagekiteDir = Join-Path $programData "AutoPrint\pagekite"
-$logsDir     = Join-Path $programData "AutoPrint\logs"
+$pagekiteDir = Join-Path $localAppData "AutoPrint\pagekite"
+$logsDir     = Join-Path $localAppData "AutoPrint\logs"
 
 if (-not (Test-Path $pagekiteDir)) { New-Item -ItemType Directory -Path $pagekiteDir -Force | Out-Null }
 if (-not (Test-Path $logsDir))     { New-Item -ItemType Directory -Path $logsDir -Force | Out-Null }
 
 if (-not $LogPath) {
     $LogPath = Join-Path $logsDir "pagekite.log"
+}
+
+# Secret Redaction Filter
+function Redact-Secret {
+    param([string]$Text)
+    if (-not $Text) { return $Text }
+    if ($SecretKey -and $SecretKey.Length -ge 3) {
+        $Text = $Text.Replace($SecretKey, "[REDACTED]")
+    }
+    return $Text
 }
 
 function Write-PageKiteLog {
@@ -69,20 +82,21 @@ function Write-PageKiteLog {
         [string]$Level = "INFO"
     )
 
+    $safeMsg = Redact-Secret -Text $Message
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $logLine = "[$timestamp] [$Level] $Message"
+    $logLine = "[$timestamp] [$Level] $safeMsg"
 
     try {
         Add-Content -Path $LogPath -Value $logLine -ErrorAction SilentlyContinue
     } catch { }
 
     switch ($Level) {
-        "STEP"     { Write-Host "`n[*] $Message" -ForegroundColor Cyan }
-        "PROGRESS" { Write-Host "    >>> $Message" -ForegroundColor Yellow }
-        "SUCCESS"  { Write-Host "    [PASS] $Message" -ForegroundColor Green }
-        "WARN"     { Write-Host "    [WARN] $Message" -ForegroundColor Yellow }
-        "ERROR"    { Write-Host "    [ERROR] $Message" -ForegroundColor Red }
-        Default    { Write-Host "    $Message" -ForegroundColor Gray }
+        "STEP"     { Write-Host "`n[*] $safeMsg" -ForegroundColor Cyan }
+        "PROGRESS" { Write-Host "    >>> $safeMsg" -ForegroundColor Yellow }
+        "SUCCESS"  { Write-Host "    [PASS] $safeMsg" -ForegroundColor Green }
+        "WARN"     { Write-Host "    [WARN] $safeMsg" -ForegroundColor Yellow }
+        "ERROR"    { Write-Host "    [ERROR] $safeMsg" -ForegroundColor Red }
+        Default    { Write-Host "    $safeMsg" -ForegroundColor Gray }
     }
 }
 
@@ -159,15 +173,15 @@ function Validate-KiteName {
 
     if ([string]::IsNullOrWhiteSpace($Name)) {
         Write-PageKiteLog "PageKite Kite Name cannot be empty." -Level "ERROR"
-        return $false
+        return $null
     }
 
     $trimmed = $Name.Trim()
 
-    # Reject any shell metacharacters or dangerous syntax
-    if ($trimmed -match '[&|;><$`%\r\n\t\s"]') {
-        Write-PageKiteLog "Invalid Kite Name: Contains illegal characters or spaces." -Level "ERROR"
-        return $false
+    # Reject any shell metacharacters, spaces, or dangerous injection syntax
+    if ($trimmed -match '[&|;><$`%\(\)\{\}\[\]"''\r\n\t\s]') {
+        Write-PageKiteLog "Invalid Kite Name: Contains illegal characters, spaces, or shell metacharacters." -Level "ERROR"
+        return $null
     }
 
     # Normalize subdomain: if user entered 'myprintshop', convert to 'myprintshop.pagekite.me'
@@ -177,74 +191,87 @@ function Validate-KiteName {
     $hostnameRegex = '^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$'
     if ($fullKite -notmatch $hostnameRegex) {
         Write-PageKiteLog "Invalid Kite Name format: '$fullKite'. Example: myprintshop.pagekite.me" -Level "ERROR"
-        return $false
+        return $null
     }
 
     return $fullKite
 }
 
 # -----------------------------------------------------------------------------
-# 4. CONFIGURATION WRITER & ACL HARDENING
+# 4. SECURE DPAPI STORAGE & ACL RESTRICTION
 # -----------------------------------------------------------------------------
-function Save-PageKiteConfig {
+function Save-PageKiteSecureConfig {
     param(
         [string]$NormalizedKite,
         [string]$Secret,
         [int]$Port
     )
 
-    Write-PageKiteLog "Saving PageKite configuration..." -Level "PROGRESS"
+    Write-PageKiteLog "Securing PageKite configuration with Windows DPAPI..." -Level "PROGRESS"
 
-    $cfgFile = Join-Path $pagekiteDir "pagekite.cfg"
-    $jsonFile = Join-Path $pagekiteDir "pagekite-settings.json"
+    $settingsFile = Join-Path $pagekiteDir "settings.json"
+    $secretFile   = Join-Path $pagekiteDir "secret.dat"
 
-    # 1. Write official pagekite.cfg format
-    $cfgContent = @"
-# AutoPrint PageKite Configuration File
-# Location: $cfgFile
-# Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-# Security Note: Manual startup only. Never automatically run in background.
-
-service_on = http:${NormalizedKite}:localhost:${Port}:${Secret}
-"@
-
-    [System.IO.File]::WriteAllText($cfgFile, $cfgContent, [System.Text.Encoding]::UTF8)
-
-    # 2. Write metadata JSON (without secret)
-    $metaJson = @{
+    # 1. Write non-secret metadata settings.json
+    $settingsObj = @{
+        configured   = $true
         kiteName     = $NormalizedKite
         customerPort = $Port
-        configured   = $true
         mode         = "manual"
         updatedAt    = (Get-Date).ToString("o")
         publicUrl    = "https://$NormalizedKite"
-    } | ConvertTo-Json -Depth 3
+    }
+    $jsonContent = $settingsObj | ConvertTo-Json -Depth 3
+    [System.IO.File]::WriteAllText($settingsFile, $jsonContent, [System.Text.Encoding]::UTF8)
 
-    [System.IO.File]::WriteAllText($jsonFile, $metaJson, [System.Text.Encoding]::UTF8)
+    # 2. Encrypt Secret Key using Windows DPAPI (CurrentUser Scope)
+    Add-Type -AssemblyName System.Security
+    $secretBytes = [System.Text.Encoding]::UTF8.GetBytes($Secret.Trim())
+    $encryptedBytes = [System.Security.Cryptography.ProtectedData]::Protect(
+        $secretBytes,
+        $null,
+        [System.Security.Cryptography.DataProtectionScope]::CurrentUser
+    )
+    [System.IO.File]::WriteAllBytes($secretFile, $encryptedBytes)
 
-    # 3. Restrict file permissions (Current User + Administrators only)
+    # Clean up memory
+    [Array]::Clear($secretBytes, 0, $secretBytes.Length)
+
+    # 3. Restrict NTFS file permissions (DACL only, Current User and Administrators)
     try {
-        $acl = Get-Acl -Path $cfgFile
-        $acl.SetAccessRuleProtection($true, $false)
-        $adminSid = New-Object Security.Principal.SecurityIdentifier([Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
-        $systemSid = New-Object Security.Principal.SecurityIdentifier([Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
-        $userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+        foreach ($file in @($settingsFile, $secretFile)) {
+            $fileInfo = New-Object System.IO.FileInfo($file)
+            $acl = $fileInfo.GetAccessControl([System.Security.AccessControl.AccessControlSections]::Access)
+            $acl.SetAccessRuleProtection($true, $false)
+            
+            $adminSid = New-Object Security.Principal.SecurityIdentifier([Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
+            $systemSid = New-Object Security.Principal.SecurityIdentifier([Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
+            $userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
 
-        $adminRule = New-Object Security.AccessControl.FileSystemAccessRule($adminSid, "FullControl", "Allow")
-        $systemRule = New-Object Security.AccessControl.FileSystemAccessRule($systemSid, "FullControl", "Allow")
-        $userRule = New-Object Security.AccessControl.FileSystemAccessRule($userSid, "FullControl", "Allow")
+            $adminRule = New-Object Security.AccessControl.FileSystemAccessRule($adminSid, "FullControl", "Allow")
+            $systemRule = New-Object Security.AccessControl.FileSystemAccessRule($systemSid, "FullControl", "Allow")
+            $userRule = New-Object Security.AccessControl.FileSystemAccessRule($userSid, "FullControl", "Allow")
 
-        $acl.AddAccessRule($adminRule)
-        $acl.AddAccessRule($systemRule)
-        $acl.AddAccessRule($userRule)
+            $acl.AddAccessRule($adminRule)
+            $acl.AddAccessRule($systemRule)
+            $acl.AddAccessRule($userRule)
 
-        Set-Acl -Path $cfgFile -AclObject $acl
+            $fileInfo.SetAccessControl($acl)
+        }
     } catch {
-        # ACL restriction is best-effort on Windows Home editions
+        # Best effort ACL hardening (DPAPI is the primary cryptographic boundary)
     }
 
-    Write-PageKiteLog "PageKite configuration saved securely in: $cfgFile" -Level "SUCCESS"
-    Write-PageKiteLog "Public customer URL will be: https://$NormalizedKite" -Level "INFO"
+    # 4. Clean up legacy plaintext config files if present
+    $legacyCfg = Join-Path $pagekiteDir "pagekite.cfg"
+    if (Test-Path $legacyCfg) { Remove-Item $legacyCfg -Force -ErrorAction SilentlyContinue }
+
+    $legacyProgData = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) "AutoPrint\pagekite\pagekite.cfg"
+    if (Test-Path $legacyProgData) { Remove-Item $legacyProgData -Force -ErrorAction SilentlyContinue }
+
+    Write-PageKiteLog "PageKite secret encrypted with Windows DPAPI at: $secretFile" -Level "SUCCESS"
+    Write-PageKiteLog "Non-secret settings stored at: $settingsFile" -Level "SUCCESS"
+    Write-PageKiteLog "Public Customer Access URL: https://$NormalizedKite" -Level "INFO"
 }
 
 # -----------------------------------------------------------------------------
@@ -254,10 +281,11 @@ function Test-PageKiteProbe {
     param(
         [hashtable]$Python,
         [string]$NormalizedKite,
+        [string]$Secret,
         [int]$Port
     )
 
-    Write-PageKiteLog "Running momentary PageKite connection test..." -Level "PROGRESS"
+    Write-PageKiteLog "Running momentary PageKite configuration test..." -Level "PROGRESS"
 
     # Step 1: Check local customer web port
     $isLocalPortOpen = $false
@@ -289,17 +317,28 @@ function Test-PageKiteProbe {
         return $Global:ExitCodes.GeneralError
     }
 
-    $cfgFile = Join-Path $pagekiteDir "pagekite.cfg"
-    $testArgs = if ($Python.Args) { "$($Python.Args) `"$pkScript`" --clean --optfile=`"$cfgFile`" --settings" } else { "`"$pkScript`" --clean --optfile=`"$cfgFile`" --settings" }
+    $serviceArg = "--service_on=http:${NormalizedKite}:localhost:${Port}:${Secret}"
+    $procArgs = if ($Python.Args) { @($Python.Args, $pkScript, "--clean", $serviceArg, "--settings") } else { @($pkScript, "--clean", $serviceArg, "--settings") }
 
     try {
-        $proc = Start-Process -FilePath $Python.Command -ArgumentList $testArgs -NoNewWindow -Wait -PassThru -RedirectStandardError (Join-Path $env:TEMP "pk_err.log") -RedirectStandardOutput (Join-Path $env:TEMP "pk_out.log")
-        if ($proc.ExitCode -eq 0) {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $Python.Command
+        foreach ($arg in $procArgs) { $psi.ArgumentList.Add($arg) }
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+
+        $proc = [System.Diagnostics.Process]::Start($psi)
+        $stdout = $proc.StandardOutput.ReadToEnd()
+        $stderr = $proc.StandardError.ReadToEnd()
+        $proc.WaitForExit(5000)
+
+        if ($proc.ExitCode -eq 0 -and $stdout -match "Current settings for pagekite") {
             Write-PageKiteLog "PageKite syntax and configuration validated successfully." -Level "SUCCESS"
             return $Global:ExitCodes.Success
         } else {
-            $errContent = Get-Content (Join-Path $env:TEMP "pk_err.log") -Raw -ErrorAction SilentlyContinue
-            Write-PageKiteLog "PageKite configuration test returned exit code $($proc.ExitCode): $errContent" -Level "WARN"
+            Write-PageKiteLog "PageKite probe returned code $($proc.ExitCode)." -Level "WARN"
             return $Global:ExitCodes.ProbeConnectionFail
         }
     } catch {
@@ -312,7 +351,7 @@ function Test-PageKiteProbe {
 # 6. MAIN WORKFLOW
 # -----------------------------------------------------------------------------
 function Invoke-PageKiteSetup {
-    Write-PageKiteLog "=== AUTOPRINT MANUAL PAGEKITE CLI CONFIGURATION ===" -Level "INFO"
+    Write-PageKiteLog "=== AUTOPRINT SECURE PAGEKITE CLI CONFIGURATION ===" -Level "INFO"
 
     # Step 1: Detect Python 3
     $py = Find-Python3
@@ -328,22 +367,33 @@ function Invoke-PageKiteSetup {
 
     # Step 3: Validate Secret Key
     if ([string]::IsNullOrWhiteSpace($SecretKey)) {
-        Write-PageKiteLog "PageKite Secret Key is required." -Level "ERROR"
-        return $Global:ExitCodes.MissingSecretKey
-    }
-
-    # Step 4: Save configuration
-    Save-PageKiteConfig -NormalizedKite $validKite -Secret $SecretKey.Trim() -Port $CustomerPort
-
-    # Step 5: Optional connection test
-    if ($TestConnection) {
-        $testRes = Test-PageKiteProbe -Python $py -NormalizedKite $validKite -Port $CustomerPort
-        if ($testRes -ne $Global:ExitCodes.Success) {
-            Write-PageKiteLog "PageKite test probe completed with notice code: $testRes" -Level "WARN"
+        if ($NonInteractive) {
+            Write-PageKiteLog "PageKite Secret Key is required." -Level "ERROR"
+            return $Global:ExitCodes.MissingSecretKey
+        } else {
+            $secureSecret = Read-Host -Prompt "Enter your PageKite Secret Key" -AsSecureString
+            $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSecret)
+            $SecretKey = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+            if ([string]::IsNullOrWhiteSpace($SecretKey)) {
+                Write-PageKiteLog "PageKite Secret Key cannot be empty." -Level "ERROR"
+                return $Global:ExitCodes.MissingSecretKey
+            }
         }
     }
 
-    Write-PageKiteLog "PageKite CLI configuration completed successfully (Manual Mode: Offline by default)." -Level "SUCCESS"
+    # Step 4: Save configuration with DPAPI protection
+    Save-PageKiteSecureConfig -NormalizedKite $validKite -Secret $SecretKey.Trim() -Port $CustomerPort
+
+    # Step 5: Optional connection test
+    if ($TestConnection -and -not $SkipTest) {
+        $testRes = Test-PageKiteProbe -Python $py -NormalizedKite $validKite -Secret $SecretKey.Trim() -Port $CustomerPort
+        if ($testRes -ne $Global:ExitCodes.Success) {
+            Write-PageKiteLog "PageKite test probe completed with code: $testRes" -Level "WARN"
+        }
+    }
+
+    Write-PageKiteLog "PageKite configuration completed successfully (Manual Mode: Offline by default)." -Level "SUCCESS"
     return $Global:ExitCodes.Success
 }
 

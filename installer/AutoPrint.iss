@@ -61,10 +61,10 @@ Source: "..\dist-installer\payload\*"; DestDir: "{app}"; Flags: ignoreversion re
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon\autoprint.ico"
 Name: "{group}\Merchant Dashboard"; Filename: "http://localhost:8000"; IconFilename: "{app}\assets\icon\autoprint.ico"
 Name: "{group}\Customer Kiosk Portal"; Filename: "http://localhost:7000"; IconFilename: "{app}\assets\icon\autoprint.ico"
-Name: "{group}\Customer Online Access (PageKite Tunnel)"; Filename: "{app}\Start-Customer-Tunnel.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon\autoprint.ico"
+Name: "{group}\AutoPrint Customer Tunnel (Manual)"; Filename: "{app}\Start-Customer-Tunnel.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon\autoprint.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\assets\icon\autoprint.ico"
-Name: "{autodesktop}\Customer Online Access (PageKite Tunnel)"; Filename: "{app}\Start-Customer-Tunnel.cmd"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\assets\icon\autoprint.ico"
+Name: "{autodesktop}\AutoPrint Customer Tunnel (Manual)"; Filename: "{app}\Start-Customer-Tunnel.cmd"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\assets\icon\autoprint.ico"
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AutoPrint"; ValueData: """{app}\{#MyAppExeName}"" --startup"; Flags: uninsdeletevalue; Tasks: startwithwindows
@@ -317,7 +317,7 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  ConfigDir, ConfigFile, JsonContent, EnvContent, TargetDataDir: String;
+  ConfigDir, ConfigFile, JsonContent, EnvContent, TargetDataDir, TestArg: String;
   NodeResultCode, PKResultCode: Integer;
 begin
   if CurStep = ssPostInstall then
@@ -403,13 +403,21 @@ begin
     // Execute optional PageKite CLI configuration if merchant opted in
     if ChkEnablePageKite.Checked then
     begin
+      TestArg := '-SkipTest';
+      if MsgBox('PageKite configuration was saved.'#13#10#13#10 +
+                'Do you want to test the PageKite connection now?', mbConfirmation, MB_YESNO) = IDYES then
+      begin
+        TestArg := '-TestConnection';
+      end;
+
       WizardForm.StatusLabel.Caption := 'Configuring PageKite CLI and secure tunnel settings...';
       Exec('powershell.exe',
         '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\installer\scripts\configure-pagekite.ps1') + '" ' +
         '-AppDir "' + ExpandConstant('{app}') + '" ' +
         '-KiteName "' + EdtSubdomain.Text + '" ' +
         '-SecretKey "' + EdtSecret.Text + '" ' +
-        '-CustomerPort ' + EdtCustomerPort.Text + ' -NonInteractive',
+        '-CustomerPort ' + EdtCustomerPort.Text + ' ' +
+        TestArg + ' -NonInteractive',
         ExpandConstant('{app}'),
         SW_HIDE,
         ewWaitUntilTerminated,
@@ -419,7 +427,7 @@ begin
       if PKResultCode <> 0 then
       begin
         MsgBox('Notice: PageKite configuration completed with notice code ' + IntToStr(PKResultCode) + '.'#13#10 +
-               'You can configure or re-test PageKite later by running Start-Customer-Tunnel.cmd.', mbInformation, MB_OK);
+               'You can run or test your PageKite tunnel anytime via Start-Customer-Tunnel.cmd.', mbInformation, MB_OK);
       end;
     end;
   end;
