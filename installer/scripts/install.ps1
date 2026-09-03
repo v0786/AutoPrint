@@ -15,7 +15,8 @@
 [CmdletBinding()]
 param(
     [switch]$NonInteractive = $false,
-    [switch]$SkipElevationCheck = $false
+    [switch]$SkipElevationCheck = $false,
+    [switch]$IncludePrereleases = $false
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,7 +52,9 @@ if (-not (Test-IsAdministrator) -and -not $SkipElevationCheck) {
     Set-Content -Path $tempScript -Value $scriptContent -Encoding UTF8 -Force
     
     try {
-        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`" -SkipElevationCheck" -Verb RunAs -Wait
+        $elevArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`" -SkipElevationCheck"
+        if ($IncludePrereleases) { $elevArgs += " -IncludePrereleases" }
+        Start-Process powershell.exe -ArgumentList $elevArgs -Verb RunAs -Wait
         Remove-Item $tempScript -Force -ErrorAction SilentlyContinue
         exit 0
     } catch {
@@ -64,7 +67,7 @@ if (-not (Test-IsAdministrator) -and -not $SkipElevationCheck) {
 # STEP 3: Detect Latest Stable Release via GitHub API
 # -----------------------------------------------------------------------------
 $repo = "v0786/AutoPrint"
-$apiUrl = "https://api.github.com/repos/$repo/releases/latest"
+$apiUrl = "https://api.github.com/repos/$repo/releases"
 
 Write-Host "[1/6] Connecting to GitHub Releases API ($repo)..." -ForegroundColor Yellow
 
@@ -73,8 +76,21 @@ $headers = @{
     "Accept"     = "application/vnd.github.v3+json"
 }
 
+$release = $null
 try {
-    $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers -UseBasicParsing -TimeoutSec 15
+    $releasesList = Invoke-RestMethod -Uri $apiUrl -Headers $headers -UseBasicParsing -TimeoutSec 15
+    if ($releasesList -and $releasesList.Count -gt 0) {
+        if (-not $IncludePrereleases) {
+            # Filter only official non-draft, non-prerelease stable versions
+            $release = $releasesList | Where-Object { -not $_.prerelease -and -not $_.draft } | Select-Object -First 1
+        } else {
+            $release = $releasesList | Where-Object { -not $_.draft } | Select-Object -First 1
+        }
+    }
+    # Fallback to /releases/latest endpoint if list was empty
+    if (-not $release) {
+        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -Headers $headers -UseBasicParsing -TimeoutSec 10
+    }
 } catch {
     Write-Host "[WARN] Could not retrieve release metadata from GitHub API: $_" -ForegroundColor Yellow
     Write-Host "[*] Attempting fallback to direct asset repository download..." -ForegroundColor Yellow
@@ -83,7 +99,7 @@ try {
 
 if ($release) {
     $tagName = $release.tag_name
-    Write-Host "      [SUCCESS] Found latest release: $tagName" -ForegroundColor Green
+    Write-Host "      [SUCCESS] Found latest stable release: $tagName" -ForegroundColor Green
     
     $exeAsset = $release.assets | Where-Object { $_.name -like "*.exe" -and $_.name -notlike "*.old.exe" } | Select-Object -First 1
     $shaAsset = $release.assets | Where-Object { $_.name -like "*.sha256" } | Select-Object -First 1
