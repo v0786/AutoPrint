@@ -101,16 +101,18 @@ if ($release) {
     $tagName = $release.tag_name
     Write-Host "      [SUCCESS] Found latest stable release: $tagName" -ForegroundColor Green
     
-    $exeAsset = $release.assets | Where-Object { $_.name -like "*.exe" -and $_.name -notlike "*.old.exe" } | Select-Object -First 1
+    $binaryAsset = $release.assets | Where-Object { 
+        ($_.name -like "*.exe" -or $_.name -like "*.zip") -and $_.name -notlike "*.old.exe" 
+    } | Select-Object -First 1
     $shaAsset = $release.assets | Where-Object { $_.name -like "*.sha256" } | Select-Object -First 1
 
-    if (-not $exeAsset) {
-        Write-Error "No Windows installer (.exe) found in release $tagName on GitHub."
+    if (-not $binaryAsset) {
+        Write-Error "No Windows installer (.exe or .zip) found in release $tagName on GitHub."
         exit 1
     }
 
-    $installerUrl = $exeAsset.browser_download_url
-    $installerName = $exeAsset.name
+    $installerUrl = $binaryAsset.browser_download_url
+    $installerName = $binaryAsset.name
     $shaUrl = if ($shaAsset) { $shaAsset.browser_download_url } else { "$installerUrl.sha256" }
 } else {
     # Fallback to standard release asset URL format
@@ -153,20 +155,35 @@ if ($existingInstallDir) {
 $tempDir = Join-Path $env:TEMP "AutoPrint_Setup_$(Get-Random)"
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 
-$downloadExePath = Join-Path $tempDir $installerName
-$downloadShaPath = Join-Path $tempDir "$installerName.sha256"
+$downloadPath = Join-Path $tempDir $installerName
 
 Write-Host "`n[3/6] Downloading official release installer..." -ForegroundColor Yellow
 Write-Host "      Source: $installerUrl" -ForegroundColor Gray
 
 try {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
-    Invoke-WebRequest -Uri $installerUrl -OutFile $downloadExePath -UseBasicParsing
-    Write-Host "      [PASS] Installer downloaded successfully ($( [Math]::Round((Get-Item $downloadExePath).Length / 1MB, 2) ) MB)." -ForegroundColor Green
+    Invoke-WebRequest -Uri $installerUrl -OutFile $downloadPath -UseBasicParsing
+    Write-Host "      [PASS] Installer downloaded successfully ($( [Math]::Round((Get-Item $downloadPath).Length / 1MB, 2) ) MB)." -ForegroundColor Green
 } catch {
     Write-Error "Failed to download installer from GitHub: $_"
     Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
     exit 1
+}
+
+# Extract if downloaded asset is a ZIP archive
+$targetExecutable = $downloadPath
+if ($installerName -like "*.zip") {
+    Write-Host "      [*] Extracting ZIP package..." -ForegroundColor Cyan
+    $extractDir = Join-Path $tempDir "extracted"
+    Expand-Archive -Path $downloadPath -DestinationPath $extractDir -Force
+    $foundExe = Get-ChildItem -Path $extractDir -Filter "*.exe" -Recurse | Select-Object -First 1
+    if (-not $foundExe) {
+        Write-Error "Could not find an executable (.exe) inside the downloaded zip archive."
+        Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+        exit 1
+    }
+    $targetExecutable = $foundExe.FullName
+    Write-Host "      [PASS] Extracted installer: $($foundExe.Name)" -ForegroundColor Green
 }
 
 # -----------------------------------------------------------------------------
@@ -174,7 +191,7 @@ try {
 # -----------------------------------------------------------------------------
 Write-Host "`n[4/6] Verifying cryptographic SHA-256 checksum..." -ForegroundColor Yellow
 
-$calculatedHash = (Get-FileHash -Path $downloadExePath -Algorithm SHA256).Hash.ToLower()
+$calculatedHash = (Get-FileHash -Path $downloadPath -Algorithm SHA256).Hash.ToLower()
 Write-Host "      Calculated SHA-256 : $calculatedHash" -ForegroundColor Gray
 
 $expectedHash = $null
@@ -213,7 +230,7 @@ Write-Host "`n[5/6] Launching AutoPrint Setup Wizard..." -ForegroundColor Yellow
 Write-Host "      Please follow the on-screen installer instructions to complete setup." -ForegroundColor White
 
 try {
-    $process = Start-Process -FilePath $downloadExePath -ArgumentList "/SP- /NORESTART" -PassThru -Wait
+    $process = Start-Process -FilePath $targetExecutable -ArgumentList "/SP- /NORESTART" -PassThru -Wait
     if ($process.ExitCode -eq 0) {
         Write-Host "      [PASS] Windows Setup completed successfully (Exit Code: 0)." -ForegroundColor Green
     } else {
