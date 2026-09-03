@@ -101,32 +101,43 @@ function New-AppShortcut {
     }
 }
 
+function Ensure-GlobalNodeJs {
+    param(
+        [string]$AppDir = "",
+        [switch]$SkipDependencies = $false
+    )
+
+    $ensureScript = Join-Path $PSScriptRoot "scripts\ensure-node.ps1"
+    if (-not (Test-Path $ensureScript)) {
+        $ensureScript = Join-Path (Split-Path $PSScriptRoot -Parent) "installer\scripts\ensure-node.ps1"
+    }
+
+    if (Test-Path $ensureScript) {
+        $argsList = @("-ExecutionPolicy", "Bypass", "-File", "`"$ensureScript`"")
+        if ($AppDir) { $argsList += @("-AppDir", "`"$AppDir`"") }
+        if ($SkipDependencies) { $argsList += "-SkipDependencies" }
+
+        & powershell.exe $argsList
+        return ($LASTEXITCODE -eq 0)
+    } else {
+        Write-InstallerLog "Could not locate ensure-node.ps1 script." -Level "ERROR"
+        return $false
+    }
+}
+
 function Test-SystemPrerequisites {
+    param([string]$TargetAppDir = "")
     $passed = $true
 
-    Write-Host "Verifying System Prerequisites:" -ForegroundColor White
+    Write-Host "Verifying System Prerequisites & Global Node.js Runtime:" -ForegroundColor White
 
-    # 1. Node.js
-    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-    if ($nodeCmd) {
-        $nodeVer = (node -v).Trim()
-        Write-InstallerLog "Node.js detected: $nodeVer" -Level "SUCCESS"
-    } else {
-        Write-InstallerLog "Node.js (v18.0.0+) is not found in PATH." -Level "ERROR"
+    $nodeOk = Ensure-GlobalNodeJs -AppDir $TargetAppDir -SkipDependencies
+    if (-not $nodeOk) {
+        Write-InstallerLog "Global Node.js runtime validation failed." -Level "ERROR"
         $passed = $false
     }
 
-    # 2. npm
-    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
-    if ($npmCmd) {
-        $npmVer = (npm -v).Trim()
-        Write-InstallerLog "npm detected: v$npmVer" -Level "SUCCESS"
-    } else {
-        Write-InstallerLog "npm is not found in PATH." -Level "ERROR"
-        $passed = $false
-    }
-
-    # 3. Disk Space Check (>500MB)
+    # Disk Space Check (>500MB)
     try {
         $drive = Get-PSDrive (Get-Location).Drive.Name -ErrorAction SilentlyContinue
         if ($drive -and $drive.Free -gt 500MB) {
@@ -138,4 +149,4 @@ function Test-SystemPrerequisites {
     return $passed
 }
 
-Export-ModuleMember -Function Show-AutoPrintBanner, Write-InstallerLog, Test-IsAdmin, Test-PortAvailability, Get-AvailablePrinters, New-AppShortcut, Test-SystemPrerequisites -ErrorAction SilentlyContinue
+Export-ModuleMember -Function Show-AutoPrintBanner, Write-InstallerLog, Test-IsAdmin, Test-PortAvailability, Get-AvailablePrinters, New-AppShortcut, Ensure-GlobalNodeJs, Test-SystemPrerequisites -ErrorAction SilentlyContinue

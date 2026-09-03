@@ -43,7 +43,7 @@ Write-Host "  STEP 1: System Requirements & Runtime Validation" -ForegroundColor
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host ""
 
-$prereqsOk = Test-SystemPrerequisites
+$prereqsOk = Test-SystemPrerequisites -TargetAppDir $defaultInstall
 if (-not $prereqsOk) {
     Write-Host ""
     $cont = Read-Host "Prerequisite checks reported missing tools. Continue anyway? [Y/N] (Default: N)"
@@ -362,11 +362,11 @@ Write-Host "  STEP 10: Installing Dependencies & Building Applications" -Foregro
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host ""
 
-Write-Host "  Installing dependencies across workspaces..." -ForegroundColor Gray
+Write-Host "  Installing production dependencies via npm ci..." -ForegroundColor Gray
 Push-Location "$installDir"
 try {
-    npm run install:all
-    Write-InstallerLog "Dependencies installed successfully." -Level "SUCCESS"
+    Ensure-GlobalNodeJs -AppDir "$installDir" | Out-Null
+    Write-InstallerLog "Dependencies installed successfully via npm ci." -Level "SUCCESS"
 
     Write-Host "  Compiling TypeScript backend and Vite frontends..." -ForegroundColor Gray
     npm run build:all

@@ -14,11 +14,17 @@ if not "%OS%"=="Windows_NT" (
 )
 
 echo.
-echo   [CHECK 2/5] Checking Node.js Runtime...
+echo   [CHECK 2/5] Checking Global Node.js Runtime...
 where node >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    call "%~dp0common.cmd" :error_msg "Node.js is not found in system PATH. Please install Node.js (v18.0.0 or higher) from https://nodejs.org/"
-    set "CHECKS_FAILED=1"
+    echo   Node.js not in active PATH. Invoking automated global runtime detection...
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\scripts\ensure-node.ps1" -SkipDependencies
+    if %ERRORLEVEL% NEQ 0 (
+        call "%~dp0common.cmd" :error_msg "Node.js (v18.0.0 or higher) is missing or could not be configured automatically."
+        set "CHECKS_FAILED=1"
+    ) else (
+        call "%~dp0common.cmd" :success_msg "Node.js runtime configured successfully."
+    )
 ) else (
     for /f "tokens=*" %%v in ('node -v 2^>nul') do set "NODE_VER=%%v"
     call "%~dp0common.cmd" :success_msg "Node.js detected: %NODE_VER%"

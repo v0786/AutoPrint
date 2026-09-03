@@ -287,6 +287,7 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ConfigDir, ConfigFile, JsonContent, EnvContent, TargetDataDir: String;
+  NodeResultCode: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -332,6 +333,22 @@ begin
       'NODE_ENV=production' + #13#10;
 
     SaveStringToFile(ExpandConstant('{app}\.env'), EnvContent, False);
+
+    // Execute global Node.js runtime validation and dependency bootstrap
+    WizardForm.StatusLabel.Caption := 'Configuring global Node.js runtime and verifying dependencies...';
+    Exec('powershell.exe',
+      '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\installer\scripts\ensure-node.ps1') + '" -AppDir "' + ExpandConstant('{app}') + '" -NonInteractive',
+      ExpandConstant('{app}'),
+      SW_HIDE,
+      ewWaitUntilTerminated,
+      NodeResultCode
+    );
+
+    if NodeResultCode <> 0 then
+    begin
+      MsgBox('Notice: Global Node.js validation or dependency setup returned code ' + IntToStr(NodeResultCode) + '.'#13#10 +
+             'Please review the installation log in ProgramData\AutoPrint\logs\node-bootstrap.log if needed.', mbInformation, MB_OK);
+    end;
   end;
 end;
 

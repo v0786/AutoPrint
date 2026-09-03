@@ -41,12 +41,15 @@ New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
 # 3. Copy Application Artifacts & Production Dependencies
 Write-Host "[3/5] Copying application binaries, assets, and production modules..." -ForegroundColor Yellow
 
-# Copy root executables and scripts
+# Copy root executables, scripts, and dependency locks
 Copy-Item (Join-Path $rootDir "AutoPrint.exe") $payloadDir -Force
 Copy-Item (Join-Path $rootDir "AutoPrint-Launcher.bat") $payloadDir -Force
 Copy-Item (Join-Path $rootDir "Launch AutoPrint.bat") $payloadDir -Force
 Copy-Item (Join-Path $rootDir "Launch AutoPrint.ps1") $payloadDir -Force
 Copy-Item (Join-Path $rootDir "package.json") $payloadDir -Force
+if (Test-Path (Join-Path $rootDir "package-lock.json")) {
+    Copy-Item (Join-Path $rootDir "package-lock.json") $payloadDir -Force
+}
 Copy-Item (Join-Path $rootDir ".env.example") $payloadDir -Force
 
 # Copy app subdirectories
@@ -59,8 +62,8 @@ $backendDest = Join-Path $targetAppDir "backend"
 New-Item -ItemType Directory -Path (Join-Path $backendDest "dist") -Force | Out-Null
 Copy-Item (Join-Path $backendSrc "dist\*") (Join-Path $backendDest "dist") -Recurse -Force
 Copy-Item (Join-Path $backendSrc "package.json") $backendDest -Force
-if (Test-Path (Join-Path $backendSrc "node_modules")) {
-    Copy-Item (Join-Path $backendSrc "node_modules") $backendDest -Recurse -Force
+if (Test-Path (Join-Path $backendSrc "package-lock.json")) {
+    Copy-Item (Join-Path $backendSrc "package-lock.json") $backendDest -Force
 }
 
 # Customer Web
@@ -70,6 +73,9 @@ New-Item -ItemType Directory -Path (Join-Path $custDest "dist") -Force | Out-Nul
 Copy-Item (Join-Path $custSrc "dist\*") (Join-Path $custDest "dist") -Recurse -Force
 Copy-Item (Join-Path $custSrc "server.js") $custDest -Force
 Copy-Item (Join-Path $custSrc "package.json") $custDest -Force
+if (Test-Path (Join-Path $custSrc "package-lock.json")) {
+    Copy-Item (Join-Path $custSrc "package-lock.json") $custDest -Force
+}
 
 # Merchant Desktop
 $merchSrc = Join-Path $rootDir "app\merchant-desktop"
@@ -78,31 +84,23 @@ New-Item -ItemType Directory -Path (Join-Path $merchDest "dist") -Force | Out-Nu
 Copy-Item (Join-Path $merchSrc "dist\*") (Join-Path $merchDest "dist") -Recurse -Force
 Copy-Item (Join-Path $merchSrc "server.js") $merchDest -Force
 Copy-Item (Join-Path $merchSrc "package.json") $merchDest -Force
+if (Test-Path (Join-Path $merchSrc "package-lock.json")) {
+    Copy-Item (Join-Path $merchSrc "package-lock.json") $merchDest -Force
+}
 
 # Connectors & Shared
 Copy-Item (Join-Path $rootDir "app\connectors") $targetAppDir -Recurse -Force
 Copy-Item (Join-Path $rootDir "app\shared") $targetAppDir -Recurse -Force
 
-# Assets, scripts, and runtime structure
+# Assets, scripts, installer helpers, and docs
 Copy-Item (Join-Path $rootDir "assets") $payloadDir -Recurse -Force
 Copy-Item (Join-Path $rootDir "scripts") $payloadDir -Recurse -Force
+Copy-Item (Join-Path $rootDir "installer") $payloadDir -Recurse -Force
 Copy-Item (Join-Path $rootDir "docs") $payloadDir -Recurse -Force
 
-# Bundled Node.js Runtime
-Write-Host "[4/5] Bundling standalone portable Node.js runtime..." -ForegroundColor Yellow
-$nodeExePath = (Get-Command node -ErrorAction SilentlyContinue).Source
-if (-not $nodeExePath) {
-    $nodeExePath = "C:\Program Files\nodejs\node.exe"
-}
-
-$bundledNodeDir = Join-Path $payloadDir "runtime\node"
-New-Item -ItemType Directory -Path $bundledNodeDir -Force | Out-Null
-if (Test-Path $nodeExePath) {
-    Copy-Item $nodeExePath (Join-Path $bundledNodeDir "node.exe") -Force
-    Write-Host "   Bundled node.exe from $nodeExePath" -ForegroundColor Green
-} else {
-    Write-Host "   [WARNING] Node.exe could not be found locally to bundle." -ForegroundColor Yellow
-}
+# Global Node.js Runtime Staging Note
+Write-Host "[4/5] Staging global Node.js detection and installation engine..." -ForegroundColor Yellow
+Write-Host "   (Zero bundled node runtime: Target system will use global Node.js)" -ForegroundColor Green
 
 # 4. Compile Inno Setup Script
 Write-Host "[5/5] Compiling Inno Setup Installer (AutoPrint-Setup.exe)..." -ForegroundColor Yellow

@@ -325,14 +325,42 @@ namespace AutoPrint.Launcher
 
         private string FindNodeExecutable()
         {
-            // 1. Check bundled runtime node.exe
-            string bundledNode = Path.Combine(projectRoot, "runtime", "node", "node.exe");
-            if (File.Exists(bundledNode)) return bundledNode;
+            // 1. Check standard 64-bit global Node.js installation
+            try
+            {
+                string progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+                string stdNode = Path.Combine(progFiles, "nodejs", "node.exe");
+                if (File.Exists(stdNode)) return stdNode;
 
-            bundledNode = Path.Combine(projectRoot, "bin", "node.exe");
-            if (File.Exists(bundledNode)) return bundledNode;
+                string progFiles86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+                string stdNode86 = Path.Combine(progFiles86, "nodejs", "node.exe");
+                if (File.Exists(stdNode86)) return stdNode86;
 
-            // 2. Check system PATH node.exe
+                string localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string userNode = Path.Combine(localApp, "Programs", "nodejs", "node.exe");
+                if (File.Exists(userNode)) return userNode;
+            }
+            catch { }
+
+            // 2. Check Windows Registry
+            try
+            {
+                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Node.js"))
+                {
+                    if (key != null)
+                    {
+                        var installPath = key.GetValue("InstallPath") as string;
+                        if (!string.IsNullOrEmpty(installPath))
+                        {
+                            string regNode = Path.Combine(installPath, "node.exe");
+                            if (File.Exists(regNode)) return regNode;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // 3. Fallback to system PATH node
             return "node";
         }
 
