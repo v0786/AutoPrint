@@ -346,8 +346,27 @@ begin
 
     if NodeResultCode <> 0 then
     begin
-      MsgBox('Notice: Global Node.js validation or dependency setup returned code ' + IntToStr(NodeResultCode) + '.'#13#10 +
-             'Please review the installation log in ProgramData\AutoPrint\logs\node-bootstrap.log if needed.', mbInformation, MB_OK);
+      case NodeResultCode of
+        2: MsgBox('Node.js Download Failed: AutoPrint could not download the required Node.js MSI from nodejs.org.'#13#10 +
+                  'Please check your internet connection or install Node.js manually from https://nodejs.org/', mbError, MB_OK);
+        3: MsgBox('Security Verification Failed: The downloaded Node.js installer SHA-256 hash did not match official checksums.'#13#10 +
+                  'Installation aborted for security.', mbError, MB_OK);
+        4: MsgBox('Digital Signature Verification Failed: The downloaded Node.js installer signature could not be verified.'#13#10 +
+                  'Installation aborted for security.', mbError, MB_OK);
+        5: MsgBox('Node.js Installation Failed: msiexec could not install Node.js globally.'#13#10 +
+                  'Please review Windows Event Viewer or install Node.js manually.', mbError, MB_OK);
+        7: MsgBox('Dependency Installation Failed: npm ci encountered an error while installing packages.'#13#10 +
+                  'Please check the logs at ProgramData\AutoPrint\logs\node-bootstrap.log', mbError, MB_OK);
+        8: MsgBox('Network / Proxy Error: npm or Node.js download was blocked by a network proxy or firewall.'#13#10 +
+                  'Please ensure your proxy settings allow access to https://nodejs.org and https://registry.npmjs.org', mbError, MB_OK);
+        9: MsgBox('Missing Lock File: package-lock.json is missing in an application workspace.'#13#10 +
+                  'Please contact AutoPrint support.', mbError, MB_OK);
+        10: MsgBox('Administrator Privileges Required: Node.js global installation requires elevated permissions.'#13#10 +
+                   'Please re-run setup as Administrator.', mbError, MB_OK);
+      else
+        MsgBox('Notice: Global Node.js runtime or dependency setup returned code ' + IntToStr(NodeResultCode) + '.'#13#10 +
+               'Please review the installation log in ProgramData\AutoPrint\logs\node-bootstrap.log if needed.', mbInformation, MB_OK);
+      end;
     end;
   end;
 end;
