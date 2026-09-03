@@ -214,12 +214,13 @@ function Save-PageKiteSecureConfig {
 
     # 1. Write non-secret metadata settings.json
     $settingsObj = @{
-        configured   = $true
-        kiteName     = $NormalizedKite
-        customerPort = $Port
-        mode         = "manual"
-        updatedAt    = (Get-Date).ToString("o")
-        publicUrl    = "https://$NormalizedKite"
+        configured      = $true
+        kiteName        = $NormalizedKite
+        customerPort    = $Port
+        pagekiteVersion = "1.5.2.260113"
+        mode            = "manual"
+        updatedAt       = (Get-Date).ToString("o")
+        publicUrl       = "https://$NormalizedKite"
     }
     $jsonContent = $settingsObj | ConvertTo-Json -Depth 3
     [System.IO.File]::WriteAllText($settingsFile, $jsonContent, [System.Text.Encoding]::UTF8)

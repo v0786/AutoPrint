@@ -112,7 +112,7 @@ if (-not $pythonCmd) {
 }
 
 # -----------------------------------------------------------------------------
-# 4. PAGEKITE CLI SCRIPT & INTEGRITY
+# 4. PAGEKITE CLI SCRIPT & SHA-256 INTEGRITY VERIFICATION
 # -----------------------------------------------------------------------------
 $pkScript = Join-Path $AppDir "tools\pagekite\pagekite.py"
 if (-not (Test-Path $pkScript)) {
@@ -123,6 +123,21 @@ if (-not (Test-Path $pkScript)) {
     Write-Host "[ERROR] Bundled PageKite CLI script was not found in: $pkScript" -ForegroundColor Red
     Write-TunnelLog "pagekite.py missing in tools" -Level "ERROR"
     exit 1
+}
+
+$expectedHash = "5498F591F51F0E8721A7282C662950E57110BF1A0C092261F88C4CCADC981AE0"
+$actualHash = (Get-FileHash -Path $pkScript -Algorithm SHA256).Hash
+if ($actualHash -ne $expectedHash) {
+    Write-Host "`n============================================================" -ForegroundColor Red
+    Write-Host " [SECURITY ERROR] PageKite CLI Integrity Check Failed!" -ForegroundColor Red
+    Write-Host "============================================================" -ForegroundColor Red
+    Write-Host " The PageKite CLI script ($pkScript) has been modified or corrupted." -ForegroundColor White
+    Write-Host " Execution has been aborted to prevent unauthorized code execution." -ForegroundColor White
+    Write-Host " Expected SHA-256: $expectedHash" -ForegroundColor Gray
+    Write-Host " Actual SHA-256:   $actualHash" -ForegroundColor Gray
+    Write-Host "============================================================`n" -ForegroundColor Red
+    Write-TunnelLog "Integrity check failure: $pkScript hash ($actualHash) does not match expected ($expectedHash)" -Level "ERROR"
+    exit 3
 }
 
 # -----------------------------------------------------------------------------
@@ -204,14 +219,17 @@ Write-Host ""
 Write-Host "[Live Tunnel Output]:" -ForegroundColor Gray
 Write-Host "----------------------------------------" -ForegroundColor Gray
 
-Write-TunnelLog "Starting manual PageKite tunnel: https://$kiteName -> 127.0.0.1:$customerPort" -Level "INFO"
+Write-TunnelLog "Starting manual PageKite tunnel (PID: $PID): https://$kiteName -> 127.0.0.1:$customerPort" -Level "INFO"
 
 # -----------------------------------------------------------------------------
-# 8. EXECUTE PAGEKITE INTERACTIVELY IN FOREGROUND
+# 8. EXECUTE PAGEKITE INTERACTIVELY WITH PID TRACKING
 # -----------------------------------------------------------------------------
+$pidFile = Join-Path $pagekiteDir "pagekite.pid"
 $serviceArg = "--service_on=http:${kiteName}:localhost:${customerPort}:${secretKey}"
 
 try {
+    [System.IO.File]::WriteAllText($pidFile, $PID.ToString(), [System.Text.Encoding]::UTF8)
+
     if ($pythonArgs.Count -gt 0) {
         & $pythonCmd $pythonArgs "$pkScript" "--clean" $serviceArg
     } else {
@@ -219,8 +237,12 @@ try {
     }
 } finally {
     # -------------------------------------------------------------------------
-    # 9. IN-MEMORY SANITIZATION & CLEANUP
+    # 9. PID CLEANUP & IN-MEMORY SANITIZATION
     # -------------------------------------------------------------------------
+    if (Test-Path $pidFile) {
+        Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+    }
+
     $secretKey = $null
     $serviceArg = $null
     [GC]::Collect()
