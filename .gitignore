@@ -12,6 +12,10 @@ dist/
 **/dist/
 dist-installer/
 dist-electron/
+AutoPrint-FreshPC-Transfer-Pack*
+*.zip
+installer/prerequisites/
+runtime/node/
 build/
 **/build/
 out/

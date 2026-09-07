@@ -1,116 +1,88 @@
-# AutoPrint / QRPrint — Automated Print Shop Operating System
+# AutoPrint
 
-![AutoPrint Logo](assets/icon/app-icon.png)
+Self-contained local print shop operating and management system.
 
-**AutoPrint** is a production-grade automated kiosk and print shop desktop management system designed for document upload, real-time visual previews, physical 8-digit verification watermarking, 3-strike fail-safe payment reconciliation, and staff-governed document handover.
-
----
-
-## ⚡ Installation
-
-### Method 1: One-Line PowerShell Installer (Recommended)
-
-Run the following command in PowerShell:
-
-```powershell
-irm https://raw.githubusercontent.com/v0786/AutoPrint/main/installer/scripts/install.ps1 | iex
-```
-
-**What this does automatically:**
-1. Queries the GitHub Releases API (`v0786/AutoPrint`) for the latest stable release.
-2. Downloads the official `AutoPrint-Setup.exe` and `AutoPrint-Setup.exe.sha256` checksum.
-3. Cryptographically calculates and verifies the SHA-256 hash before running.
-4. Checks and preserves existing SQLite datastores and rate cards if upgrading.
-5. Launches the Windows Setup Wizard for a clean or upgraded installation.
+> **Windows 7 Compatibility: Testing Required**  
+> *The standalone package targets 64-bit Windows systems including Windows 7 SP1. Official certification requires running the hardware verification checklist.*
 
 ---
 
-### Method 2: Manual Download from GitHub Releases
+## Overview
 
-1. Open the [GitHub Releases Page](https://github.com/v0786/AutoPrint/releases/latest).
-2. Download **`AutoPrint-Setup.exe`**.
-3. Download **`AutoPrint-Setup.exe.sha256`**.
-4. *(Optional but Recommended)* Verify the SHA-256 checksum in PowerShell:
-   ```powershell
-   Get-FileHash AutoPrint-Setup.exe -Algorithm SHA256
-   ```
-5. Run **`AutoPrint-Setup.exe`** and follow the on-screen setup wizard.
+**AutoPrint** is a production-grade automated kiosk and print shop desktop management system. It provides seamless document upload, real-time visual previews, physical 8-digit verification watermarking, 3-strike fail-safe payment reconciliation, and staff-governed document handover.
 
----
-
-### Method 3: 1-Click Launchers (Local Portable / Clean PC Setup)
-
-If running directly from the cloned repository or unzipped archive:
-
-1. **`configure.bat`**: Run diagnostics to verify Windows 64-bit, Node.js, Spooler, printers, and port availability.
-2. **`start.bat`**: Universal 1-click launcher (downloads files with operator permission, compiles assets, starts all 3 microservices, and opens browsers).
-3. **[`FRESH_PC_SETUP_AND_REQUIREMENTS.md`](FRESH_PC_SETUP_AND_REQUIREMENTS.md)**: Step-by-step non-technical installation and daily operations guide.
+AutoPrint is engineered as a **100% self-contained Windows application**:
+- **One Application Executable:** The operator only interacts with `AutoPrint.exe` or `AutoPrint-Setup.exe`.
+- **Zero External Prerequisites:** Node.js, npm, PowerShell package managers, or Visual Studio runtimes are **never** required from customers.
+- **Private Bundled Runtime:** AutoPrint executes using its own embedded 64-bit private runtime.
+- **No External Batch Files:** Everything runs through the native launcher and background service orchestrator.
 
 ---
 
-## 🌐 Default Access Portals
+## Key Features
 
-| Portal | Default URL | Purpose |
+- **Self-Contained Application Runtime:** Embedded private Node.js engine and pre-packaged production dependencies.
+- **No External Node.js Installation:** Completely isolated from system PATH and user environments.
+- **No npm Commands for Customers:** Operators never run build or package manager commands.
+- **Local SQLite Database:** ACID transactional database with Write-Ahead Logging (WAL) and automatic migration.
+- **Customer Upload Kiosk (`:7000`):** Fast in-shop and mobile document upload, preview, and 8-digit pickup code issuance.
+- **Merchant Management Desk (`:8000`):** Staff POS, queue inspection, rate cards, and physical document release.
+- **Physical Printer Fleet Integration:** Direct spooler integration with Windows-detected physical laser and inkjet printers.
+- **First-User Onboarding & Welcome Flow:** Guided 4-step wizard on clean installs to set up the store administrator account.
+- **Remember This PC:** Secure persistent workstation sessions for trusted shop computers.
+- **Optional PageKite Remote Access:** Local shop operations work completely offline; PageKite can be enabled for remote mobile uploads.
+- **Factory Reset for Development & Testing:** Destructive `npm run reset` command to instantly restore a pristine, unconfigured fresh-install state.
+
+---
+
+## Documentation & Guides
+
+| Document | Purpose |
+| :--- | :--- |
+| 📖 [**Windows 7 Installation Guide**](docs/WINDOWS_7_INSTALLATION_GUIDE.md) | Simple, non-technical setup instructions for Windows 7 (64-bit SP1) PCs. |
+| 🚀 [**First-Time Setup Guide**](docs/FIRST_TIME_SETUP.md) | Visual walkthrough of the initial onboarding wizard and admin creation. |
+| 🔧 [**User Troubleshooting & Diagnostics**](docs/TROUBLESHOOTING.md) | Solutions for port conflicts, offline printers, blank screens, and tunnels. |
+| 🔄 [**Factory Reset Guide**](docs/FACTORY_RESET.md) | How to execute destructive factory resets for testing and quality assurance. |
+| 🏛 [**System Architecture**](docs/AUTOPRINT_ARCHITECTURE.md) | In-depth technical architecture, process lifecycle, and database schemas. |
+
+---
+
+## Access Portals
+
+Once AutoPrint is running, the portals are accessible via your web browser:
+
+| Portal | Default URL | Description |
 | :--- | :--- | :--- |
-| **Customer Kiosk** | [`http://localhost:7000`](http://localhost:7000) | Document upload, layout preview, & 8-digit pickup code. |
-| **Merchant Desktop** | [`http://localhost:8000`](http://localhost:8000) | Code lookup, cash collection, rate cards, & physical handover. |
-| **Backend Health** | [`http://localhost:5000/api/health`](http://localhost:5000/api/health) | Live server diagnostic and SQLite WAL status. |
+| **Merchant Desk** | [`http://localhost:8000`](http://localhost:8000) | Cash collection, queue inspection, printer selection, and rate cards. |
+| **Customer Kiosk** | [`http://localhost:7000`](http://localhost:7000) | Document upload, layout preview, and 8-digit pickup code issuance. |
+| **Backend Health** | [`http://localhost:5000/api/health`](http://localhost:5000/api/health) | Real-time service diagnostic and database status endpoint. |
 
 ---
 
-## 📁 Repository Structure
+## Physical Printer Setup
 
-```
-AutoPrint/
-├── app/                           # Active Applications (backend, customer-web, merchant-desktop, connectors)
-│   ├── backend/                   # Node.js Express REST API + SQLite WAL Datastore + Spooler Core
-│   ├── customer-web/              # Vite React Customer Kiosk with Document Previews
-│   └── merchant-desktop/          # Vite React Merchant POS & Pickup Verification Desk
-├── datastore/                     # Persistent Runtime Data (database, uploads, audit, logs)
-├── runtime/                       # Ephemeral Process Runtime State (logs, temp, pid, status)
-├── installer/                     # Inno Setup 6 & PowerShell Installer Suite
-│   └── scripts/install.ps1        # Official GitHub one-line release installer
-├── assets/                        # High-resolution application branding & icons
-├── docs/                          # Architecture, User, Admin, Installation, & Quick-Start Guides
-├── scripts/                       # Operational Management Scripts (start-all, stop-all, test-e2e)
-├── configure.bat                  # PC Compatibility & System Diagnostics Tool
-└── start.bat                      # 1-Click Multi-App Launcher for Operators
-```
+AutoPrint connects to Windows-detected physical printers:
+1. Connect and turn on your printer.
+2. Ensure the official manufacturer driver is installed and prints a test page from Windows **Devices and Printers**.
+3. Open the AutoPrint Merchant Desk $\rightarrow$ **Settings** $\rightarrow$ **Printers**.
+4. Select your physical printer as default and click **Print Test Page**.
 
 ---
 
-## 🛠 Operational Commands
+## Development & Maintenance Commands
 
-### Start All Services:
-```cmd
-start.bat
-```
+For developers and system administrators working directly with the source code:
 
-### Stop All Services:
-```cmd
-scripts\stop-all.cmd
-```
-
-### Check System Compatibility:
-```cmd
-configure.bat
-```
-
-### Run Automated E2E Test Suite:
-```powershell
-node scripts\test-e2e-integration.mjs
-```
-
-### Build All Applications:
-```powershell
+```bash
+# Build all workspaces (Backend, Customer Web, Merchant Desktop)
 npm run build:all
+
+# Destructive factory reset (interactive confirmation)
+npm run reset
+
+# Destructive factory reset (non-interactive / automated)
+npm run reset -- --force
+
+# Compile the standalone Windows installer
+powershell -File scripts/build-installer.ps1
 ```
-
----
-
-## 🔒 Verification & Security Architecture
-* **8-Digit Verification Code**: Rejection-sampled cryptographic random codes (`XXXX XXXX`).
-* **HMAC-SHA256 Checksum**: Deterministic verification watermark checksum for physical tamper detection.
-* **Scrypt Password Hashing**: Zero plaintext passwords; 16-byte random salt with `scryptSync` key derivation.
-* **Persistent SQLite Database**: ACID transactions, foreign keys, and WAL journal mode.
-* **Zero-Mock Operational Fleet**: Live Windows printers and SQLite print jobs only.
