@@ -17,8 +17,13 @@ import { PaymentController } from './controllers/paymentController';
 import { MerchantController } from './controllers/merchantController';
 import { SystemController } from './controllers/systemController';
 import { ConfigController } from './controllers/configController';
+import { FeedbackController } from './controllers/feedbackController';
+import { SupportController } from './controllers/supportController';
+import { RefundController } from './controllers/refundController';
+import { SetupController } from './controllers/setupController';
 import { PrinterService } from './services/printerService';
 import { tunnelService } from './services/tunnelService';
+import { CloudSyncService } from './services/cloudSyncService';
 
 // 1. Initialize data storage directories and database
 ensureDataDirectories();
@@ -66,9 +71,13 @@ const healthHandler = (_req: express.Request, res: express.Response) => {
 
   res.status(status).json({
     ok: dbHealthy && storageHealthy,
-    status: dbHealthy && storageHealthy ? 'healthy' : 'unhealthy',
+    status: dbHealthy && storageHealthy ? 'ok' : 'unhealthy',
+    health: dbHealthy && storageHealthy ? 'healthy' : 'unhealthy',
     service: 'autoprint',
     backend: 'running',
+    port: CONFIG.PORT,
+    backendPort: CONFIG.PORT,
+    apiBaseUrl: CONFIG.API_BASE_URL,
     customerWeb: 'running',
     merchantWeb: 'running',
     pagekite: tunnelState.status.toLowerCase(),
@@ -84,6 +93,8 @@ const healthHandler = (_req: express.Request, res: express.Response) => {
     database: {
       healthy: dbHealthy,
       engine: 'sqlite3-wal',
+      path: PATHS.DB_FILE,
+      exists: fs.existsSync(PATHS.DB_FILE),
     },
     ports: {
       backend: CONFIG.PORT,
@@ -94,12 +105,30 @@ const healthHandler = (_req: express.Request, res: express.Response) => {
   });
 };
 
+const runtimeConfigHandler = (_req: express.Request, res: express.Response) => {
+  res.json({
+    backendPort: CONFIG.PORT,
+    customerWebPort: CONFIG.CUSTOMER_PORT,
+    merchantDesktopPort: CONFIG.MERCHANT_PORT,
+    apiBaseUrl: CONFIG.API_BASE_URL,
+    databasePath: PATHS.DB_FILE,
+  });
+};
+
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
+app.get('/config/runtime.json', runtimeConfigHandler);
+app.get('/setup/status', SetupController.getStatus);
+app.get('/api/setup/status', SetupController.getStatus);
+app.post('/setup/create-first-user', SetupController.createFirstUser);
+app.post('/api/setup/create-first-user', SetupController.createFirstUser);
 
 // 4. API Routes
 const api = express.Router();
 api.get('/health', healthHandler);
+api.get('/config/runtime', runtimeConfigHandler);
+api.get('/setup/status', SetupController.getStatus);
+api.post('/setup/create-first-user', SetupController.createFirstUser);
 
 // Job Management Routes (supports multipart file upload)
 api.post('/jobs', upload.single('file'), JobController.submitJob);
@@ -150,6 +179,27 @@ api.get('/config/public', ConfigController.getPublicConfig);
 api.get('/config/qr-code', ConfigController.getQrCodeImage);
 api.post('/config/pagekite', ConfigController.updatePageKiteConfig);
 
+// Customer Feedback & Intelligence Routes
+api.get('/feedback/eligibility/:code', FeedbackController.checkEligibility);
+api.post('/feedback', FeedbackController.submit);
+api.get('/feedback', FeedbackController.getAllFeedback);
+api.get('/feedback/analytics', FeedbackController.getAnalytics);
+
+// Unified Customer & Merchant Support Routes
+api.post('/support/customer', SupportController.createCustomerTicket);
+api.post('/support/merchant', SupportController.createMerchantTicket);
+api.get('/support/tickets', SupportController.getAllTickets);
+api.get('/support/tickets/:id', SupportController.getTicketById);
+api.patch('/support/tickets/:id/status', SupportController.updateTicketStatus);
+api.get('/support/diagnostics/preview', SupportController.previewDiagnostics);
+api.get('/support/sync/status', SupportController.getSyncStatus);
+
+// Refund Management Routes
+api.post('/refunds', RefundController.create);
+api.get('/refunds', RefundController.getAll);
+api.get('/refunds/:id', RefundController.getById);
+api.patch('/refunds/:id/status', RefundController.updateStatus);
+
 // Printer Fleet Discovery
 api.get('/printers', async (_req, res, next) => {
   try {
@@ -159,6 +209,9 @@ api.get('/printers', async (_req, res, next) => {
     next(err);
   }
 });
+
+// Start background Cloud Support Sync Worker
+CloudSyncService.startWorker(30000);
 
 app.use(CONFIG.API_PREFIX, api);
 
@@ -203,7 +256,11 @@ const server = app.listen(CONFIG.PORT, '0.0.0.0', () => {
     '==================================================================',
     '       AUTOPRINT PRINT MANAGEMENT & VERIFICATION SERVER           ',
     '==================================================================',
-    ` [API Port]       : http://localhost:${CONFIG.PORT}${CONFIG.API_PREFIX}`,
+    ' AutoPrint Backend Started',
+    ` Port: ${CONFIG.PORT}`,
+    ` API Base URL: http://127.0.0.1:${CONFIG.PORT}`,
+    ` Database: ${PATHS.DB_FILE}`,
+    ` [API Route]      : http://localhost:${CONFIG.PORT}${CONFIG.API_PREFIX}`,
     ` [Health Check]   : http://localhost:${CONFIG.PORT}/health`,
     ` [Customer Kiosk] : http://localhost:${CONFIG.CUSTOMER_PORT}`,
     ` [Merchant Desk]  : http://localhost:${CONFIG.MERCHANT_PORT}`,

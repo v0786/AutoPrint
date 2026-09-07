@@ -220,6 +220,60 @@ export class MerchantRepository {
     return res.changes > 0;
   }
 
+  public static createFirstAdmin(data: {
+    fullName: string;
+    email: string;
+    username?: string;
+    password: string;
+    shopName?: string;
+  }): MerchantRecord {
+    const db = getDb();
+    const createTx = db.transaction(() => {
+      const count = this.getCount();
+      if (count > 0) {
+        const err = new Error('SETUP_ALREADY_COMPLETED');
+        (err as any).code = 'SETUP_ALREADY_COMPLETED';
+        throw err;
+      }
+
+      const id = uuidv4();
+      const { hash, salt } = this.hashPassword(data.password);
+      const cleanEmail = data.email.trim().toLowerCase();
+      let cleanUsername = (data.username || '').trim().toLowerCase();
+      if (!cleanUsername) {
+        cleanUsername = cleanEmail.split('@')[0] || 'merchant';
+      }
+      const shopName = (data.shopName || '').trim() || 'AutoPrint Express Store';
+      const ownerName = data.fullName.trim();
+
+      db.prepare(`
+        INSERT INTO merchants (
+          id, username, shop_name, owner_name, email,
+          password_hash, password_salt, role, is_active,
+          address, branch, kiosk_number, selected_printer,
+          color_price_per_page, bw_price_per_page, is_onboarded, is_online
+        ) VALUES (
+          ?, ?, ?, ?, ?,
+          ?, ?, 'admin', 1,
+          'Main Counter', 'Counter #01', 'Counter #01', 'AutoPrint Virtual Spooler',
+          1000, 200, 1, 1
+        )
+      `).run(
+        id,
+        cleanUsername,
+        shopName,
+        ownerName,
+        cleanEmail,
+        hash,
+        salt
+      );
+
+      return this.getById(id)!;
+    });
+
+    return createTx();
+  }
+
   public static createMerchant(data: {
     shopName: string;
     ownerName: string;

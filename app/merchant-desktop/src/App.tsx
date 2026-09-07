@@ -28,15 +28,21 @@ import { PrinterFleetView } from './components/PrinterFleetView';
 import { ActivityHistoryView } from './components/ActivityHistoryView';
 import { SystemDiagnosticsView } from './components/SystemDiagnosticsView';
 import { SettingsView } from './components/SettingsView';
+import { PaymentReconciliationView } from './components/PaymentReconciliationView';
+import { RefundManagementView } from './components/RefundManagementView';
+import { HelpSupportView } from './components/HelpSupportView';
+import { FeedbackIntelligenceView } from './components/FeedbackIntelligenceView';
 
 // Modals & Auth
 import { DocumentPreviewModal } from './components/DocumentPreviewModal';
 import { QuickNewJobModal } from './components/QuickNewJobModal';
 import { MerchantAuthModal } from './components/auth/MerchantAuthModal';
+import { FirstRunOnboarding } from './components/auth/FirstRunOnboarding';
 import { apiFetch } from './utils/api';
 
 export default function App() {
   const [authChecking, setAuthChecking] = useState<boolean>(true);
+  const [hasUsers, setHasUsers] = useState<boolean>(true);
   const [isOnboarded, setIsOnboarded] = useState<boolean>(true);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [merchantProfile, setMerchantProfile] = useState<any>(null);
@@ -75,6 +81,27 @@ export default function App() {
   const checkAuth = useCallback(async () => {
     setAuthChecking(true);
     try {
+      // 1. Authoritative check: Does SQLite have at least one merchant user?
+      let systemHasUsers = true;
+      try {
+        const setupRes = await apiFetch('/api/setup/status');
+        if (setupRes.ok) {
+          const setupData = await setupRes.json();
+          systemHasUsers = Boolean(setupData.hasUsers);
+        }
+      } catch (err) {
+        console.warn('Setup status check unreachable, assuming existing users:', err);
+      }
+      setHasUsers(systemHasUsers);
+
+      // If this is a fresh installation with zero users, present First-Run Onboarding
+      if (!systemHasUsers) {
+        setIsOnboarded(false);
+        setIsAuthenticated(false);
+        return;
+      }
+
+      // 2. Normal Flow: Verify existing session token if available
       const token = localStorage.getItem('autoprint_merchant_session_token');
       const headers: Record<string, string> = {};
       if (token) {
@@ -142,6 +169,11 @@ export default function App() {
     if (isAuthenticated) {
       refreshData();
 
+      // Real-time 2-second polling to ensure all newly paid jobs & state changes appear immediately
+      const pollTimer = setInterval(() => {
+        refreshData();
+      }, 2000);
+
       const unsubJob = spoolerService.onJobUpdate((updatedJob) => {
         if (!updatedJob) return;
         setJobs((prevJobs) => {
@@ -169,6 +201,7 @@ export default function App() {
       });
 
       return () => {
+        clearInterval(pollTimer);
         try {
           unsubJob();
           unsubLog();
@@ -237,11 +270,30 @@ export default function App() {
     );
   }
 
-  // If not onboarded or not authenticated, present the Auth Gate
-  if (!isOnboarded || !isAuthenticated) {
+  // 1. Fresh Installation: Present First-Run Onboarding Wizard
+  if (!hasUsers) {
+    return (
+      <FirstRunOnboarding
+        onSetupComplete={(token, merchant) => {
+          localStorage.setItem('autoprint_merchant_session_token', token);
+          setHasUsers(true);
+          setIsOnboarded(true);
+          setIsAuthenticated(true);
+          setMerchantProfile(merchant);
+        }}
+        onGoToLogin={() => {
+          setHasUsers(true);
+          checkAuth();
+        }}
+      />
+    );
+  }
+
+  // 2. Normal Flow: Present Authentication Modal if not authenticated
+  if (!isAuthenticated) {
     return (
       <MerchantAuthModal
-        isOnboarded={isOnboarded}
+        isOnboarded={true}
         onAuthenticated={handleAuthenticated}
       />
     );
@@ -324,16 +376,45 @@ export default function App() {
                 });
               }}
               onOpenNewJobModal={() => setIsQuickJobModalOpen(true)}
+              onRefreshQueue={refreshData}
             />
           )}
 
-          {/* VIEW 4: Printers Fleet */}
+          {/* VIEW 4: Payment Reconciliation */}
+          {currentView === 'reconciliation' && (
+            <PaymentReconciliationView
+              jobs={jobs}
+              onRefresh={refreshData}
+              onNavigateToSupport={() => setCurrentView('support')}
+              onNavigateToRefunds={() => setCurrentView('refunds')}
+            />
+          )}
+
+          {/* VIEW 5: Refund Management */}
+          {currentView === 'refunds' && (
+            <RefundManagementView
+              jobs={jobs}
+              onRefreshJobs={refreshData}
+            />
+          )}
+
+          {/* VIEW 6: Feedback Intelligence */}
+          {currentView === 'feedback' && (
+            <FeedbackIntelligenceView />
+          )}
+
+          {/* VIEW 7: Help & Support */}
+          {currentView === 'support' && (
+            <HelpSupportView />
+          )}
+
+          {/* VIEW 8: Printers Fleet */}
           {currentView === 'fleet' && <PrinterFleetView />}
 
-          {/* VIEW 5: Activity & History */}
+          {/* VIEW 9: Activity & History */}
           {currentView === 'history' && <ActivityHistoryView />}
 
-          {/* VIEW 6: System Diagnostics */}
+          {/* VIEW 10: System Diagnostics */}
           {currentView === 'diagnostics' && (
             <SystemDiagnosticsView
               logs={logs}
@@ -343,7 +424,7 @@ export default function App() {
             />
           )}
 
-          {/* VIEW 7: Consolidated Settings */}
+          {/* VIEW 11: Consolidated Settings */}
           {currentView === 'settings' && (
             <SettingsView
               userRole={merchantProfile?.role || 'staff'}
