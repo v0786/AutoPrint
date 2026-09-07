@@ -31,6 +31,7 @@ interface PrintJobContextType {
   shopStatusMessage: string;
   isHeavyWorkload: boolean;
   queueWorkloadMessage: string | null;
+  customerName: string;
   uploadedFile: UploadedFileDetails | null;
   specs: PrintSpecifications;
   pricing: PriceBreakdown;
@@ -40,11 +41,14 @@ interface PrintJobContextType {
   isShopModalOpen: boolean;
   isQrModalOpen: boolean;
   isPreviewModalOpen: boolean;
+  isFeedbackModalOpen: boolean;
+  isSupportModalOpen: boolean;
   isSubmitting: boolean;
   submissionError: string | null;
 
   // Actions
   setStep: (step: AppStep) => void;
+  setCustomerName: (name: string) => void;
   switchShop: (shopId: string) => void;
   connectShop: (shopId: string) => void;
   disconnectShop: () => void;
@@ -59,6 +63,8 @@ interface PrintJobContextType {
   setShopModalOpen: (open: boolean) => void;
   setQrModalOpen: (open: boolean) => void;
   setPreviewModalOpen: (open: boolean) => void;
+  setFeedbackModalOpen: (open: boolean) => void;
+  setSupportModalOpen: (open: boolean) => void;
   refreshShopStatus: () => Promise<void>;
 }
 
@@ -91,6 +97,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isHeavyWorkload, setIsHeavyWorkload] = useState<boolean>(false);
   const [queueWorkloadMessage, setQueueWorkloadMessage] = useState<string | null>(null);
 
+  const [customerName, setCustomerName] = useState<string>('');
   const [uploadedFile, setUploadedFile] = useState<UploadedFileDetails | null>(null);
   const [specs, setSpecs] = useState<PrintSpecifications>(DEFAULT_SPECS);
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails>(DEFAULT_PAYMENT);
@@ -105,6 +112,8 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isShopModalOpen, setShopModalOpen] = useState(false);
   const [isQrModalOpen, setQrModalOpen] = useState(false);
   const [isPreviewModalOpen, setPreviewModalOpen] = useState(false);
+  const [isFeedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [isSupportModalOpen, setSupportModalOpen] = useState(false);
 
   // Fetch real merchant online profile & dynamic printer-capacity workload from backend
   const refreshShopStatus = async () => {
@@ -333,18 +342,24 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const backendPaymentMethod = finalPayment.method === 'cash' ? 'CASH' : 'UPI';
       const rawFile = (uploadedFile as any).rawFile || null;
 
-      // 1. Submit actual file and print specifications to backend API
+      // 1. Submit actual file and print specifications to backend API with trace ID
+      const traceId = CustomerApiClient.generateTraceId();
       const backendJob = await CustomerApiClient.submitPrintJob({
         file: rawFile,
         fileName: uploadedFile.name,
-        customerName: 'Kiosk Customer',
+        customerName: customerName.trim() || 'Walk-In Customer',
         customerPhone: finalPayment.payerContact?.phone,
         specs,
         paymentMethod: backendPaymentMethod,
         amountMinorUnits,
         currency: 'INR',
         printerName: currentShop?.activePrinters[0] || 'AutoPrint Spooler',
+        traceId,
       });
+
+      if (!backendJob || !backendJob.id || !backendJob.verification?.formattedCode) {
+        throw new Error('Print job was not accepted or persisted by the print server. No valid job ID received.');
+      }
 
       const now = new Date();
       const waitMins = currentShop?.averageWaitMins || 2;
@@ -369,6 +384,8 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           ? 'printing'
           : 'queued';
 
+      const isQueueVisible = backendJob.queueVisible !== false;
+
       const newOrder: PrintOrder = {
         orderId: backendJob.id,
         collectionCode: backendJob.verification.formattedCode,
@@ -385,6 +402,8 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           transactionId: upiTxnId,
         },
         jobStatus: initialJobStatus,
+        traceId: backendJob.traceId || traceId,
+        queueVisible: isQueueVisible,
         createdAt: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }),
         estimatedCompletionTime: estimatedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }),
       };
@@ -421,6 +440,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         URL.revokeObjectURL(uploadedFile.previewUrl);
       } catch {}
     }
+    setCustomerName('');
     setUploadedFile(null);
     setSpecs(DEFAULT_SPECS);
     setPaymentDetails(DEFAULT_PAYMENT);
@@ -439,6 +459,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         shopStatusMessage,
         isHeavyWorkload,
         queueWorkloadMessage,
+        customerName,
         uploadedFile,
         specs,
         pricing,
@@ -448,9 +469,12 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isShopModalOpen,
         isQrModalOpen,
         isPreviewModalOpen,
+        isFeedbackModalOpen,
+        isSupportModalOpen,
         isSubmitting,
         submissionError,
         setStep,
+        setCustomerName,
         switchShop,
         connectShop,
         disconnectShop,
@@ -465,6 +489,8 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setShopModalOpen,
         setQrModalOpen,
         setPreviewModalOpen,
+        setFeedbackModalOpen,
+        setSupportModalOpen,
         refreshShopStatus,
       }}
     >

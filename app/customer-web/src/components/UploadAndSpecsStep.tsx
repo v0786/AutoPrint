@@ -17,12 +17,15 @@ import {
   AlertTriangle,
   Eye,
   CheckCircle2,
+  User,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DocumentPreview } from './DocumentPreview';
 
 export const UploadAndSpecsStep: React.FC = () => {
   const {
+    customerName,
+    setCustomerName,
     uploadedFile,
     setUploadedFile,
     handleFileUpload,
@@ -137,7 +140,35 @@ export const UploadAndSpecsStep: React.FC = () => {
         </div>
       )}
 
-      {/* 4. DOCUMENT UPLOAD & AUTOMATIC LIVE PREVIEW SECTION */}
+      {/* 4. CUSTOMER IDENTIFICATION SECTION */}
+      <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl p-5 sm:p-6 shadow-xl shadow-black/40">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-[#D0BCFF]/15 text-[#D0BCFF] flex items-center justify-center border border-[#D0BCFF]/30 flex-shrink-0">
+              <User className="w-4 h-4" />
+            </div>
+            <div>
+              <label htmlFor="customer-name-input" className="text-sm font-bold text-white block">
+                Your Name <span className="text-xs font-normal text-zinc-400">(Recommended)</span>
+              </label>
+              <p className="text-xs text-zinc-400">Printed on receipt & pickup verification ticket</p>
+            </div>
+          </div>
+          <div className="w-full sm:w-64">
+            <input
+              id="customer-name-input"
+              type="text"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="e.g. Rahul Patil"
+              maxLength={60}
+              className="w-full px-4 py-2.5 rounded-2xl bg-black/40 border border-white/10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D0BCFF]/60 focus:ring-1 focus:ring-[#D0BCFF]/30 transition-all"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 5. DOCUMENT UPLOAD & AUTOMATIC LIVE PREVIEW SECTION */}
       {!uploadedFile ? (
         <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/40 space-y-5">
           <div className="flex items-center gap-3">

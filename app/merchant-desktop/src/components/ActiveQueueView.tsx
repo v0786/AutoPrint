@@ -36,6 +36,7 @@ interface ActiveQueueViewProps {
   onPurgeCompleted: () => void;
   onPreviewJobDoc: (job: PrintJob) => void;
   onOpenNewJobModal: () => void;
+  onRefreshQueue?: () => Promise<void> | void;
 }
 
 export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
@@ -49,9 +50,27 @@ export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
   onPurgeCompleted,
   onPreviewJobDoc,
   onOpenNewJobModal,
+  onRefreshQueue,
 }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string>(new Date().toLocaleTimeString());
+
+  const handleManualRefresh = async () => {
+    if (!onRefreshQueue) return;
+    setIsRefreshing(true);
+    setRefreshError(null);
+    try {
+      await onRefreshQueue();
+      setLastRefreshedAt(new Date().toLocaleTimeString());
+    } catch (err: any) {
+      setRefreshError(err.message || 'Failed to sync with backend');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const filteredJobs = jobs.filter((job) => {
     if (filterStatus === 'active') {
@@ -191,6 +210,18 @@ export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5">
+          {onRefreshQueue && (
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 hover:text-white font-bold text-xs transition-all cursor-pointer disabled:opacity-50 shadow-lg shadow-blue-600/10"
+              title={`Force sync directly from active backend database (Last: ${lastRefreshedAt})`}
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-white' : ''}`} />
+              <span>{isRefreshing ? 'Syncing...' : 'Refresh Queue'}</span>
+            </button>
+          )}
+
           <button
             onClick={onPauseResumeQueue}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-xs transition-all cursor-pointer ${
@@ -212,6 +243,18 @@ export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
           </button>
         </div>
       </div>
+
+      {refreshError && (
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-400" />
+            <span>Backend Sync Failed: <strong>{refreshError}</strong></span>
+          </div>
+          <button onClick={() => setRefreshError(null)} className="text-zinc-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-[#141419] p-4 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -319,8 +362,21 @@ export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
 
                     {/* Pages & Specs */}
                     <td className="py-3 px-4 text-zinc-300">
-                      <div>{job.totalPages} page(s) × {job.copies || 1}</div>
-                      <div className="text-[10px] text-zinc-500 uppercase">{job.documentType}</div>
+                      <div>{job.totalPages} page(s) × {job.printSettings?.copies || job.copies || 1}</div>
+                      {job.printSettings && job.printSettings.paperFormat ? (
+                        <div className="text-[10px] text-zinc-400 font-medium">
+                          <span className="font-bold text-white">{job.printSettings.paperFormat}</span>
+                          {' • '}
+                          <span>{job.printSettings.colorMode === 'color' ? 'Color' : 'B&W'}</span>
+                          {' • '}
+                          <span>{job.printSettings.duplex ? '2-Sided' : '1-Sided'}</span>
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded mt-0.5">
+                          <AlertCircle className="w-3 h-3 shrink-0" />
+                          <span>Config Incomplete</span>
+                        </div>
+                      )}
                     </td>
 
                     {/* Priority */}

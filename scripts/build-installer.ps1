@@ -1,6 +1,6 @@
 # ===============================================================================
 #   AUTOPRINT / QRPRINT — AUTOMATED PRODUCTION INSTALLER BUILD SCRIPT
-#   Compiles all workspaces, bundles portable runtime, and generates AutoPrint-Setup.exe
+#   Builds all workspaces, validates components, and generates AutoPrint-Setup.exe
 # ===============================================================================
 
 param(
@@ -13,23 +13,55 @@ Set-Location $rootDir
 
 Write-Host ""
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "   AUTOPRINT PRODUCTION INSTALLER BUILD PIPELINE                " -ForegroundColor White
+Write-Host "   AUTOPRINT PRODUCTION SINGLE-EXE INSTALLER BUILD PIPELINE      " -ForegroundColor White
 Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Compile All Workspaces
+# 0. Validate Prerequisite Node.js MSI
+Write-Host "[1/6] Validating embedded Node.js prerequisite MSI..." -ForegroundColor Yellow
+$msiPath = Join-Path $rootDir "installer\prerequisites\node-v20.18.0-x64.msi"
+if (-not (Test-Path $msiPath)) {
+    Write-Host "   Downloading official Node.js v20.18.0 x64 MSI prerequisite..." -ForegroundColor Yellow
+    New-Item -ItemType Directory -Path (Join-Path $rootDir "installer\prerequisites") -Force | Out-Null
+    Invoke-WebRequest -Uri "https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi" -OutFile $msiPath -UseBasicParsing
+}
+if (-not (Test-Path $msiPath)) {
+    Write-Error "CRITICAL: node-v20.18.0-x64.msi is missing from installer\prerequisites!"
+}
+$msiSizeMb = [Math]::Round((Get-Item $msiPath).Length / 1MB, 2)
+Write-Host "   [PASS] Found embedded Node.js prerequisite ($msiSizeMb MB): $msiPath" -ForegroundColor Green
+
+# 1. Compile Native Launcher (AutoPrint.exe)
+Write-Host "[2/6] Compiling native Windows System Tray Launcher (AutoPrint.exe)..." -ForegroundColor Yellow
+& cmd.exe /c "src-launcher\build-launcher.cmd"
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $rootDir "AutoPrint.exe"))) {
+    Write-Error "CRITICAL: AutoPrint.exe compilation failed!"
+}
+Write-Host "   [PASS] AutoPrint.exe compiled successfully." -ForegroundColor Green
+
+# 2. Compile Workspaces / Validate Production Outputs
 if (-not $SkipBuildAll) {
-    Write-Host "[1/5] Compiling all project workspaces & native launcher..." -ForegroundColor Yellow
+    Write-Host "[3/6] Compiling all project workspaces..." -ForegroundColor Yellow
     & npm run build:all
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Workspace compilation failed. Aborting installer build."
     }
 } else {
-    Write-Host "[1/5] Skipping build:all (reusing existing builds)..." -ForegroundColor Gray
+    Write-Host "[3/6] Skipping build:all (validating existing production builds)..." -ForegroundColor Gray
 }
 
-# 2. Setup Staging Payload Directory
-Write-Host "[2/5] Preparing staging payload in dist-installer\payload..." -ForegroundColor Yellow
+# Validate production build artifacts
+$backendServer = Join-Path $rootDir "app\backend\dist\server.js"
+$custHtml = Join-Path $rootDir "app\customer-web\dist\index.html"
+$merchHtml = Join-Path $rootDir "app\merchant-desktop\dist\index.html"
+
+if (-not (Test-Path $backendServer)) { Write-Error "Backend production build missing: $backendServer" }
+if (-not (Test-Path $custHtml)) { Write-Error "Customer Web production build missing: $custHtml" }
+if (-not (Test-Path $merchHtml)) { Write-Error "Merchant Desktop production build missing: $merchHtml" }
+Write-Host "   [PASS] Verified pre-compiled Backend, Customer Web, and Merchant Desktop outputs." -ForegroundColor Green
+
+# 3. Setup Staging Payload Directory
+Write-Host "[4/6] Preparing clean staging payload in dist-installer\payload..." -ForegroundColor Yellow
 $distDir = Join-Path $rootDir "dist-installer"
 $payloadDir = Join-Path $distDir "payload"
 
@@ -38,15 +70,11 @@ if (Test-Path $payloadDir) {
 }
 New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
 
-# 3. Copy Application Artifacts & Production Dependencies
-Write-Host "[3/5] Copying application binaries, assets, and production modules..." -ForegroundColor Yellow
+# 4. Copy Application Artifacts & Production Dependencies
+Write-Host "[5/6] Copying application binaries, assets, and production modules..." -ForegroundColor Yellow
 
 # Copy root executables, scripts, and dependency locks
 Copy-Item (Join-Path $rootDir "AutoPrint.exe") $payloadDir -Force
-Copy-Item (Join-Path $rootDir "AutoPrint-Launcher.bat") $payloadDir -Force
-Copy-Item (Join-Path $rootDir "Launch AutoPrint.bat") $payloadDir -Force
-Copy-Item (Join-Path $rootDir "Launch AutoPrint.ps1") $payloadDir -Force
-Copy-Item (Join-Path $rootDir "Start-Customer-Tunnel.cmd") $payloadDir -Force
 Copy-Item (Join-Path $rootDir "package.json") $payloadDir -Force
 if (Test-Path (Join-Path $rootDir "package-lock.json")) {
     Copy-Item (Join-Path $rootDir "package-lock.json") $payloadDir -Force
@@ -77,9 +105,6 @@ $backendDest = Join-Path $targetAppDir "backend"
 New-Item -ItemType Directory -Path (Join-Path $backendDest "dist") -Force | Out-Null
 Copy-Item (Join-Path $backendSrc "dist\*") (Join-Path $backendDest "dist") -Recurse -Force
 Copy-Item (Join-Path $backendSrc "package.json") $backendDest -Force
-if (Test-Path (Join-Path $backendSrc "package-lock.json")) {
-    Copy-Item (Join-Path $backendSrc "package-lock.json") $backendDest -Force
-}
 
 # Customer Web
 $custSrc = Join-Path $rootDir "app\customer-web"
@@ -88,9 +113,6 @@ New-Item -ItemType Directory -Path (Join-Path $custDest "dist") -Force | Out-Nul
 Copy-Item (Join-Path $custSrc "dist\*") (Join-Path $custDest "dist") -Recurse -Force
 Copy-Item (Join-Path $custSrc "server.js") $custDest -Force
 Copy-Item (Join-Path $custSrc "package.json") $custDest -Force
-if (Test-Path (Join-Path $custSrc "package-lock.json")) {
-    Copy-Item (Join-Path $custSrc "package-lock.json") $custDest -Force
-}
 
 # Merchant Desktop
 $merchSrc = Join-Path $rootDir "app\merchant-desktop"
@@ -99,13 +121,25 @@ New-Item -ItemType Directory -Path (Join-Path $merchDest "dist") -Force | Out-Nu
 Copy-Item (Join-Path $merchSrc "dist\*") (Join-Path $merchDest "dist") -Recurse -Force
 Copy-Item (Join-Path $merchSrc "server.js") $merchDest -Force
 Copy-Item (Join-Path $merchSrc "package.json") $merchDest -Force
-if (Test-Path (Join-Path $merchSrc "package-lock.json")) {
-    Copy-Item (Join-Path $merchSrc "package-lock.json") $merchDest -Force
-}
 
 # Connectors & Shared
 Copy-Item (Join-Path $rootDir "app\connectors") $targetAppDir -Recurse -Force
 Copy-Item (Join-Path $rootDir "app\shared") $targetAppDir -Recurse -Force
+
+# Stage Production Node Modules for Zero-Setup Offline Execution
+Write-Host "   Staging production node_modules (Backend, Customer, Merchant)..." -ForegroundColor Yellow
+$backendNm = Join-Path $backendSrc "node_modules"
+if (Test-Path $backendNm) {
+    robocopy $backendNm (Join-Path $backendDest "node_modules") /E /NFL /NDL /NJH /NJS /XD .cache | Out-Null
+}
+$custNm = Join-Path $custSrc "node_modules"
+if (Test-Path $custNm) {
+    robocopy $custNm (Join-Path $custDest "node_modules") /E /NFL /NDL /NJH /NJS /XD .cache | Out-Null
+}
+$merchNm = Join-Path $merchSrc "node_modules"
+if (Test-Path $merchNm) {
+    robocopy $merchNm (Join-Path $merchDest "node_modules") /E /NFL /NDL /NJH /NJS /XD .cache | Out-Null
+}
 
 # Assets, scripts, installer helpers, and docs
 Copy-Item (Join-Path $rootDir "assets") $payloadDir -Recurse -Force
@@ -113,12 +147,16 @@ Copy-Item (Join-Path $rootDir "scripts") $payloadDir -Recurse -Force
 Copy-Item (Join-Path $rootDir "installer") $payloadDir -Recurse -Force
 Copy-Item (Join-Path $rootDir "docs") $payloadDir -Recurse -Force
 
-# Global Node.js Runtime Staging Note
-Write-Host "[4/5] Staging global Node.js detection and installation engine..." -ForegroundColor Yellow
-Write-Host "   (Zero bundled node runtime: Target system will use global Node.js)" -ForegroundColor Green
+# Bundled Private Portable Node.js Runtime fallback
+$nodeSrc = Join-Path $rootDir "runtime\node\node.exe"
+if (Test-Path $nodeSrc) {
+    $runtimeDest = Join-Path $payloadDir "runtime\node"
+    New-Item -ItemType Directory -Path $runtimeDest -Force | Out-Null
+    Copy-Item $nodeSrc $runtimeDest -Force
+}
 
-# 4. Compile Inno Setup Script
-Write-Host "[5/5] Compiling Inno Setup Installer (AutoPrint-Setup.exe)..." -ForegroundColor Yellow
+# 5. Compile Inno Setup Script
+Write-Host "[6/6] Compiling Inno Setup Single-EXE Installer (AutoPrint-Setup.exe)..." -ForegroundColor Yellow
 
 $isccCandidates = @(
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
@@ -154,12 +192,16 @@ if ($LASTEXITCODE -ne 0) {
 $setupExe = Join-Path $distDir "AutoPrint-Setup.exe"
 if (Test-Path $setupExe) {
     $sizeMb = [Math]::Round((Get-Item $setupExe).Length / 1MB, 2)
+    $hash = (Get-FileHash -Path $setupExe -Algorithm SHA256).Hash
+    Set-Content (Join-Path $distDir "AutoPrint-Setup.exe.sha256") "$hash  AutoPrint-Setup.exe"
+
     Write-Host ""
     Write-Host "=================================================================" -ForegroundColor Green
-    Write-Host "   AUTOPRINT INSTALLER BUILT SUCCESSFULLY!                       " -ForegroundColor White
+    Write-Host "   AUTOPRINT SINGLE-EXE INSTALLER BUILT SUCCESSFULLY!            " -ForegroundColor White
     Write-Host "=================================================================" -ForegroundColor Green
     Write-Host "   Installer File : $setupExe" -ForegroundColor Green
     Write-Host "   Installer Size : $sizeMb MB" -ForegroundColor Green
+    Write-Host "   SHA-256 Hash   : $hash" -ForegroundColor Green
     Write-Host ""
 } else {
     Write-Error "Installer executable was not generated at expected location: $setupExe"

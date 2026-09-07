@@ -263,13 +263,13 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
         {authTab === 'login' && (
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-300">Username, Email, or Phone</label>
+              <label className="text-xs font-bold text-zinc-300">Username / Email</label>
               <div className="relative">
                 <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
                 <input
                   type="text"
                   required
-                  placeholder="admin or user@autoprint.local"
+                  placeholder="Username or email address"
                   value={loginIdentifier}
                   onChange={(e) => setLoginIdentifier(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-black/40 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-purple-500"
@@ -284,15 +284,13 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
                 <input
                   type="password"
                   required
-                  placeholder="Enter password"
+                  placeholder="Enter your password"
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-black/40 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-purple-500"
                 />
               </div>
             </div>
-
-
 
             <div className="flex items-center justify-between pt-1">
               <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
@@ -302,7 +300,7 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="rounded border-white/20 bg-black text-purple-600 focus:ring-purple-500"
                 />
-                <span>Remember me on this station</span>
+                <span>Remember this PC</span>
               </label>
             </div>
 
@@ -312,7 +310,7 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
               className="w-full mt-2 py-3 px-6 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
             >
               <ShieldCheck className="w-4 h-4" />
-              <span>{loading ? 'Authenticating...' : 'Sign In to Merchant Desk'}</span>
+              <span>{loading ? 'Signing In...' : 'Sign In'}</span>
             </button>
           </form>
         )}

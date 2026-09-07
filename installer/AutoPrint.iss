@@ -49,18 +49,24 @@ Name: "merchant"; Description: "Merchant Desktop (Cash Desk, Rate Cards, Verific
 Name: "kiosk"; Description: "Customer Kiosk (Instant Document Upload & Preview)"; Types: full kiosk custom
 Name: "spooler"; Description: "Universal Windows Spooler & Hardware Integration"; Types: full merchant custom
 
+[Dirs]
+Name: "{commonappdata}\{#MyAppName}"; Permissions: users-full
+Name: "{commonappdata}\{#MyAppName}\config"; Permissions: users-full
+Name: "{commonappdata}\{#MyAppName}\datastore"; Permissions: users-full
+Name: "{commonappdata}\{#MyAppName}\logs"; Permissions: users-full
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "startwithwindows"; Description: "Start AutoPrint automatically when Windows starts"; GroupDescription: "Windows Startup Options:"
 
 [Files]
+; Embedded Official Node.js Prerequisite MSI (extracted to temp only if Node.js is missing on target PC)
+Source: "prerequisites\node-v20.18.0-x64.msi"; DestDir: "{tmp}"; Flags: deleteafterinstall dontcopy
 ; Primary application payload compiled into dist-installer\payload
 Source: "..\dist-installer\payload\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon\autoprint.ico"
-Name: "{group}\Merchant Dashboard"; Filename: "http://localhost:8000"; IconFilename: "{app}\assets\icon\autoprint.ico"
-Name: "{group}\Customer Kiosk Portal"; Filename: "http://localhost:7000"; IconFilename: "{app}\assets\icon\autoprint.ico"
 Name: "{group}\AutoPrint Customer Tunnel (Manual)"; Filename: "{app}\Start-Customer-Tunnel.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon\autoprint.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\assets\icon\autoprint.ico"
@@ -305,20 +311,96 @@ begin
     Result := 'false';
 end;
 
+function GetNodeExePath(): String;
+var
+  StdPath, StdPath86: String;
+begin
+  StdPath := ExpandConstant('{pf}\nodejs\node.exe');
+  if FileExists(StdPath) then
+  begin
+    Result := StdPath;
+    Exit;
+  end;
+  StdPath86 := ExpandConstant('{pf32}\nodejs\node.exe');
+  if FileExists(StdPath86) then
+  begin
+    Result := StdPath86;
+    Exit;
+  end;
+  Result := '';
+end;
+
+function IsNodeFunctional(): Boolean;
+var
+  NodePath: String;
+  ResultCode: Integer;
+begin
+  NodePath := GetNodeExePath();
+  if NodePath <> '' then
+  begin
+    if Exec(NodePath, '-v', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+
+  if Exec('node.exe', '-v', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  Result := False;
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
+  MsiPath: String;
 begin
-  // Gracefully terminate running instances before replacing files
-  Exec('taskkill', '/F /IM AutoPrint.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('taskkill', '/F /IM node.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Result := '';
+
+  // Terminate any running AutoPrint instance (AutoPrint.exe gracefully cleans up its child microservices)
+  Exec('taskkill.exe', '/F /IM AutoPrint.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  // Check if Node.js prerequisite is installed and functional
+  if not IsNodeFunctional() then
+  begin
+    MsiPath := ExpandConstant('{tmp}\node-v20.18.0-x64.msi');
+    try
+      ExtractTemporaryFile('node-v20.18.0-x64.msi');
+    except
+      Result := 'Failed to extract embedded Node.js prerequisite MSI installer.';
+      Exit;
+    end;
+
+    if not FileExists(MsiPath) then
+    begin
+      Result := 'Embedded Node.js prerequisite was not found in the installer package.';
+      Exit;
+    end;
+
+    // Execute silent Node.js installation (zero UI, zero external batch files)
+    if not Exec('msiexec.exe', '/i "' + MsiPath + '" /qn /norestart', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    begin
+      Result := 'Node.js prerequisite installation failed with error code ' + IntToStr(ResultCode) + '. AutoPrint cannot continue.';
+      Exit;
+    end;
+
+    // Verify installation succeeded and node.exe is functional
+    if not IsNodeFunctional() then
+    begin
+      Result := 'Node.js was installed but could not be verified (node.exe -v failed). Please restart Windows and run AutoPrint Setup again.';
+      Exit;
+    end;
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ConfigDir, ConfigFile, JsonContent, EnvContent, TargetDataDir, TestArg: String;
-  NodeResultCode, PKResultCode: Integer;
+  PKResultCode: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -326,13 +408,20 @@ begin
     ConfigDir := TargetDataDir + '\config';
     ConfigFile := ConfigDir + '\appsettings.json';
 
+    // Create writable application data directories in ProgramData
     ForceDirectories(ConfigDir);
     ForceDirectories(TargetDataDir + '\datastore\backend\database');
+    ForceDirectories(TargetDataDir + '\datastore\uploads');
     ForceDirectories(TargetDataDir + '\logs');
 
-    // Generate production appsettings.json
+    // Generate authoritative appsettings.json (single source of truth)
     JsonContent := 
       '{' + #13#10 +
+      '  "installationId": "ap-' + GetDateTimeString('yyyymmdd-hhnnss', #0, #0) + '",' + #13#10 +
+      '  "backendPort": ' + EdtBackendPort.Text + ',' + #13#10 +
+      '  "customerWebPort": ' + EdtCustomerPort.Text + ',' + #13#10 +
+      '  "merchantDesktopPort": ' + EdtMerchantPort.Text + ',' + #13#10 +
+      '  "apiBaseUrl": "http://127.0.0.1:' + EdtBackendPort.Text + '",' + #13#10 +
       '  "ports": {' + #13#10 +
       '    "backend": ' + EdtBackendPort.Text + ',' + #13#10 +
       '    "merchant": ' + EdtMerchantPort.Text + ',' + #13#10 +
@@ -342,12 +431,16 @@ begin
       '    "dataDirectory": "' + EscapeJsonPath(TargetDataDir + '\datastore') + '",' + #13#10 +
       '    "logsDirectory": "' + EscapeJsonPath(TargetDataDir + '\logs') + '"' + #13#10 +
       '  },' + #13#10 +
+      '  "database": {' + #13#10 +
+      '    "path": "' + EscapeJsonPath(TargetDataDir + '\datastore\backend\database\autoprint.db') + '"' + #13#10 +
+      '  },' + #13#10 +
       '  "pagekite": {' + #13#10 +
       '    "enabled": ' + BoolToJsStr(ChkEnablePageKite.Checked) + ',' + #13#10 +
       '    "subdomain": "' + EdtSubdomain.Text + '",' + #13#10 +
       '    "domain": "pagekite.me",' + #13#10 +
       '    "secret": "' + EdtSecret.Text + '"' + #13#10 +
-      '  }' + #13#10 +
+      '  },' + #13#10 +
+      '  "updatedAt": "' + GetDateTimeString('yyyy-mm-dd"T"hh:nn:ss"Z"', #0, #0) + '"' + #13#10 +
       '}';
 
     SaveStringToFile(ConfigFile, JsonContent, False);
@@ -355,6 +448,7 @@ begin
     // Write .env into {app} for runtime backward compatibility
     EnvContent :=
       'PORT=' + EdtBackendPort.Text + #13#10 +
+      'BACKEND_PORT=' + EdtBackendPort.Text + #13#10 +
       'MERCHANT_PORT=' + EdtMerchantPort.Text + #13#10 +
       'CUSTOMER_PORT=' + EdtCustomerPort.Text + #13#10 +
       'PAGEKITE_ENABLED=' + BoolToJsStr(ChkEnablePageKite.Checked) + #13#10 +
@@ -365,39 +459,32 @@ begin
 
     SaveStringToFile(ExpandConstant('{app}\.env'), EnvContent, False);
 
-    // Execute global Node.js runtime validation and dependency bootstrap
-    WizardForm.StatusLabel.Caption := 'Configuring global Node.js runtime and verifying dependencies...';
-    Exec('powershell.exe',
-      '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\installer\scripts\ensure-node.ps1') + '" -AppDir "' + ExpandConstant('{app}') + '" -NonInteractive',
-      ExpandConstant('{app}'),
-      SW_HIDE,
-      ewWaitUntilTerminated,
-      NodeResultCode
-    );
+    // Generate dynamic desktop and start menu shortcuts with exact selected ports
+    SaveStringToFile(ExpandConstant('{group}\Merchant Dashboard.url'),
+      '[InternetShortcut]' + #13#10 +
+      'URL=http://localhost:' + EdtMerchantPort.Text + #13#10 +
+      'IconFile=' + ExpandConstant('{app}\assets\icon\autoprint.ico') + #13#10 +
+      'IconIndex=0' + #13#10, False);
 
-    if NodeResultCode <> 0 then
+    SaveStringToFile(ExpandConstant('{group}\Customer Kiosk Portal.url'),
+      '[InternetShortcut]' + #13#10 +
+      'URL=http://localhost:' + EdtCustomerPort.Text + #13#10 +
+      'IconFile=' + ExpandConstant('{app}\assets\icon\autoprint.ico') + #13#10 +
+      'IconIndex=0' + #13#10, False);
+
+    if WizardIsTaskSelected('desktopicon') then
     begin
-      case NodeResultCode of
-        2: MsgBox('Node.js Download Failed: AutoPrint could not download the required Node.js MSI from nodejs.org.'#13#10 +
-                  'Please check your internet connection or install Node.js manually from https://nodejs.org/', mbError, MB_OK);
-        3: MsgBox('Security Verification Failed: The downloaded Node.js installer SHA-256 hash did not match official checksums.'#13#10 +
-                  'Installation aborted for security.', mbError, MB_OK);
-        4: MsgBox('Digital Signature Verification Failed: The downloaded Node.js installer signature could not be verified.'#13#10 +
-                  'Installation aborted for security.', mbError, MB_OK);
-        5: MsgBox('Node.js Installation Failed: msiexec could not install Node.js globally.'#13#10 +
-                  'Please review Windows Event Viewer or install Node.js manually.', mbError, MB_OK);
-        7: MsgBox('Dependency Installation Failed: npm ci encountered an error while installing packages.'#13#10 +
-                  'Please check the logs at ProgramData\AutoPrint\logs\node-bootstrap.log', mbError, MB_OK);
-        8: MsgBox('Network / Proxy Error: npm or Node.js download was blocked by a network proxy or firewall.'#13#10 +
-                  'Please ensure your proxy settings allow access to https://nodejs.org and https://registry.npmjs.org', mbError, MB_OK);
-        9: MsgBox('Missing Lock File: package-lock.json is missing in an application workspace.'#13#10 +
-                  'Please contact AutoPrint support.', mbError, MB_OK);
-        10: MsgBox('Administrator Privileges Required: Node.js global installation requires elevated permissions.'#13#10 +
-                   'Please re-run setup as Administrator.', mbError, MB_OK);
-      else
-        MsgBox('Notice: Global Node.js runtime or dependency setup returned code ' + IntToStr(NodeResultCode) + '.'#13#10 +
-               'Please review the installation log in ProgramData\AutoPrint\logs\node-bootstrap.log if needed.', mbInformation, MB_OK);
-      end;
+      SaveStringToFile(ExpandConstant('{autodesktop}\Merchant Dashboard.url'),
+        '[InternetShortcut]' + #13#10 +
+        'URL=http://localhost:' + EdtMerchantPort.Text + #13#10 +
+        'IconFile=' + ExpandConstant('{app}\assets\icon\autoprint.ico') + #13#10 +
+        'IconIndex=0' + #13#10, False);
+
+      SaveStringToFile(ExpandConstant('{autodesktop}\Customer Kiosk.url'),
+        '[InternetShortcut]' + #13#10 +
+        'URL=http://localhost:' + EdtCustomerPort.Text + #13#10 +
+        'IconFile=' + ExpandConstant('{app}\assets\icon\autoprint.ico') + #13#10 +
+        'IconIndex=0' + #13#10, False);
     end;
 
     // Execute optional PageKite CLI configuration if merchant opted in
@@ -439,8 +526,8 @@ var
 begin
   if CurUninstallStep = usUninstall then
   begin
-    Exec('taskkill', '/F /IM AutoPrint.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec('taskkill', '/F /IM node.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // Terminate AutoPrint.exe only (AutoPrint.exe shuts down its own child services)
+    Exec('taskkill.exe', '/F /IM AutoPrint.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 
   if CurUninstallStep = usPostUninstall then

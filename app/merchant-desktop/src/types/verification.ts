@@ -3,7 +3,7 @@
  * AutoPrint Automated Print Collection System
  */
 
-import { PrintJob } from './printer';
+import { PrintJob, CanonicalPrintSettings } from './printer';
 
 /**
  * Supported payment methods for print jobs
@@ -93,6 +93,8 @@ export interface CollectionVerificationRecord {
   customerName: string;
   /** Optional customer phone for SMS/receipt */
   customerPhone?: string;
+  /** Canonical print settings */
+  printSettings?: CanonicalPrintSettings;
   /** Total monetary amount */
   amountTotal: number;
   /** Currency code */

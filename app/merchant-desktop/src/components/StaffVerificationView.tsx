@@ -344,8 +344,10 @@ export const StaffVerificationView: React.FC<StaffVerificationViewProps> = ({
                   <div className="font-bold text-white mt-0.5">{activeRecord.jobNo}</div>
                 </div>
                 <div>
-                  <span className="text-zinc-500 text-[10px] font-bold uppercase">Printer Target</span>
-                  <div className="font-bold text-white mt-0.5 truncate">{activeRecord.printerName}</div>
+                  <span className="text-zinc-500 text-[10px] font-bold uppercase">Print Specs</span>
+                  <div className="font-bold text-indigo-300 mt-0.5">
+                    {activeRecord.printSettings?.paperFormat || 'A4'} • {activeRecord.printSettings?.colorMode === 'color' ? 'Color' : 'B&W'}
+                  </div>
                 </div>
                 <div>
                   <span className="text-zinc-500 text-[10px] font-bold uppercase">Bill Total</span>

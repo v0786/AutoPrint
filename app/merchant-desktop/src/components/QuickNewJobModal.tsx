@@ -26,9 +26,32 @@ export const QuickNewJobModal: React.FC<QuickNewJobModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const effectivePrinters = printers.length > 0 ? printers : [
+    {
+      id: 'printer-pos-80',
+      name: 'Default Spooler',
+      displayName: 'Default Spooler',
+      status: 'ready' as const,
+      isDefault: true,
+      type: 'virtual_pdf' as const,
+      paperFormat: 'A4' as const,
+      dpi: 300,
+      connectionType: 'virtual' as const,
+      port: 'USB001',
+      location: 'Counter',
+      paperLevelPercent: 100,
+      tonerLevelPercent: 100,
+      activeJobsCount: 0,
+      totalJobsPrinted: 0,
+      errorCount: 0,
+      supportedFeatures: { color: true, duplex: true, autoCut: false, cashDrawerKick: false, barcode1D: true, qr2D: true },
+      lastStatusUpdate: new Date().toISOString(),
+    },
+  ];
+
   const [docType, setDocType] = useState<DocumentType>('receipt');
   const [targetPrinterId, setTargetPrinterId] = useState<string>(
-    printers[0]?.id || 'printer-pos-80'
+    effectivePrinters[0]?.id || 'printer-pos-80'
   );
   const [priority, setPriority] = useState<JobPriority>('high');
   const [copies, setCopies] = useState<number>(1);
@@ -39,7 +62,7 @@ export const QuickNewJobModal: React.FC<QuickNewJobModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const targetPrinter = printers.find((p) => p.id === targetPrinterId) || printers[0];
+    const targetPrinter = effectivePrinters.find((p) => p.id === targetPrinterId) || effectivePrinters[0];
 
     try {
       let content: any = {};
@@ -105,6 +128,10 @@ export const QuickNewJobModal: React.FC<QuickNewJobModalProps> = ({
         };
       }
 
+      const jobPaperFormat = (['A4', 'A3', 'Letter', 'Legal', '80mm'].includes(targetPrinter.paperFormat)
+        ? targetPrinter.paperFormat
+        : 'A4') as any;
+
       await onSubmitJob({
         title,
         documentType: docType,
@@ -115,6 +142,14 @@ export const QuickNewJobModal: React.FC<QuickNewJobModalProps> = ({
         totalPages: 1,
         bytesTotal: 4200,
         content,
+        printSettings: {
+          paperFormat: jobPaperFormat,
+          orientation: 'portrait',
+          colorMode: 'black_and_white',
+          copies,
+          duplex: false,
+          pageRange: 'all',
+        },
         silentPrint: true,
       });
 
@@ -222,9 +257,9 @@ export const QuickNewJobModal: React.FC<QuickNewJobModalProps> = ({
                 onChange={(e) => setTargetPrinterId(e.target.value)}
                 className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
               >
-                {printers.map((p) => (
+                {effectivePrinters.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.displayName} ({p.paperFormat})
+                    {p.displayName} ({p.paperFormat || 'A4'})
                   </option>
                 ))}
               </select>

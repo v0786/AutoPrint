@@ -21,13 +21,32 @@ export type PaymentAttemptStatus = 'SUCCESS' | 'FAILED' | 'TIMED_OUT';
 // ─── Print Job ────────────────────────────────────────────────────────────────
 
 export type PrintJobStatus =
+  | 'DRAFT'
+  | 'UPLOAD_RECEIVED'
+  | 'PAYMENT_PENDING'
+  | 'PAYMENT_PROCESSING'
+  | 'PAID'
+  | 'PAYMENT_FAILED'
+  | 'PAYMENT_REVIEW_REQUIRED'
+  | 'READY_FOR_PRINT'
   | 'CREATED'
   | 'QUEUED'
   | 'PRINTING'
   | 'PRINTED'
+  | 'PRINT_COMPLETED'
   | 'READY_FOR_HANDOVER'
+  | 'READY_FOR_COLLECTION'
   | 'COMPLETED'
-  | 'FAILED';
+  | 'COLLECTED'
+  | 'FAILED'
+  | 'REFUND_REQUESTED'
+  | 'REFUND_UNDER_REVIEW'
+  | 'REFUND_APPROVED'
+  | 'REFUND_PROCESSING'
+  | 'REFUNDED'
+  | 'REFUND_REJECTED'
+  | 'CANCELLED'
+  | 'SUPPORT_REQUIRED';
 
 // ─── Handover ─────────────────────────────────────────────────────────────────
 
@@ -50,21 +69,41 @@ export type AuditAction =
   | 'DIGITAL_PAYMENT_FAILED'
   | 'THREE_STRIKE_LOCKOUT_TRIGGERED'
   | 'CASH_COLLECTION_COMPLETED'
-  | 'PRINTS_HANDED_OVER';
+  | 'PRINTS_HANDED_OVER'
+  | 'PAYMENT_REVIEW_REQUIRED'
+  | 'REFUND_REQUESTED'
+  | 'REFUND_PROCESSED'
+  | 'SUPPORT_TICKET_CREATED'
+  | 'FEEDBACK_SUBMITTED';
 
 export type AuditActor =
   | 'SYSTEM_AUTOPRINT'
   | 'CUSTOMER_TERMINAL'
   | 'STAFF_TERMINAL'
-  | 'PAYMENT_GATEWAY';
+  | 'PAYMENT_GATEWAY'
+  | 'MERCHANT'
+  | 'CUSTOMER';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
+
+export type CanonicalPaperFormat = 'A4' | 'A3' | 'Letter' | 'Legal' | '80mm';
+export type CanonicalColorMode = 'black_and_white' | 'color';
+export type CanonicalOrientation = 'portrait' | 'landscape';
+
+export interface CanonicalPrintSettings {
+  paperFormat: CanonicalPaperFormat;
+  orientation: CanonicalOrientation;
+  colorMode: CanonicalColorMode;
+  copies: number;
+  duplex: boolean;
+  pageRange: string;
+}
 
 export interface PrintSpecs {
   colorMode: 'bw' | 'color';
   copies: number;
   pageRange: string;
-  paperSize?: 'a4' | 'letter' | 'a3' | 'receipt_80mm';
+  paperSize?: 'a4' | 'letter' | 'a3' | 'legal' | 'receipt_80mm';
   duplex?: 'single' | 'double';
   finishing?: 'none' | 'staple' | 'laminate';
 }
@@ -77,11 +116,13 @@ export interface PrintJobRequest {
   printerId?: string;
   printerName?: string;
   specs: PrintSpecs;
+  printSettings?: Partial<CanonicalPrintSettings>;
   paymentMethod: PaymentMethod;
   /** Amount in minor units (paise for INR, cents for USD) */
   amountMinorUnits: number;
   /** Currency code e.g. INR */
   currency?: string;
+  traceId?: string;
 }
 
 export interface PrintJobRow {
@@ -101,6 +142,7 @@ export interface PrintJobRow {
   paper_size: string | null;
   duplex: string | null;
   finishing: string | null;
+  print_settings_json?: string | null;
   /** Amount in minor units (integer paise/cents) */
   amount_minor_units: number;
   currency: string;
@@ -121,7 +163,9 @@ export interface PrintJobResponse {
   /** Amount as decimal (e.g. 24.50) */
   amountTotal: number;
   currency: string;
+  printSettings: CanonicalPrintSettings;
   verification?: CollectionVerificationRecord;
+  traceId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -150,6 +194,7 @@ export interface CollectionVerificationRecord {
   printerName: string;
   customerName: string;
   customerPhone?: string;
+  printSettings?: CanonicalPrintSettings;
   /** Amount as decimal */
   amountTotal: number;
   /** Amount in minor units */

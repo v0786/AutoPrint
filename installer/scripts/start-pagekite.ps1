@@ -71,6 +71,19 @@ try {
     $settingsJson = Get-Content $settingsFile -Raw -Encoding UTF8 | ConvertFrom-Json
     $kiteName     = $settingsJson.kiteName
     $customerPort = if ($settingsJson.customerPort) { [int]$settingsJson.customerPort } else { 7000 }
+
+    # Synchronize with central single source of truth (appsettings.json) if present
+    $appsettingsFile = "C:\ProgramData\AutoPrint\config\appsettings.json"
+    if (Test-Path $appsettingsFile) {
+        try {
+            $centralJson = Get-Content $appsettingsFile -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($centralJson.customerWebPort) {
+                $customerPort = [int]$centralJson.customerWebPort
+            } elseif ($centralJson.ports -and $centralJson.ports.customer) {
+                $customerPort = [int]$centralJson.ports.customer
+            }
+        } catch { }
+    }
 } catch {
     Write-Host "[ERROR] Failed to parse PageKite settings.json: $_" -ForegroundColor Red
     exit 1

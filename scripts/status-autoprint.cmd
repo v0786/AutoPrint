@@ -14,7 +14,18 @@ powershell -NoProfile -Command "
 `$merchantPort = 8000;
 `$customerPort = 7000;
 
-if (Test-Path '.env') {
+`$cfgFile = 'C:\ProgramData\AutoPrint\config\appsettings.json';
+if (Test-Path `$cfgFile) {
+    try {
+        `$cfg = Get-Content `$cfgFile -Raw | ConvertFrom-Json;
+        if (`$cfg.backendPort) { `$backendPort = [int]`$cfg.backendPort }
+        elseif (`$cfg.ports.backend) { `$backendPort = [int]`$cfg.ports.backend }
+        if (`$cfg.merchantDesktopPort) { `$merchantPort = [int]`$cfg.merchantDesktopPort }
+        elseif (`$cfg.ports.merchant) { `$merchantPort = [int]`$cfg.ports.merchant }
+        if (`$cfg.customerWebPort) { `$customerPort = [int]`$cfg.customerWebPort }
+        elseif (`$cfg.ports.customer) { `$customerPort = [int]`$cfg.ports.customer }
+    } catch {}
+} elseif (Test-Path '.env') {
     Get-Content '.env' | ForEach-Object {
         if (`$_ -match '^PORT=(\d+)') { `$backendPort = [int]`$matches[1] }
         if (`$_ -match '^MERCHANT_PORT=(\d+)') { `$merchantPort = [int]`$matches[1] }

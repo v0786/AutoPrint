@@ -114,17 +114,39 @@ if not exist "%ROOT_DIR%datastore\customer\documents" mkdir "%ROOT_DIR%datastore
 if not exist "%ROOT_DIR%datastore\merchant\jobs" mkdir "%ROOT_DIR%datastore\merchant\jobs" >nul 2>&1
 
 :: -----------------------------------------------------------------------------
-:: STEP 4: Start Microservices (Backend, Kiosk, Merchant POS)
+:: STEP 4: Resolve Configured Ports & Start Microservices
 :: -----------------------------------------------------------------------------
+set "BACKEND_PORT=5000"
+set "MERCHANT_PORT=8000"
+set "CUSTOMER_PORT=7000"
+
+if exist "C:\ProgramData\AutoPrint\config\appsettings.json" (
+    for /f "tokens=1,2 delims=:, " %%A in ('powershell -NoProfile -Command "$cfg = Get-Content 'C:\ProgramData\AutoPrint\config\appsettings.json' -Raw | ConvertFrom-Json; Write-Host ('BACKEND_PORT:' + ($cfg.backendPort ? $cfg.backendPort : $cfg.ports.backend)); Write-Host ('MERCHANT_PORT:' + ($cfg.merchantDesktopPort ? $cfg.merchantDesktopPort : $cfg.ports.merchant)); Write-Host ('CUSTOMER_PORT:' + ($cfg.customerWebPort ? $cfg.customerWebPort : $cfg.ports.customer))"') do (
+        if "%%A"=="BACKEND_PORT" if not "%%B"=="" set "BACKEND_PORT=%%B"
+        if "%%A"=="MERCHANT_PORT" if not "%%B"=="" set "MERCHANT_PORT=%%B"
+        if "%%A"=="CUSTOMER_PORT" if not "%%B"=="" set "CUSTOMER_PORT=%%B"
+    )
+) else if exist "%ROOT_DIR%.env" (
+    for /f "usebackq tokens=1,* delims==" %%A in ("%ROOT_DIR%.env") do (
+        if "%%A"=="PORT" set "BACKEND_PORT=%%B"
+        if "%%A"=="MERCHANT_PORT" set "MERCHANT_PORT=%%B"
+        if "%%A"=="CUSTOMER_PORT" set "CUSTOMER_PORT=%%B"
+    )
+)
+
+set "PORT=%BACKEND_PORT%"
+set "CUSTOMER_PORT=%CUSTOMER_PORT%"
+set "MERCHANT_PORT=%MERCHANT_PORT%"
+
 color 0B
 echo.
-echo [1/3] Starting AutoPrint Backend REST Engine (Port 5000)...
+echo [1/3] Starting AutoPrint Backend REST Engine (Port %BACKEND_PORT%)...
 start "AutoPrint Backend Core" /B node app\backend\dist\server.js > runtime\logs\backend.log 2>&1
 
-echo [2/3] Starting Customer Web Kiosk (Port 7000)...
+echo [2/3] Starting Customer Web Kiosk (Port %CUSTOMER_PORT%)...
 start "AutoPrint Customer Kiosk" /B node app\customer-web\server.js > runtime\logs\customer.log 2>&1
 
-echo [3/3] Starting Merchant Desktop POS (Port 8000)...
+echo [3/3] Starting Merchant Desktop POS (Port %MERCHANT_PORT%)...
 start "AutoPrint Merchant Desk" /B node app\merchant-desktop\server.js > runtime\logs\merchant.log 2>&1
 
 echo.
@@ -134,7 +156,7 @@ timeout /t 3 /nobreak >nul
 :: -----------------------------------------------------------------------------
 :: STEP 5: Health Check & Open Browser Interfaces
 :: -----------------------------------------------------------------------------
-powershell -NoProfile -Command "try { $r = Invoke-RestMethod -Uri 'http://localhost:5000/api/health' -TimeoutSec 3; if ($r.ok) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
+powershell -NoProfile -Command "try { $r = Invoke-RestMethod -Uri 'http://localhost:%BACKEND_PORT%/api/health' -TimeoutSec 3; if ($r.ok) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     color 0A
     echo.
@@ -142,9 +164,9 @@ if %ERRORLEVEL% equ 0 (
     echo                  AUTOPRINT IS RUNNING SUCCESSFULLY!
     echo ===============================================================================
     echo.
-    echo    * Backend REST API       : http://localhost:5000/api/health
-    echo    * Customer Web Kiosk     : http://localhost:7000
-    echo    * Merchant Desktop POS   : http://localhost:8000
+    echo    * Backend REST API       : http://localhost:%BACKEND_PORT%/api/health
+    echo    * Customer Web Kiosk     : http://localhost:%CUSTOMER_PORT%
+    echo    * Merchant Desktop POS   : http://localhost:%MERCHANT_PORT%
     echo.
     echo    * SQLite Datastore       : datastore\backend\database\autoprint.db (WAL Mode)
     echo    * Universal Spooler      : Active (Connected to Windows Printers)
@@ -152,13 +174,13 @@ if %ERRORLEVEL% equ 0 (
     echo.
     
     echo Launching Merchant POS and Customer Kiosk in your default browser...
-    start http://localhost:8000
-    start http://localhost:7000
+    start http://localhost:%MERCHANT_PORT%
+    start http://localhost:%CUSTOMER_PORT%
 ) else (
     color 0E
     echo [INFO] Services launched. Check runtime\logs\backend.log if an interface does not open.
-    start http://localhost:8000
-    start http://localhost:7000
+    start http://localhost:%MERCHANT_PORT%
+    start http://localhost:%CUSTOMER_PORT%
 )
 
 :: -----------------------------------------------------------------------------
@@ -169,8 +191,8 @@ echo.
 echo  -------------------------------------------------------------------------------
 echo    OPERATOR MANAGEMENT MENU:
 echo  -------------------------------------------------------------------------------
-echo    [1] Open Merchant Desktop POS in Browser (http://localhost:8000)
-echo    [2] Open Customer Web Kiosk in Browser   (http://localhost:7000)
+echo    [1] Open Merchant Desktop POS in Browser (http://localhost:%MERCHANT_PORT%)
+echo    [2] Open Customer Web Kiosk in Browser   (http://localhost:%CUSTOMER_PORT%)
 echo    [3] Run System Diagnostics (configure.bat)
 echo    [4] Restart AutoPrint Services
 echo    [Q] Stop AutoPrint and Exit

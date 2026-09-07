@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   LayoutDashboard,
   ShieldCheck,
@@ -11,6 +10,10 @@ import {
   LogOut,
   Power,
   Users,
+  ShieldAlert,
+  RotateCcw,
+  Sparkles,
+  LifeBuoy,
 } from 'lucide-react';
 import { SpoolerMetrics } from '../types/printer';
 
@@ -61,6 +64,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-blue-500 text-white',
     },
     {
+      id: 'reconciliation',
+      label: 'Payment Review',
+      icon: ShieldAlert,
+      badge: 'Auto',
+      badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+    },
+    {
+      id: 'refunds',
+      label: 'Refunds',
+      icon: RotateCcw,
+      badge: undefined,
+    },
+    {
+      id: 'feedback',
+      label: 'Customer Feedback',
+      icon: Sparkles,
+      badge: 'Insights',
+      badgeColor: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
+    },
+    {
+      id: 'support',
+      label: 'Help & Support',
+      icon: LifeBuoy,
+      badge: 'Tickets',
+      badgeColor: 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
+    },
+    {
       id: 'fleet',
       label: 'Printers',
       icon: HardDrive,
@@ -72,13 +102,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Activity & History',
       icon: History,
       badge: undefined,
-    },
-    {
-      id: 'diagnostics',
-      label: 'System Diagnostics',
-      icon: Terminal,
-      badge: 'Spooler',
-      badgeColor: 'bg-white/10 text-zinc-300',
     },
   ];
 

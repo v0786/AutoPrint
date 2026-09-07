@@ -19,13 +19,21 @@ if not exist "datastore\generated\qr" mkdir "datastore\generated\qr"
 if not exist "runtime\logs" mkdir "runtime\logs"
 if not exist "runtime\pid" mkdir "runtime\pid"
 
-:: Load configured ports from .env if present
+:: Load configured ports from central appsettings.json or .env
 set "BACKEND_PORT=5000"
 set "MERCHANT_PORT=8000"
 set "CUSTOMER_PORT=7000"
 set "PAGEKITE_ENABLED=true"
 set "PAGEKITE_NAME=autoprint"
 set "PAGEKITE_SECRET=xakd4af2azx229x94effe9az79262cxz"
+
+if exist "C:\ProgramData\AutoPrint\config\appsettings.json" (
+    for /f "tokens=1,2 delims=:, " %%A in ('powershell -NoProfile -Command "$cfg = Get-Content 'C:\ProgramData\AutoPrint\config\appsettings.json' -Raw | ConvertFrom-Json; Write-Host ('BACKEND_PORT:' + ($cfg.backendPort ? $cfg.backendPort : $cfg.ports.backend)); Write-Host ('MERCHANT_PORT:' + ($cfg.merchantDesktopPort ? $cfg.merchantDesktopPort : $cfg.ports.merchant)); Write-Host ('CUSTOMER_PORT:' + ($cfg.customerWebPort ? $cfg.customerWebPort : $cfg.ports.customer))"') do (
+        if "%%A"=="BACKEND_PORT" if not "%%B"=="" set "BACKEND_PORT=%%B"
+        if "%%A"=="MERCHANT_PORT" if not "%%B"=="" set "MERCHANT_PORT=%%B"
+        if "%%A"=="CUSTOMER_PORT" if not "%%B"=="" set "CUSTOMER_PORT=%%B"
+    )
+)
 
 if exist ".env" (
     for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
@@ -37,6 +45,11 @@ if exist ".env" (
         if "%%A"=="PAGEKITE_SECRET" set "PAGEKITE_SECRET=%%B"
     )
 )
+
+:: Explicitly set environment variables for child processes
+set "PORT=%BACKEND_PORT%"
+set "CUSTOMER_PORT=%CUSTOMER_PORT%"
+set "MERCHANT_PORT=%MERCHANT_PORT%"
 
 echo [1/4] Starting AutoPrint Backend REST API Engine (Port %BACKEND_PORT%)...
 start "AutoPrint Backend" /B node app\backend\dist\server.js > runtime\logs\backend.log 2>&1

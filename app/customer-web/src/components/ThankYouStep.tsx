@@ -37,16 +37,18 @@ export const ThankYouStep: React.FC = () => {
   const hasDownloadedRef = useRef(false);
 
   useEffect(() => {
-    // Launch celebratory confetti
-    try {
-      confetti({
-        particleCount: 85,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#D0BCFF', '#6dd58c', '#ffb77c', '#381E72'],
-      });
-    } catch {
-      // safe fallback
+    // Only launch celebratory confetti if queue is confirmed
+    if (currentOrder?.queueVisible !== false) {
+      try {
+        confetti({
+          particleCount: 85,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#D0BCFF', '#6dd58c', '#ffb77c', '#381E72'],
+        });
+      } catch {
+        // safe fallback
+      }
     }
 
     // Automatically trigger local receipt download
@@ -118,15 +120,44 @@ export const ThankYouStep: React.FC = () => {
         animate={{ y: 0, opacity: 1 }}
         className="text-center space-y-2 pt-2"
       >
-        <div className="w-16 h-16 rounded-3xl bg-[#6dd58c]/15 text-[#6dd58c] mx-auto flex items-center justify-center border border-[#6dd58c]/30 shadow-lg shadow-[#6dd58c]/10">
-          <CheckCircle2 className="w-9 h-9" />
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-          Print Job Sent to Shop!
-        </h1>
-        <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto">
-          Provide your 8-digit collection code verbally at the shop counter to collect your prints.
-        </p>
+        {currentOrder.queueVisible !== false ? (
+          <>
+            <div className="w-16 h-16 rounded-3xl bg-[#6dd58c]/15 text-[#6dd58c] mx-auto flex items-center justify-center border border-[#6dd58c]/30 shadow-lg shadow-[#6dd58c]/10">
+              <CheckCircle2 className="w-9 h-9" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Print Job Sent to Shop!
+            </h1>
+            <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto">
+              Provide your 8-digit collection code verbally at the shop counter to collect your prints.
+            </p>
+          </>
+        ) : (
+          <div className="p-5 rounded-3xl bg-amber-500/10 border-2 border-amber-500/40 text-amber-200 text-center max-w-xl mx-auto shadow-xl">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 mx-auto flex items-center justify-center border border-amber-500/30 mb-2">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-amber-300 tracking-tight mb-2">
+              Queue Confirmation Pending
+            </h1>
+            <p className="text-xs sm:text-sm text-amber-100 mb-3">
+              ⚠ Your request was received, but we could not confirm that it reached the shop queue.
+            </p>
+            <div className="p-2.5 bg-black/40 rounded-xl border border-amber-500/30 text-xs font-mono text-white mb-2">
+              Reference ID: <strong className="text-amber-300">{currentOrder.orderId}</strong>
+            </div>
+            <p className="text-xs text-amber-200/90">
+              Please do not submit the same document again. The merchant can verify your order using this reference.
+            </p>
+          </div>
+        )}
+
+        {currentOrder.traceId && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] font-mono text-zinc-400 mt-1">
+            <span>Trace:</span>
+            <span className="text-zinc-200 font-bold">{currentOrder.traceId}</span>
+          </div>
+        )}
 
         {/* Automatic Receipt Download Notice */}
         {autoDownloaded && (
@@ -376,6 +407,13 @@ export const ThankYouStep: React.FC = () => {
         >
           <RotateCcw className="w-4 h-4 stroke-[3]" />
           <span>PRINT ANOTHER DOCUMENT</span>
+        </button>
+
+        <button
+          onClick={() => (window as any).dispatchEvent(new CustomEvent('open-feedback-modal')) || resetJob()}
+          className="px-5 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <span>Share Feedback</span>
         </button>
       </div>
 

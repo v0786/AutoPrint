@@ -1,18 +1,38 @@
 /**
  * AutoPrint Merchant Desktop API Client Utility
- * Ensures robust connectivity to backend (:5000) whether running in Vite dev,
- * Electron, or static web hosting on port 8000.
+ * Ensures robust connectivity to backend whether running in Vite dev,
+ * Electron, or static web hosting on any configured port.
+ *
+ * Uses relative '/api' requests by default, routing seamlessly through the
+ * server's transparent reverse proxy to the backend port.
  */
 
+let cachedApiBaseUrl: string | null = null;
+
 export function getApiBaseUrl(): string {
-  // If running in browser on port 8000, connect directly to backend port 5000
-  if (typeof window !== 'undefined') {
-    if (window.location.port === '8000' || window.location.port === '8085' || window.location.port === '3001') {
-      const hostname = window.location.hostname || 'localhost';
-      return `http://${hostname}:5000/api`;
-    }
+  if (cachedApiBaseUrl) {
+    return cachedApiBaseUrl;
   }
-  return '/api';
+
+  // 1. Check explicit environment override
+  if (import.meta.env.VITE_API_BASE_URL) {
+    cachedApiBaseUrl = import.meta.env.VITE_API_BASE_URL as string;
+    return cachedApiBaseUrl;
+  }
+
+  // 2. Check window runtime configuration if injected
+  if (typeof window !== 'undefined' && (window as any).__AUTOPRINT_CONFIG__?.apiBaseUrl) {
+    cachedApiBaseUrl = (window as any).__AUTOPRINT_CONFIG__.apiBaseUrl;
+    return cachedApiBaseUrl!;
+  }
+
+  // 3. Default to relative /api (works on any host/port with reverse proxy or same-origin backend)
+  cachedApiBaseUrl = '/api';
+  return cachedApiBaseUrl;
+}
+
+export function setApiBaseUrl(url: string): void {
+  cachedApiBaseUrl = url.replace(/\/+$/, '');
 }
 
 export async function apiFetch(endpoint: string, init?: RequestInit): Promise<Response> {
@@ -22,18 +42,22 @@ export async function apiFetch(endpoint: string, init?: RequestInit): Promise<Re
 
   try {
     const res = await fetch(url, init);
-    // Check if response is valid JSON vs HTML fallback
-    const contentType = res.headers.get('content-type') || '';
-    if (!res.ok && contentType.includes('text/html') && baseUrl !== 'http://localhost:5000/api') {
-      // Retry once directly with localhost:5000
-      const fallbackUrl = `http://localhost:5000/api${cleanEndpoint.startsWith('/') ? '' : '/'}${cleanEndpoint}`;
-      return await fetch(fallbackUrl, init);
-    }
     return res;
   } catch (err) {
-    if (baseUrl !== 'http://localhost:5000/api') {
-      const fallbackUrl = `http://localhost:5000/api${cleanEndpoint.startsWith('/') ? '' : '/'}${cleanEndpoint}`;
-      return await fetch(fallbackUrl, init);
+    // If relative /api failed and running on localhost, attempt fallback to runtime config probe
+    if (typeof window !== 'undefined' && baseUrl === '/api') {
+      try {
+        const configRes = await fetch('/config/runtime.json');
+        if (configRes.ok) {
+          const cfg = await configRes.json();
+          if (cfg.backendPort && cfg.backendPort !== window.location.port) {
+            const fallbackBase = `http://${window.location.hostname || '127.0.0.1'}:${cfg.backendPort}/api`;
+            setApiBaseUrl(fallbackBase);
+            const fallbackUrl = `${fallbackBase}${cleanEndpoint.startsWith('/') ? '' : '/'}${cleanEndpoint}`;
+            return await fetch(fallbackUrl, init);
+          }
+        }
+      } catch { }
     }
     throw err;
   }

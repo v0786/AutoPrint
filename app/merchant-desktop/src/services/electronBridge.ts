@@ -7,6 +7,7 @@
 import {
   PrinterDevice,
   PrintJob,
+  CanonicalPrintSettings,
   SpoolerMetrics,
   SpoolerEvent,
   SpoolerLog,
@@ -120,13 +121,12 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
   }
 
   public async getJobs(): Promise<PrintJob[]> {
-    if (this.isElectron && window.electronAPI) {
-      return await window.electronAPI.getJobs();
-    }
     try {
       const backendJobs = await BackendApiService.getAllJobs();
+      let mappedJobs: PrintJob[] = [];
+
       if (Array.isArray(backendJobs) && backendJobs.length > 0) {
-        const mappedJobs: PrintJob[] = backendJobs.map((bj: any) => {
+        mappedJobs = backendJobs.map((bj: any) => {
           const statusLower = (bj.status || '').toLowerCase();
           const jobStatus =
             statusLower === 'created' || statusLower === 'queued'
@@ -139,6 +139,31 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
               ? 'failed'
               : 'queued';
 
+          // Canonical print settings normalization
+          const rawPs = bj.printSettings || {};
+          let format: any = rawPs.paperFormat;
+          if (!format) {
+            const rawSize = (bj.paperSize || bj.paper_size || '').toLowerCase();
+            if (rawSize === 'a3') format = 'A3';
+            else if (rawSize === 'letter') format = 'Letter';
+            else if (rawSize === 'legal') format = 'Legal';
+            else if (rawSize === '80mm' || rawSize === 'receipt_80mm') format = '80mm';
+            else format = 'A4';
+          }
+          const validFormats = ['A4', 'A3', 'Letter', 'Legal', '80mm'];
+          if (!validFormats.includes(format)) format = 'A4';
+
+          const canonicalSettings: CanonicalPrintSettings = {
+            paperFormat: format,
+            orientation: rawPs.orientation === 'landscape' ? 'landscape' : 'portrait',
+            colorMode: (rawPs.colorMode === 'color' || rawPs.colorMode === 'bw')
+              ? (rawPs.colorMode === 'color' ? 'color' : 'black_and_white')
+              : 'black_and_white',
+            copies: Number(rawPs.copies) > 0 ? Number(rawPs.copies) : (Number(bj.copies) > 0 ? Number(bj.copies) : 1),
+            duplex: Boolean(rawPs.duplex),
+            pageRange: String(rawPs.pageRange || bj.pageRange || 'all'),
+          };
+
           const mappedJob: PrintJob = {
             id: bj.id,
             jobNo: bj.jobNo || '#1000',
@@ -148,13 +173,14 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
             printerName: bj.printerName || 'AutoPrint Spooler',
             status: jobStatus,
             priority: 'normal',
-            copies: 1,
+            copies: canonicalSettings.copies,
             submittedAt: bj.createdAt || new Date().toISOString(),
             totalPages: 1,
             pagesPrinted: 1,
             bytesTotal: 2048,
             bytesSpooled: 2048,
             content: { plainText: bj.fileName },
+            printSettings: canonicalSettings,
             retryCount: 0,
             maxRetries: 3,
             silentPrint: true,
@@ -169,12 +195,33 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
           };
           return mappedJob;
         });
-        this.jobs = mappedJobs;
-      } else {
-        this.jobs = [];
       }
-    } catch {
-      // fallback
+
+      // If running inside Electron, merge any local spooler jobs that are not yet in backend
+      if (this.isElectron && window.electronAPI) {
+        try {
+          const electronJobs = await window.electronAPI.getJobs();
+          if (Array.isArray(electronJobs) && electronJobs.length > 0) {
+            const existingIds = new Set(mappedJobs.map((j) => j.id));
+            for (const ej of electronJobs) {
+              if (!existingIds.has(ej.id)) {
+                mappedJobs.push(ej);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[SpoolerBridge] Electron jobs fetch fallback error:', e);
+        }
+      }
+
+      this.jobs = mappedJobs;
+    } catch (err) {
+      console.warn('[SpoolerBridge] Failed to fetch backend jobs:', err);
+      if (this.isElectron && window.electronAPI) {
+        try {
+          this.jobs = await window.electronAPI.getJobs();
+        } catch {}
+      }
     }
     return [...this.jobs];
   }
@@ -254,12 +301,26 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
     let paymentStatus = jobData.paymentStatus || 'PENDING';
     let isCashLocked = jobData.isCashLocked || false;
 
+    const defaultSettings: CanonicalPrintSettings = {
+      paperFormat: 'A4',
+      orientation: 'portrait',
+      colorMode: 'black_and_white',
+      copies: jobData.copies || 1,
+      duplex: false,
+      pageRange: 'all',
+    };
+    const resolvedSettings: CanonicalPrintSettings = {
+      ...defaultSettings,
+      ...(jobData.printSettings || {}),
+    };
+
     if (!verificationCode) {
       const jobRef: PrintJob = {
         ...jobData,
         id: jobId,
         jobNo,
         status: 'queued',
+        printSettings: resolvedSettings,
         submittedAt: new Date().toISOString(),
         bytesSpooled: 0,
         pagesPrinted: 0,
@@ -291,6 +352,7 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
       paymentStatus,
       isCashLocked,
       totalCost,
+      printSettings: resolvedSettings,
       status: this.metrics.isQueuePaused ? 'paused' : 'queued',
       submittedAt: new Date().toISOString(),
       bytesSpooled: 0,
@@ -486,7 +548,28 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
     printerId: string,
     testType: 'diagnostic' | 'alignment' | 'density' | 'receipt'
   ): Promise<PrintJob> {
-    const printer = this.printers.find((p) => p.id === printerId) || this.printers[0];
+    const defaultFallbackPrinter: PrinterDevice = {
+      id: 'default-spooler',
+      name: 'Default Spooler',
+      displayName: 'Default Spooler',
+      status: 'ready',
+      isDefault: true,
+      type: 'virtual_pdf',
+      paperFormat: 'A4',
+      dpi: 300,
+      connectionType: 'virtual',
+      port: 'USB001',
+      location: 'Local Desk',
+      paperLevelPercent: 100,
+      tonerLevelPercent: 100,
+      activeJobsCount: 0,
+      totalJobsPrinted: 0,
+      errorCount: 0,
+      supportedFeatures: { color: true, duplex: true, autoCut: false, cashDrawerKick: false, barcode1D: true, qr2D: true },
+      lastStatusUpdate: new Date().toISOString(),
+    };
+
+    const printer = this.printers.find((p) => p.id === printerId) || this.printers[0] || defaultFallbackPrinter;
 
     let content: any = {};
     let title = `Test Print - ${testType.toUpperCase()}`;
@@ -550,6 +633,10 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
       };
     }
 
+    const testPaperFormat = (['A4', 'A3', 'Letter', 'Legal', '80mm'].includes(printer.paperFormat)
+      ? printer.paperFormat
+      : 'A4') as any;
+
     return await this.submitPrintJob({
       title,
       documentType: testType === 'receipt' ? 'receipt' : 'report',
@@ -560,6 +647,14 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
       totalPages: 1,
       bytesTotal: 3400,
       content,
+      printSettings: {
+        paperFormat: testPaperFormat,
+        orientation: 'portrait',
+        colorMode: 'black_and_white',
+        copies: 1,
+        duplex: false,
+        pageRange: 'all',
+      },
       maxRetries: 2,
       silentPrint: true,
       spoolSpeedKbps: 350,
@@ -629,7 +724,7 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
       const nextJob = this.jobs.find((j) => j.status === 'queued');
       if (!nextJob) break;
 
-      const targetPrinter = this.printers.find((p) => p.id === nextJob.printerId);
+      const targetPrinter = this.printers.find((p) => p.id === nextJob.printerId) || this.printers[0];
 
       // Check for printer hardware faults
       if (

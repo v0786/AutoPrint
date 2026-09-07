@@ -16,7 +16,7 @@
     "test:backend": "npm test --prefix app/backend",
     "test:all": "npm test --prefix app/backend && npm run lint --prefix app/merchant-desktop && npm run lint --prefix app/customer-web",
     "start:backend": "npm start --prefix app/backend",
-    "reset": "node scripts/reset-fresh-install.cjs"
+    "reset": "node scripts/reset-autoprint.cjs"
   },
   "keywords": [
     "autoprint",

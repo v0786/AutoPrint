@@ -50,7 +50,7 @@ export function closeDatabase(): void {
 
 // ─── Schema Migration ─────────────────────────────────────────────────────────
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 6;
 
 function runMigrations(db: Database.Database): void {
   // Create migration tracking table
@@ -99,6 +99,24 @@ function runMigrations(db: Database.Database): void {
     });
     migrate4();
     console.log('[DB] Applied migration 4 (Admin Credentials, User Management & RBAC)');
+  }
+
+  if (currentVersion < 5) {
+    const migrate5 = db.transaction(() => {
+      runMigration5(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(5);
+    });
+    migrate5();
+    console.log('[DB] Applied migration 5 (Status History, Refunds, Feedback, Support & Sync Queue)');
+  }
+
+  if (currentVersion < 6) {
+    const migrate6 = db.transaction(() => {
+      runMigration6(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(6);
+    });
+    migrate6();
+    console.log('[DB] Applied migration 6 (Canonical Print Settings JSON column and legacy normalization)');
   }
 }
 
@@ -298,4 +316,182 @@ function runMigration4(db: Database.Database): void {
   }
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_merchants_username ON merchants(username);`);
+}
+
+function runMigration5(db: Database.Database): void {
+  db.exec(`
+    -- 1. Print Job Status History
+    CREATE TABLE IF NOT EXISTS print_job_status_history (
+      id                   TEXT PRIMARY KEY,
+      job_id               TEXT NOT NULL,
+      previous_status      TEXT,
+      new_status           TEXT NOT NULL,
+      actor                TEXT NOT NULL,
+      reason               TEXT,
+      payment_id           TEXT,
+      ticket_id            TEXT,
+      created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (job_id) REFERENCES print_jobs(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_status_hist_job ON print_job_status_history(job_id);
+
+    -- 2. Refund Requests
+    CREATE TABLE IF NOT EXISTS refund_requests (
+      id                   TEXT PRIMARY KEY,
+      job_id               TEXT NOT NULL,
+      verification_code    TEXT NOT NULL,
+      payment_id           TEXT,
+      amount_minor_units   INTEGER NOT NULL,
+      currency             TEXT NOT NULL DEFAULT 'INR',
+      customer_name        TEXT NOT NULL,
+      reason               TEXT NOT NULL,
+      detailed_explanation TEXT NOT NULL,
+      status               TEXT NOT NULL DEFAULT 'REFUND_REQUESTED',
+      requested_by         TEXT NOT NULL DEFAULT 'MERCHANT',
+      reviewed_by_staff    TEXT,
+      review_notes         TEXT,
+      gateway_refund_id    TEXT,
+      created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at           TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (job_id) REFERENCES print_jobs(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_refund_job ON refund_requests(job_id);
+    CREATE INDEX IF NOT EXISTS idx_refund_status ON refund_requests(status);
+
+    -- 3. Customer Feedback Intelligence
+    CREATE TABLE IF NOT EXISTS customer_feedback (
+      id                   TEXT PRIMARY KEY,
+      job_id               TEXT NOT NULL UNIQUE,
+      verification_code    TEXT NOT NULL,
+      customer_name        TEXT,
+      rating_overall       INTEGER NOT NULL CHECK(rating_overall BETWEEN 1 AND 5),
+      rating_quality       INTEGER NOT NULL CHECK(rating_quality BETWEEN 1 AND 5),
+      rating_service       INTEGER NOT NULL CHECK(rating_service BETWEEN 1 AND 5),
+      rating_ease          INTEGER NOT NULL CHECK(rating_ease BETWEEN 1 AND 5),
+      category             TEXT NOT NULL DEFAULT 'POSITIVE',
+      comment              TEXT,
+      improvement_suggestion TEXT,
+      created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (job_id) REFERENCES print_jobs(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_feedback_job ON customer_feedback(job_id);
+    CREATE INDEX IF NOT EXISTS idx_feedback_category ON customer_feedback(category);
+
+    -- 4. Unified Support Tickets (Customer, Merchant, System)
+    CREATE TABLE IF NOT EXISTS support_tickets (
+      id                   TEXT PRIMARY KEY,
+      ticket_no            TEXT NOT NULL UNIQUE,
+      source               TEXT NOT NULL,
+      customer_name        TEXT,
+      customer_email       TEXT,
+      merchant_id          TEXT,
+      job_id               TEXT,
+      payment_id           TEXT,
+      verification_code    TEXT,
+      category             TEXT NOT NULL,
+      priority             TEXT NOT NULL DEFAULT 'MEDIUM',
+      status               TEXT NOT NULL DEFAULT 'OPEN',
+      description          TEXT NOT NULL,
+      expected_behavior    TEXT,
+      actual_behavior      TEXT,
+      steps_tried          TEXT,
+      diagnostics_json     TEXT,
+      assigned_to          TEXT,
+      resolution_notes     TEXT,
+      resolved_at          TEXT,
+      sync_status          TEXT NOT NULL DEFAULT 'PENDING_SYNC',
+      cloud_ticket_id      TEXT,
+      created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_ticket_status ON support_tickets(status);
+    CREATE INDEX IF NOT EXISTS idx_ticket_source ON support_tickets(source);
+    CREATE INDEX IF NOT EXISTS idx_ticket_sync ON support_tickets(sync_status);
+
+    -- 5. Support Ticket Audit History
+    CREATE TABLE IF NOT EXISTS support_ticket_history (
+      id                   TEXT PRIMARY KEY,
+      ticket_id            TEXT NOT NULL,
+      previous_status      TEXT,
+      new_status           TEXT NOT NULL,
+      actor                TEXT NOT NULL,
+      notes                TEXT,
+      created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_ticket_hist ON support_ticket_history(ticket_id);
+
+    -- 6. Diagnostic Attachments
+    CREATE TABLE IF NOT EXISTS diagnostic_attachments (
+      id                   TEXT PRIMARY KEY,
+      ticket_id            TEXT NOT NULL,
+      file_name            TEXT NOT NULL,
+      file_type            TEXT NOT NULL,
+      file_size_bytes      INTEGER NOT NULL,
+      file_path            TEXT NOT NULL,
+      redacted             INTEGER NOT NULL DEFAULT 1,
+      created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_diag_ticket ON diagnostic_attachments(ticket_id);
+
+    -- 7. Offline Support Sync Queue
+    CREATE TABLE IF NOT EXISTS support_sync_queue (
+      id                   TEXT PRIMARY KEY,
+      entity_type          TEXT NOT NULL,
+      entity_id            TEXT NOT NULL,
+      payload_json         TEXT NOT NULL,
+      status               TEXT NOT NULL DEFAULT 'PENDING',
+      retry_count          INTEGER NOT NULL DEFAULT 0,
+      max_retries          INTEGER NOT NULL DEFAULT 5,
+      last_error           TEXT,
+      next_retry_at        TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_sync_status ON support_sync_queue(status, next_retry_at);
+  `);
+}
+
+function runMigration6(db: Database.Database): void {
+  // 1. Add print_settings_json column if not exists
+  const columns = db.prepare("PRAGMA table_info(print_jobs)").all() as Array<{ name: string }>;
+  const hasCol = columns.some((c) => c.name === 'print_settings_json');
+  if (!hasCol) {
+    db.exec(`ALTER TABLE print_jobs ADD COLUMN print_settings_json TEXT;`);
+  }
+
+  // 2. Backfill existing jobs with canonical print settings JSON
+  const rows = db.prepare(
+    "SELECT id, paper_size, color_mode, copies, duplex, page_range, print_settings_json FROM print_jobs"
+  ).all() as any[];
+
+  const updateStmt = db.prepare("UPDATE print_jobs SET print_settings_json = ? WHERE id = ?");
+
+  for (const row of rows) {
+    if (!row.print_settings_json) {
+      const pSize = (row.paper_size || 'a4').toLowerCase().trim();
+      let format = 'A4';
+      if (pSize === 'a3') format = 'A3';
+      else if (pSize === 'letter') format = 'Letter';
+      else if (pSize === 'legal') format = 'Legal';
+      else if (pSize === 'receipt_80mm' || pSize === '80mm') format = '80mm';
+
+      const colorMode = (row.color_mode || 'bw').toLowerCase().trim() === 'color' ? 'color' : 'black_and_white';
+      const duplex = row.duplex === 'double' || row.duplex === 'true' || row.duplex === 1;
+      const copies = Number(row.copies) > 0 ? Number(row.copies) : 1;
+      const pageRange = row.page_range || 'all';
+
+      const settings = {
+        paperFormat: format,
+        orientation: 'portrait',
+        colorMode,
+        copies,
+        duplex,
+        pageRange,
+      };
+
+      updateStmt.run(JSON.stringify(settings), row.id);
+    }
+  }
 }

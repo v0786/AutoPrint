@@ -25,12 +25,14 @@ export const jobRepository = {
         id, job_no, title, file_name, file_path, processed_file_path,
         customer_name, customer_phone, printer_id, printer_name,
         color_mode, copies, page_range, paper_size, duplex, finishing,
+        print_settings_json,
         amount_minor_units, currency, payment_method, status,
         created_at, updated_at
       ) VALUES (
         @id, @job_no, @title, @file_name, @file_path, @processed_file_path,
         @customer_name, @customer_phone, @printer_id, @printer_name,
         @color_mode, @copies, @page_range, @paper_size, @duplex, @finishing,
+        @print_settings_json,
         @amount_minor_units, @currency, @payment_method, @status,
         @created_at, @updated_at
       )
@@ -40,6 +42,7 @@ export const jobRepository = {
       processed_file_path: row.processed_file_path ?? null,
       customer_phone: row.customer_phone ?? null,
       printer_id: row.printer_id ?? null,
+      print_settings_json: row.print_settings_json ?? null,
       created_at: now,
       updated_at: now,
     });

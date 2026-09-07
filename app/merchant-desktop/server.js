@@ -1,23 +1,69 @@
 /**
- * AutoPrint Merchant Desktop Production Static Server
- * Serves compiled merchant dashboard operator assets on port 8000
+ * AutoPrint Merchant Desktop Production Static Server & API Reverse Proxy
+ * Serves compiled merchant dashboard operator assets and proxies /api requests to configured local backend.
+ * Authoritative single source of truth: C:\ProgramData\AutoPrint\config\appsettings.json
  */
 
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import http from 'http';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// ─── AppSettings Loader ────────────────────────────────────────────────────────
+function loadAppSettings() {
+  const possiblePaths = [
+    process.env.AUTOPRINT_CONFIG_FILE,
+    'C:\\ProgramData\\AutoPrint\\config\\appsettings.json',
+    path.resolve(__dirname, '../../config/appsettings.json'),
+    path.resolve(process.cwd(), 'config/appsettings.json'),
+  ].filter(Boolean);
+
+  for (const configPath of possiblePaths) {
+    if (fs.existsSync(configPath)) {
+      try {
+        const raw = fs.readFileSync(configPath, 'utf8');
+        return JSON.parse(raw);
+      } catch (err) {
+        console.warn(`[CONFIG] Failed to parse ${configPath}:`, err);
+      }
+    }
+  }
+  return {};
+}
+
+const appSettings = loadAppSettings();
+
 const app = express();
-const PORT = Number(process.env.MERCHANT_PORT || 8000);
-const BACKEND_PORT = Number(process.env.PORT || 5000);
+const PORT = Number(process.env.MERCHANT_PORT || appSettings.merchantDesktopPort || appSettings.ports?.merchant || 8000);
+const BACKEND_PORT = Number(process.env.BACKEND_PORT || appSettings.backendPort || appSettings.ports?.backend || 5000);
 const BACKEND_HOST = process.env.BACKEND_HOST || '127.0.0.1';
 const distPath = path.join(__dirname, 'dist');
 
-// 1. Transparent API Reverse Proxy to Local Backend
+// 0. Health Check Endpoint
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'merchant-desktop',
+    port: PORT,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 1. Dynamic Runtime Config Endpoint
+app.get('/config/runtime.json', (_req, res) => {
+  res.json({
+    merchantDesktopPort: PORT,
+    backendPort: BACKEND_PORT,
+    apiBaseUrl: '/api',
+    updatedAt: new Date().toISOString(),
+  });
+});
+
+// 2. Transparent API Reverse Proxy to Local Backend
 app.use('/api', (req, res) => {
   const options = {
     hostname: BACKEND_HOST,
@@ -38,11 +84,11 @@ app.use('/api', (req, res) => {
   });
 
   proxyReq.on('error', (err) => {
-    console.error('[PROXY ERROR] Merchant desktop to backend failure:', err.message);
+    console.error(`[PROXY ERROR] Merchant desktop to backend (: ${BACKEND_PORT}) failure:`, err.message);
     if (!res.headersSent) {
       res.status(502).json({
         ok: false,
-        error: 'AutoPrint backend service is currently unreachable on localhost.',
+        error: `AutoPrint backend service is currently unreachable on ${BACKEND_HOST}:${BACKEND_PORT}.`,
       });
     }
   });
@@ -50,14 +96,21 @@ app.use('/api', (req, res) => {
   req.pipe(proxyReq);
 });
 
-// 2. Serve Static Frontend Assets
-app.use(express.static(distPath));
+// 3. Serve Static Frontend Assets
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+}
 
-// 3. SPA Fallback
+// 4. SPA Fallback
 app.get('*', (_req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
+  const indexPath = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(200).send('AutoPrint Merchant Desk is ready. Please build merchant-desktop frontend.');
+  }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[MERCHANT DESKTOP] Running on http://0.0.0.0:${PORT} (Proxying /api -> :${BACKEND_PORT})`);
+  console.log(`[MERCHANT DESKTOP] Running on http://0.0.0.0:${PORT} (Proxying /api -> ${BACKEND_HOST}:${BACKEND_PORT})`);
 });

@@ -84,6 +84,34 @@ function attemptsForCode(code: string): PaymentAttempt[] {
 }
 
 function rowToRecord(row: VerificationRow): CollectionVerificationRecord {
+  const db = getDb();
+  let printSettings: any = undefined;
+  try {
+    const jobRow = db.prepare('SELECT print_settings_json, paper_size, color_mode, copies, duplex, page_range FROM print_jobs WHERE id = ?').get(row.job_id) as any;
+    if (jobRow) {
+      if (jobRow.print_settings_json) {
+        try { printSettings = JSON.parse(jobRow.print_settings_json); } catch {}
+      }
+      if (!printSettings || !printSettings.paperFormat) {
+        const pSize = (jobRow.paper_size || 'a4').toLowerCase();
+        let format = 'A4';
+        if (pSize === 'a3') format = 'A3';
+        else if (pSize === 'letter') format = 'Letter';
+        else if (pSize === 'legal') format = 'Legal';
+        else if (pSize === 'receipt_80mm' || pSize === '80mm') format = '80mm';
+
+        printSettings = {
+          paperFormat: format,
+          orientation: 'portrait',
+          colorMode: (jobRow.color_mode || 'bw').toLowerCase() === 'color' ? 'color' : 'black_and_white',
+          copies: Number(jobRow.copies) || 1,
+          duplex: jobRow.duplex === 'double' || jobRow.duplex === 'true',
+          pageRange: jobRow.page_range || 'all',
+        };
+      }
+    }
+  } catch {}
+
   return {
     verificationCode: row.verification_code,
     formattedCode: row.formatted_code,
@@ -93,6 +121,7 @@ function rowToRecord(row: VerificationRow): CollectionVerificationRecord {
     printerName: row.printer_name,
     customerName: row.customer_name,
     customerPhone: row.customer_phone ?? undefined,
+    printSettings,
     amountTotal: toMinorToDecimal(row.amount_minor_units),
     amountMinorUnits: row.amount_minor_units,
     currency: row.currency,

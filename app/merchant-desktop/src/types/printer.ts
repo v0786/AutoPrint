@@ -168,6 +168,19 @@ export interface PrintJobContent {
   plainText?: string;
 }
 
+export type CanonicalPaperFormat = 'A4' | 'A3' | 'Letter' | 'Legal' | '80mm';
+export type CanonicalColorMode = 'black_and_white' | 'color';
+export type CanonicalOrientation = 'portrait' | 'landscape';
+
+export interface CanonicalPrintSettings {
+  paperFormat: CanonicalPaperFormat;
+  orientation: CanonicalOrientation;
+  colorMode: CanonicalColorMode;
+  copies: number;
+  duplex: boolean;
+  pageRange: string;
+}
+
 export interface PrintJob {
   id: string;
   jobNo: string;
@@ -186,6 +199,7 @@ export interface PrintJob {
   bytesTotal: number;
   bytesSpooled: number;
   content: PrintJobContent;
+  printSettings: CanonicalPrintSettings;
   errorReason?: string;
   retryCount: number;
   maxRetries: number;

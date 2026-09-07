@@ -104,6 +104,19 @@ export interface PaymentDetails {
   };
 }
 
+export type CanonicalPaperFormat = 'A4' | 'A3' | 'Letter' | 'Legal' | '80mm';
+export type CanonicalColorMode = 'black_and_white' | 'color';
+export type CanonicalOrientation = 'portrait' | 'landscape';
+
+export interface CanonicalPrintSettings {
+  paperFormat: CanonicalPaperFormat;
+  orientation: CanonicalOrientation;
+  colorMode: CanonicalColorMode;
+  copies: number;
+  duplex: boolean;
+  pageRange: string;
+}
+
 export interface PrintOrder {
   orderId: string;
   collectionCode: string; // 8-digit formatted code e.g. "8492-1057"
@@ -112,9 +125,12 @@ export interface PrintOrder {
   kioskNumber: string;
   file: UploadedFileDetails;
   specs: PrintSpecifications;
+  printSettings?: CanonicalPrintSettings;
   pricing: PriceBreakdown;
   payment: PaymentDetails;
   jobStatus: JobStatus;
+  traceId?: string;
+  queueVisible?: boolean;
   createdAt: string;
   estimatedCompletionTime: string;
 }

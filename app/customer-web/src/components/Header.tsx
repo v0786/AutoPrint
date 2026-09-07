@@ -2,10 +2,19 @@ import React from 'react';
 import { usePrintJob } from '../context/PrintJobContext';
 import { useLanguage } from '../context/LanguageContext';
 import { LanguageSwitcher } from './LanguageSwitcher';
-import { Printer, MapPin, QrCode, Store, ChevronRight, CheckCircle2, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
+import { Printer, MapPin, QrCode, Store, ChevronRight, CheckCircle2, Sparkles, RefreshCw, AlertCircle, MessageSquare, LifeBuoy } from 'lucide-react';
 
 export const Header: React.FC = () => {
-  const { currentShop, isShopOnline, currentStep, setShopModalOpen, setQrModalOpen, resetJob } = usePrintJob();
+  const {
+    currentShop,
+    isShopOnline,
+    currentStep,
+    setShopModalOpen,
+    setQrModalOpen,
+    setFeedbackModalOpen,
+    setSupportModalOpen,
+    resetJob,
+  } = usePrintJob();
   const { t } = useLanguage();
 
   if (currentStep === 'splash') return null;
@@ -53,8 +62,26 @@ export const Header: React.FC = () => {
             </button>
           </div>
 
-          {/* Controls: Language Switcher & Shop Details */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* Controls: Support, Feedback, Language Switcher & Shop Details */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Help / Support Button */}
+            <button
+              onClick={() => setSupportModalOpen(true)}
+              title="Help & Support"
+              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 transition-colors cursor-pointer"
+            >
+              <LifeBuoy className="w-4 h-4" />
+            </button>
+
+            {/* Feedback Button */}
+            <button
+              onClick={() => setFeedbackModalOpen(true)}
+              title="Give Customer Feedback"
+              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-[#D0BCFF] border border-white/10 transition-colors cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4" />
+            </button>
+
             {/* Language Switcher */}
             <LanguageSwitcher />
 

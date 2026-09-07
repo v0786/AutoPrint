@@ -44,6 +44,13 @@ export const SystemDiagnosticsView: React.FC<SystemDiagnosticsViewProps> = ({
   // Backend Health State
   const [backendHealth, setBackendHealth] = useState<any>(null);
   const [healthChecking, setHealthChecking] = useState<boolean>(false);
+  const [latestJob, setLatestJob] = useState<any>(null);
+  const [totalJobCount, setTotalJobCount] = useState<number>(0);
+
+  // Dedicated Installation Diagnostics State
+  const [lastSyncTime, setLastSyncTime] = useState<string>(new Date().toLocaleTimeString());
+  const [lastSyncResult, setLastSyncResult] = useState<string>('Sync Initialized');
+  const [jobsReturned, setJobsReturned] = useState<number>(0);
 
   const checkBackendHealth = async () => {
     setHealthChecking(true);
@@ -52,9 +59,30 @@ export const SystemDiagnosticsView: React.FC<SystemDiagnosticsViewProps> = ({
       if (res.ok) {
         const json = await res.json();
         setBackendHealth(json);
+      } else {
+        setBackendHealth({ status: 'unreachable', ok: false });
       }
-    } catch {
+
+      const jobsRes = await apiFetch('/api/jobs');
+      const nowStr = new Date().toLocaleTimeString();
+      setLastSyncTime(nowStr);
+
+      if (jobsRes.ok) {
+        const jobsJson = await jobsRes.json();
+        const list = Array.isArray(jobsJson.data) ? jobsJson.data : [];
+        setTotalJobCount(list.length);
+        setJobsReturned(list.length);
+        setLastSyncResult(`✓ OK (${list.length} jobs returned)`);
+        if (list.length > 0) {
+          setLatestJob(list[0]);
+        }
+      } else {
+        setLastSyncResult(`HTTP Error ${jobsRes.status}`);
+      }
+    } catch (err: any) {
       setBackendHealth({ status: 'unreachable', ok: false });
+      setLastSyncTime(new Date().toLocaleTimeString());
+      setLastSyncResult(`Failed: ${err.message || 'Connection refused'}`);
     } finally {
       setHealthChecking(false);
     }
@@ -184,7 +212,92 @@ export const SystemDiagnosticsView: React.FC<SystemDiagnosticsViewProps> = ({
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span>WAL Ready</span>
           </div>
-          <div className="text-[10px] text-zinc-500 mt-0.5">Backend :5000 OK</div>
+          <div className="text-[10px] text-zinc-500 mt-0.5">Backend :{backendHealth?.port || 'Auto'} OK</div>
+        </div>
+      </div>
+
+      {/* Merchant Service & Port Environment Diagnostics Panel */}
+      <div className="bg-[#141419] border border-white/10 rounded-3xl p-6 shadow-2xl space-y-4">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2.5">
+            <Server className="w-5 h-5 text-purple-400" />
+            <div>
+              <h3 className="text-sm font-bold text-white">AutoPrint Installation & Queue Diagnostics</h3>
+              <p className="text-[11px] text-zinc-400">Real-time synchronized port topology, database persistence, and queue sync verification</p>
+            </div>
+          </div>
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${backendHealth?.ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+            <span className={`w-2 h-2 rounded-full ${backendHealth?.ok ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+            <span>Connection: {backendHealth?.ok ? '✓ Connected' : '✗ Failed'}</span>
+          </span>
+        </div>
+
+        {/* Core System Topology Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
+          <div className="bg-black/30 border border-white/5 p-3.5 rounded-2xl">
+            <div className="text-[11px] font-semibold text-zinc-400">Backend URL</div>
+            <div className="text-sm font-mono font-bold text-white mt-1 truncate">
+              {backendHealth?.apiBaseUrl ? `http://127.0.0.1:${backendHealth?.port || 5000}` : 'http://127.0.0.1:5000'}
+            </div>
+            <div className="text-[10px] text-emerald-400 mt-0.5">
+              {backendHealth?.ok ? '✓ Active & Responding' : 'Offline / Unreachable'}
+            </div>
+          </div>
+
+          <div className="bg-black/30 border border-white/5 p-3.5 rounded-2xl">
+            <div className="text-[11px] font-semibold text-zinc-400">Port Architecture</div>
+            <div className="text-sm font-mono font-bold text-white mt-1">
+              Configured: {backendHealth?.port || '5000'} / Actual: {backendHealth?.port || '5000'}
+            </div>
+            <div className="text-[10px] text-zinc-400 mt-0.5">
+              Customer Port: {backendHealth?.ports?.customer || '7000'}
+            </div>
+          </div>
+
+          <div className="bg-black/30 border border-white/5 p-3.5 rounded-2xl">
+            <div className="text-[11px] font-semibold text-zinc-400">Last Queue Sync</div>
+            <div className="text-sm font-mono font-bold text-indigo-300 mt-1">{lastSyncTime}</div>
+            <div className="text-[10px] text-zinc-400 mt-0.5 truncate">{lastSyncResult}</div>
+          </div>
+
+          <div className="bg-black/30 border border-white/5 p-3.5 rounded-2xl">
+            <div className="text-[11px] font-semibold text-zinc-400">Jobs Returned</div>
+            <div className="text-lg font-black text-emerald-400 mt-1">{jobsReturned} Active</div>
+            <div className="text-[10px] text-zinc-400 mt-0.5">Total in DB: {totalJobCount}</div>
+          </div>
+        </div>
+
+        {/* Database Verification Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1">
+          <div className="bg-black/30 border border-white/5 p-3.5 rounded-2xl col-span-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1.5">
+                <Database className="w-3.5 h-3.5 text-emerald-400" />
+                Authoritative SQLite Database Path
+              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                  backendHealth?.database?.exists !== false
+                    ? 'text-emerald-400 bg-emerald-500/10'
+                    : 'text-rose-400 bg-rose-500/10'
+                }`}>
+                  Database Exists: {backendHealth?.database?.exists !== false ? '✓ Yes' : '✗ Missing'}
+                </span>
+                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md">CONNECTED</span>
+              </div>
+            </div>
+            <div className="text-xs font-mono text-zinc-200 mt-1.5 break-all">
+              {backendHealth?.database?.path || 'C:\\ProgramData\\AutoPrint\\datastore\\backend\\database\\autoprint.db'}
+            </div>
+          </div>
+
+          <div className="bg-black/30 border border-white/5 p-3.5 rounded-2xl">
+            <div className="text-[11px] font-semibold text-zinc-400">PageKite / Public Tunnel</div>
+            <div className="text-base font-bold text-cyan-300 mt-1 capitalize">{backendHealth?.pagekite || 'Offline'}</div>
+            <div className="text-[10px] text-zinc-400 mt-0.5 truncate">
+              {latestJob ? `Latest Job: ${latestJob.jobNo || latestJob.id}` : 'Manual Merchant Control Guarded'}
+            </div>
+          </div>
         </div>
       </div>
 

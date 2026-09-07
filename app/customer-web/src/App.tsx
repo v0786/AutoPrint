@@ -10,6 +10,8 @@ import { ThankYouStep } from './components/ThankYouStep';
 import { ShopSwitcherModal } from './components/ShopSwitcherModal';
 import { QrCodeModal } from './components/QrCodeModal';
 import { DocumentPreviewModal } from './components/DocumentPreviewModal';
+import { FeedbackModal } from './components/FeedbackModal';
+import { CustomerSupportModal } from './components/CustomerSupportModal';
 
 const MainKioskView: React.FC = () => {
   const { currentStep } = usePrintJob();
@@ -46,6 +48,8 @@ const MainKioskView: React.FC = () => {
       <ShopSwitcherModal />
       <QrCodeModal />
       <DocumentPreviewModal />
+      <FeedbackModal />
+      <CustomerSupportModal />
     </div>
   );
 };
