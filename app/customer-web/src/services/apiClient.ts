@@ -41,6 +41,28 @@ export interface BackendJobResponse {
 }
 
 export class CustomerApiClient {
+  public static async createRazorpayOrder(params: { amount: number; currency?: string; receipt?: string }): Promise<{ order_id: string; amount: number; currency: string; key_id: string }> {
+    const response = await fetch(`${API_BASE_URL}/payment/create-order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const json = await response.json();
+    if (!response.ok || !json.ok) throw new Error(json.error || `Unable to create Razorpay order (${response.status})`);
+    return json.data;
+  }
+
+  public static async verifyRazorpayPayment(params: { verificationCode: string; razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/payment/verify-razorpay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const json = await response.json();
+    if (!response.ok || !json.ok) throw new Error(json.error || `Unable to verify Razorpay payment (${response.status})`);
+    return json.data;
+  }
+
   /**
    * Helper to generate standardized trace ID
    */

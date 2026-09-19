@@ -365,9 +365,19 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const waitMins = currentShop?.averageWaitMins || 2;
       const estimatedTime = new Date(now.getTime() + waitMins * 60000);
 
-      // 2. If UPI or Razorpay payment, record payment attempt
+      // 2. Verify Razorpay server-side, or record the legacy UPI attempt.
       let upiTxnId = finalPayment.gatewayPaymentId || finalPayment.transactionId;
-      if (backendPaymentMethod === 'UPI') {
+      if (finalPayment.method === 'razorpay') {
+        if (!finalPayment.razorpayOrderId || !finalPayment.razorpaySignature || !finalPayment.gatewayPaymentId) {
+          throw new Error('Razorpay payment response was incomplete. The print job was not marked as paid.');
+        }
+        await CustomerApiClient.verifyRazorpayPayment({
+          verificationCode: backendJob.verification.verificationCode,
+          razorpayOrderId: finalPayment.razorpayOrderId,
+          razorpayPaymentId: finalPayment.gatewayPaymentId,
+          razorpaySignature: finalPayment.razorpaySignature,
+        });
+      } else if (backendPaymentMethod === 'UPI') {
         upiTxnId = upiTxnId || `UPI/2026/${Date.now().toString().slice(-8)}`;
         await CustomerApiClient.recordDigitalAttempt({
           verificationCode: backendJob.verification.verificationCode,

@@ -88,12 +88,14 @@ export const PaymentStep: React.FC = () => {
     setShowConfirmModal(true);
   };
 
-  const handleGatewaySuccess = (_gateway: GatewayType, paymentId: string) => {
+  const handleGatewaySuccess = async (payment: { paymentId: string; orderId: string; signature: string }) => {
     setIsRazorpayOpen(false);
-    completePayment({
+    await completePayment({
       method: 'razorpay',
       gateway: 'razorpay',
-      gatewayPaymentId: paymentId,
+      gatewayPaymentId: payment.paymentId,
+      razorpayOrderId: payment.orderId,
+      razorpaySignature: payment.signature,
     });
   };
 

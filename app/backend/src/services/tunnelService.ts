@@ -27,11 +27,11 @@ class TunnelManagementService {
   private currentCustomerUrl: string = '';
 
   constructor() {
-    const pagekiteEnabled = process.env.PAGEKITE_ENABLED === 'true';
-    const subdomain = process.env.PAGEKITE_NAME || process.env.PAGEKITE_SUBDOMAIN || 'autoprint';
-    const domain = process.env.PAGEKITE_DOMAIN || 'pagekite.me';
-    const secret = process.env.PAGEKITE_SECRET || '';
-    const localPort = CONFIG.CUSTOMER_PORT || 7000;
+    const pagekiteEnabled = CONFIG.PAGEKITE.enabled;
+    const subdomain = CONFIG.PAGEKITE.subdomain;
+    const domain = CONFIG.PAGEKITE.domain;
+    const secret = CONFIG.PAGEKITE.secret;
+    const localPort = CONFIG.CUSTOMER_PORT;
     const executablePath = process.env.PAGEKITE_BINARY_PATH || undefined;
 
     this.connector = new PageKiteConnector({
@@ -44,7 +44,10 @@ class TunnelManagementService {
     });
 
     this.computeActiveCustomerUrl();
-    // PageKite tunnel is manual only (offline by default, started via Start-Customer-Tunnel.cmd).
+  }
+
+  public startTunnel(): boolean {
+    return this.connector.start();
   }
 
   private getLocalIpAddress(): string {

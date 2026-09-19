@@ -10,6 +10,7 @@ import { VerificationService } from '../services/verificationService';
 import { AutoPrintService } from '../services/autoprintService';
 import { PaymentConfigRepository } from '../database/repositories/paymentConfigRepository';
 import { verificationRepository } from '../database/repositories/verificationRepository';
+import Razorpay from 'razorpay';
 
 const digitalAttemptSchema = z.object({
   verificationCode: z.string().min(1, 'Verification code is required'),
@@ -21,7 +22,10 @@ const digitalAttemptSchema = z.object({
 });
 
 const createOrderSchema = z.object({
-  verificationCode: z.string().min(1, 'Verification code is required'),
+  verificationCode: z.string().min(1, 'Verification code is required').optional(),
+  amount: z.number().int().min(100, 'Amount must be at least 100 paise').optional(),
+  currency: z.string().length(3).default('INR'),
+  receipt: z.string().min(1).max(40).optional(),
 });
 
 const verifyRazorpaySchema = z.object({
@@ -32,20 +36,43 @@ const verifyRazorpaySchema = z.object({
 });
 
 export class PaymentController {
+  public static async checkRazorpay(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const payConfig = PaymentConfigRepository.getConfig();
+      const keyId = process.env.RAZORPAY_KEY_ID || payConfig?.razorpay_key_id;
+      const secret = process.env.RAZORPAY_KEY_SECRET || payConfig?.razorpay_key_secret;
+      if (!keyId || !secret) {
+        res.status(500).json({ ok: false, configured: false, error: 'Razorpay credentials are not configured on the server.' });
+        return;
+      }
+
+      const razorpay = new Razorpay({ key_id: keyId, key_secret: secret });
+      await razorpay.orders.all({ count: 1 });
+      res.json({ ok: true, configured: true, keyId: keyId.replace(/^(rzp_(?:test|live)_).+$/i, '$1••••') });
+    } catch (error: any) {
+      const statusCode = Number(error?.statusCode || error?.status);
+      if (statusCode === 401) {
+        res.status(401).json({ ok: false, configured: true, error: 'Razorpay authentication failed. Check the server credentials.' });
+        return;
+      }
+      next(error);
+    }
+  }
+
   /**
    * Generates a payment order or UPI intent string for the customer
    */
   public static async createOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { verificationCode } = createOrderSchema.parse(req.body);
-      const record = verificationRepository.getByCode(verificationCode);
+      const parsed = createOrderSchema.parse(req.body);
+      const record = parsed.verificationCode ? verificationRepository.getByCode(parsed.verificationCode) : null;
 
-      if (!record) {
+      if (parsed.verificationCode && !record) {
         res.status(404).json({ ok: false, error: 'Invalid verification code.' });
         return;
       }
 
-      if (record.isCashLocked) {
+      if (record?.isCashLocked) {
         res.status(403).json({
           ok: false,
           error: 'Digital payments are locked for this order. Please pay cash at the merchant counter.',
@@ -55,31 +82,43 @@ export class PaymentController {
       }
 
       const payConfig = PaymentConfigRepository.getConfig();
-      const amountMajor = (record.amountMinorUnits / 100).toFixed(2);
-      const payeeVpa = payConfig?.upi_id || 'autoprint@upi';
-      const payeeName = payConfig?.upi_payee_name || 'AutoPrint Shop';
+      const amount = record?.amountMinorUnits ?? parsed.amount;
+      if (!amount || amount < 100) {
+        res.status(400).json({ ok: false, error: 'Amount must be at least 100 paise.' });
+        return;
+      }
+      const keyId = process.env.RAZORPAY_KEY_ID || payConfig?.razorpay_key_id;
+      const secret = process.env.RAZORPAY_KEY_SECRET || payConfig?.razorpay_key_secret;
+      if (!keyId || !secret) {
+        res.status(500).json({ ok: false, error: 'Razorpay credentials are not configured on the server.' });
+        return;
+      }
+      const razorpay = new Razorpay({ key_id: keyId, key_secret: secret });
+      let order;
+      try {
+        order = await razorpay.orders.create({
+          amount,
+          currency: record?.currency || parsed.currency,
+          receipt: parsed.receipt || (record ? `autoprint_${record.jobNo}` : `autoprint_${Date.now()}`),
+        });
+      } catch (error: any) {
+        const statusCode = Number(error?.statusCode || error?.status);
+        if (statusCode === 401) {
+          res.status(401).json({ ok: false, error: 'Razorpay authentication failed. Check the server credentials.' });
+          return;
+        }
+        next(error);
+        return;
+      }
 
-      // Generate standard NPCI UPI Intent URI
-      const upiIntentUri = `upi://pay?pa=${encodeURIComponent(payeeVpa)}&pn=${encodeURIComponent(payeeName)}&am=${amountMajor}&cu=INR&tn=${encodeURIComponent(`AutoPrint Job #${record.jobNo}`)}&tr=${encodeURIComponent(verificationCode)}`;
+      res.json({ ok: true, data: { order_id: order.id, amount: order.amount, currency: order.currency, key_id: keyId } });
+      return;
 
-      res.json({
-        ok: true,
-        data: {
-          verificationCode,
-          jobNo: record.jobNo,
-          amountTotal: Number(amountMajor),
-          currency: record.currency,
-          payeeVpa,
-          payeeName,
-          upiIntentUri,
-          customQrDataUrl: payConfig?.upi_qr_data_url || null,
-          gateway: {
-            provider: payConfig?.provider || 'UPI_DIRECT',
-            razorpayKeyId: payConfig?.razorpay_key_id || null,
-          },
-        },
-      });
     } catch (err) {
+      if (err instanceof z.ZodError) {
+        res.status(400).json({ ok: false, error: err.issues[0]?.message || 'Invalid payment order request.' });
+        return;
+      }
       next(err);
     }
   }
@@ -92,7 +131,7 @@ export class PaymentController {
       const { verificationCode, razorpayOrderId, razorpayPaymentId, razorpaySignature } = verifyRazorpaySchema.parse(req.body);
       const payConfig = PaymentConfigRepository.getConfig();
 
-      const secret = payConfig?.razorpay_key_secret || process.env.RAZORPAY_KEY_SECRET;
+      const secret = process.env.RAZORPAY_KEY_SECRET || payConfig?.razorpay_key_secret;
       if (!secret) {
         // If no secret key is set, log warning and reject
         res.status(500).json({ ok: false, error: 'Razorpay secret key not configured on server.' });
@@ -147,6 +186,10 @@ export class PaymentController {
         data: result.record,
       });
     } catch (err) {
+      if (err instanceof z.ZodError) {
+        res.status(400).json({ ok: false, error: err.issues[0]?.message || 'Invalid payment verification request.' });
+        return;
+      }
       next(err);
     }
   }

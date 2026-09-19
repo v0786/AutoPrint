@@ -22,6 +22,7 @@ import {
   Eye,
   EyeOff,
   Key,
+  Loader2,
 } from 'lucide-react';
 import { UserManagementView } from './UserManagementView';
 import { apiFetch } from '../utils/api';
@@ -97,6 +98,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [verifyingPagekite, setVerifyingPagekite] = useState(false);
   const [verifyResult, setVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [savingPagekite, setSavingPagekite] = useState(false);
+  const [checkingRazorpay, setCheckingRazorpay] = useState(false);
+  const [razorpayCheck, setRazorpayCheck] = useState<{ ok: boolean; message: string } | null>(null);
 
   // Available Windows Printers
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
@@ -270,6 +273,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setErrorMessage(err.message || 'Failed to save payment receiver.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCheckRazorpay = async () => {
+    setCheckingRazorpay(true);
+    setRazorpayCheck(null);
+    try {
+      const res = await apiFetch('/api/payment/razorpay/check', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Razorpay credentials could not be verified.');
+      setRazorpayCheck({ ok: true, message: `Razorpay is connected (${json.keyId || 'key configured'}).` });
+    } catch (error: any) {
+      setRazorpayCheck({ ok: false, message: error.message || 'Razorpay connection check failed.' });
+    } finally {
+      setCheckingRazorpay(false);
     }
   };
 
@@ -738,6 +756,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 placeholder="••••••••"
                 className="w-full px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-mono"
               />
+            </div>
+            <div className="sm:col-span-2 flex flex-wrap items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={handleCheckRazorpay}
+                disabled={checkingRazorpay}
+                className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-xs font-bold text-blue-300 transition-colors hover:bg-blue-500/20 disabled:cursor-wait disabled:opacity-60"
+              >
+                {checkingRazorpay ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                {checkingRazorpay ? 'Checking Razorpay...' : 'Confirm Razorpay Integration'}
+              </button>
+              {razorpayCheck && <span className={`text-xs ${razorpayCheck.ok ? 'text-emerald-300' : 'text-rose-300'}`}>{razorpayCheck.message}</span>}
             </div>
           </Disclosure>
         </div>

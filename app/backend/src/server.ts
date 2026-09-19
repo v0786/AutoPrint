@@ -190,6 +190,9 @@ api.post('/merchant/users/:id/reset-password', requireAdmin, MerchantController.
 // Digital Payment Gateway Routes
 api.post('/payment/create-order', PaymentController.createOrder);
 api.post('/payment/verify-razorpay', PaymentController.verifyRazorpay);
+api.post('/payment/razorpay/check', requireAdmin, PaymentController.checkRazorpay);
+api.post('/create-order', PaymentController.createOrder);
+api.post('/verify-payment', PaymentController.verifyRazorpay);
 api.post('/payment/digital-attempt', optionalAuth, PaymentController.recordDigitalAttempt);
 
 // System Workload & Dynamic Queue Routes
@@ -277,6 +280,9 @@ app.use(errorHandler);
 
 // 7. Start Server
 const server = app.listen(CONFIG.PORT, '0.0.0.0', () => {
+  if (CONFIG.PAGEKITE.enabled) {
+    tunnelService.startTunnel();
+  }
   const banner = [
     '==================================================================',
     '       AUTOPRINT PRINT MANAGEMENT & VERIFICATION SERVER           ',

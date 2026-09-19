@@ -152,6 +152,21 @@ const RESOLVED_PORT = Number(process.env.PORT || appSettings.backendPort || appS
 const RESOLVED_MERCHANT_PORT = Number(process.env.MERCHANT_PORT || appSettings.merchantDesktopPort || appSettings.ports?.merchant || 8000);
 const RESOLVED_CUSTOMER_PORT = Number(process.env.CUSTOMER_PORT || appSettings.customerWebPort || appSettings.ports?.customer || 7000);
 
+function validatePort(name: string, port: number): number {
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new Error(`[CONFIG] ${name} must be an integer between 1024 and 65535. Received: ${port}`);
+  }
+  return port;
+}
+
+validatePort('Backend port', RESOLVED_PORT);
+validatePort('Merchant port', RESOLVED_MERCHANT_PORT);
+validatePort('Customer port', RESOLVED_CUSTOMER_PORT);
+
+if (new Set([RESOLVED_PORT, RESOLVED_MERCHANT_PORT, RESOLVED_CUSTOMER_PORT]).size !== 3) {
+  throw new Error('[CONFIG] Backend, merchant, and customer ports must be unique.');
+}
+
 function resolveCorsOrigins(): string[] {
   const dynamicOrigins = [
     `http://localhost:${RESOLVED_PORT}`,
@@ -182,9 +197,9 @@ export const CONFIG = {
   APP_VERSION:          '2.0.0',
   PATHS,
   PAGEKITE: {
-    enabled:   process.env.PAGEKITE_ENABLED === 'true' || appSettings.pagekite?.enabled || false,
+    enabled:   process.env.PAGEKITE_ENABLED ? process.env.PAGEKITE_ENABLED.toLowerCase() === 'true' : appSettings.pagekite?.enabled || false,
     subdomain: process.env.PAGEKITE_NAME || appSettings.pagekite?.subdomain || 'autoprint',
-    domain:    appSettings.pagekite?.domain || 'pagekite.me',
+    domain:    process.env.PAGEKITE_DOMAIN || appSettings.pagekite?.domain || 'pagekite.me',
     secret:    process.env.PAGEKITE_SECRET || appSettings.pagekite?.secret || '',
   },
 } as const;

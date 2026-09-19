@@ -25,14 +25,19 @@ set "MERCHANT_PORT=8000"
 set "CUSTOMER_PORT=7000"
 set "PAGEKITE_ENABLED=true"
 set "PAGEKITE_NAME=autoprint"
-set "PAGEKITE_SECRET=xakd4af2azx229x94effe9az79262cxz"
+set "PAGEKITE_DOMAIN=pagekite.me"
+set "PAGEKITE_SECRET="
 
-if exist "C:\ProgramData\AutoPrint\config\appsettings.json" (
-    for /f "tokens=1,2 delims=:, " %%A in ('powershell -NoProfile -Command "$cfg = Get-Content 'C:\ProgramData\AutoPrint\config\appsettings.json' -Raw | ConvertFrom-Json; Write-Host ('BACKEND_PORT:' + ($cfg.backendPort ? $cfg.backendPort : $cfg.ports.backend)); Write-Host ('MERCHANT_PORT:' + ($cfg.merchantDesktopPort ? $cfg.merchantDesktopPort : $cfg.ports.merchant)); Write-Host ('CUSTOMER_PORT:' + ($cfg.customerWebPort ? $cfg.customerWebPort : $cfg.ports.customer))"') do (
-        if "%%A"=="BACKEND_PORT" if not "%%B"=="" set "BACKEND_PORT=%%B"
-        if "%%A"=="MERCHANT_PORT" if not "%%B"=="" set "MERCHANT_PORT=%%B"
-        if "%%A"=="CUSTOMER_PORT" if not "%%B"=="" set "CUSTOMER_PORT=%%B"
-    )
+set "CONFIG_FILE=C:\ProgramData\AutoPrint\config\appsettings.json"
+if not exist "%CONFIG_FILE%" set "CONFIG_FILE=%ROOT_DIR%\config\appsettings.json"
+
+if exist "%CONFIG_FILE%" (
+    for /f "delims=" %%A in ('powershell -NoProfile -Command "$cfg = Get-Content -LiteralPath '%CONFIG_FILE%' -Raw | ConvertFrom-Json; if ($cfg.backendPort) {$cfg.backendPort} elseif ($cfg.ports -and $cfg.ports.backend) {$cfg.ports.backend} else {5000}"') do set "BACKEND_PORT=%%A"
+    for /f "delims=" %%A in ('powershell -NoProfile -Command "$cfg = Get-Content -LiteralPath '%CONFIG_FILE%' -Raw | ConvertFrom-Json; if ($cfg.merchantDesktopPort) {$cfg.merchantDesktopPort} elseif ($cfg.ports -and $cfg.ports.merchant) {$cfg.ports.merchant} else {8000}"') do set "MERCHANT_PORT=%%A"
+    for /f "delims=" %%A in ('powershell -NoProfile -Command "$cfg = Get-Content -LiteralPath '%CONFIG_FILE%' -Raw | ConvertFrom-Json; if ($cfg.customerWebPort) {$cfg.customerWebPort} elseif ($cfg.ports -and $cfg.ports.customer) {$cfg.ports.customer} else {7000}"') do set "CUSTOMER_PORT=%%A"
+    for /f "delims=" %%A in ('powershell -NoProfile -Command "$cfg = Get-Content -LiteralPath '%CONFIG_FILE%' -Raw | ConvertFrom-Json; if ($cfg.pagekite.enabled -ne $null) {$cfg.pagekite.enabled} else {'false'}"') do set "PAGEKITE_ENABLED=%%A"
+    for /f "delims=" %%A in ('powershell -NoProfile -Command "$cfg = Get-Content -LiteralPath '%CONFIG_FILE%' -Raw | ConvertFrom-Json; if ($cfg.pagekite.subdomain) {$cfg.pagekite.subdomain}"') do set "PAGEKITE_NAME=%%A"
+    for /f "delims=" %%A in ('powershell -NoProfile -Command "$cfg = Get-Content -LiteralPath '%CONFIG_FILE%' -Raw | ConvertFrom-Json; if ($cfg.pagekite.domain) {$cfg.pagekite.domain}"') do set "PAGEKITE_DOMAIN=%%A"
 )
 
 if exist ".env" (
@@ -42,14 +47,20 @@ if exist ".env" (
         if "%%A"=="CUSTOMER_PORT" set "CUSTOMER_PORT=%%B"
         if "%%A"=="PAGEKITE_ENABLED" set "PAGEKITE_ENABLED=%%B"
         if "%%A"=="PAGEKITE_NAME" set "PAGEKITE_NAME=%%B"
+        if "%%A"=="PAGEKITE_DOMAIN" set "PAGEKITE_DOMAIN=%%B"
         if "%%A"=="PAGEKITE_SECRET" set "PAGEKITE_SECRET=%%B"
     )
 )
 
 :: Explicitly set environment variables for child processes
 set "PORT=%BACKEND_PORT%"
+set "BACKEND_PORT=%BACKEND_PORT%"
 set "CUSTOMER_PORT=%CUSTOMER_PORT%"
 set "MERCHANT_PORT=%MERCHANT_PORT%"
+set "PAGEKITE_ENABLED=%PAGEKITE_ENABLED%"
+set "PAGEKITE_NAME=%PAGEKITE_NAME%"
+set "PAGEKITE_DOMAIN=%PAGEKITE_DOMAIN%"
+set "PAGEKITE_SECRET=%PAGEKITE_SECRET%"
 
 echo [1/4] Starting AutoPrint Backend REST API Engine (Port %BACKEND_PORT%)...
 start "AutoPrint Backend" /B node app\backend\dist\server.js > runtime\logs\backend.log 2>&1
@@ -60,8 +71,8 @@ start "AutoPrint Customer Kiosk" /B node app\customer-web\server.js > runtime\lo
 echo [3/4] Starting Merchant Desktop Desk (Port %MERCHANT_PORT%)...
 start "AutoPrint Merchant Desk" /B node app\merchant-desktop\server.js > runtime\logs\merchant.log 2>&1
 
-echo [4/4] Customer Public Tunnel (PageKite) is manual (offline by default).
-echo       To start public online customer access, run: Start-Customer-Tunnel.cmd
+echo [4/4] PageKite tunnel: %PAGEKITE_ENABLED% (automatic when enabled)
+if /i "%PAGEKITE_ENABLED%"=="false" echo       To start public online customer access manually, run: Start-Customer-Tunnel.cmd
 
 :after_pagekite
 echo Waiting for services to initialize...
@@ -72,7 +83,7 @@ echo ===========================================================================
 echo    AUTOPRINT PRINT MANAGEMENT SYSTEM -- ALL SERVICES ONLINE
 echo ===============================================================================
 echo.
-echo    [Customer Public Portal] : https://%PAGEKITE_NAME%.pagekite.me
+echo    [Customer Public Portal] : https://%PAGEKITE_NAME%.%PAGEKITE_DOMAIN%
 echo    [Customer Local Kiosk]   : http://localhost:%CUSTOMER_PORT%
 echo    [Merchant Counter Desk]  : http://localhost:%MERCHANT_PORT%
 echo    [Backend REST API]       : http://localhost:%BACKEND_PORT%/api

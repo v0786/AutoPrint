@@ -102,6 +102,7 @@ export class PageKiteConnector extends EventEmitter {
       path.resolve(__dirname, '../tools/pagekite/pagekite.py'),
       path.resolve(__dirname, '../../tools/pagekite/pagekite.py'),
       path.resolve(__dirname, '../../../tools/pagekite/pagekite.py'),
+      path.resolve(__dirname, '../../../../tools/pagekite/pagekite.py'),
       path.resolve(cwd, 'app/connectors/tunnel/pagekite.py'),
       path.resolve(cwd, 'app/backend/src/connectors/pagekite.py'),
       'C:\\Program Files\\AutoPrint\\tools\\pagekite\\pagekite.py',
@@ -331,15 +332,6 @@ export class PageKiteConnector extends EventEmitter {
         }
         this.emit('status', this.state);
       });
-
-      // Optimistic connection check after startup
-      setTimeout(() => {
-        if (this.process && this.state.status === 'CONNECTING') {
-          this.state.status = 'CONNECTED';
-          this.state.lastConnectedAt = new Date().toISOString();
-          this.emit('status', this.state);
-        }
-      }, 3500);
 
       return true;
     } catch (e: any) {

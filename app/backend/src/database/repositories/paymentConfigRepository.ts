@@ -87,13 +87,15 @@ export class PaymentConfigRepository {
 
   public static getPublicPaymentConfig() {
     const config = this.getConfig();
+    const razorpayKeyId = process.env.RAZORPAY_KEY_ID || config?.razorpay_key_id || null;
     return {
-      provider: config?.provider || 'UPI_DIRECT',
+      provider: config?.provider || (razorpayKeyId ? 'RAZORPAY' : 'UPI_DIRECT'),
       upiId: config?.upi_id || null,
       upiPayeeName: config?.upi_payee_name || null,
       upiQrDataUrl: config?.upi_qr_data_url || null,
-      razorpayKeyId: config?.razorpay_key_id || null,
-      isConfigured: Boolean(config?.upi_id || config?.razorpay_key_id),
+      razorpayKeyId,
+      hasRazorpay: Boolean(razorpayKeyId && (config?.razorpay_key_secret || process.env.RAZORPAY_KEY_SECRET)),
+      isConfigured: Boolean(config?.upi_id || razorpayKeyId),
     };
   }
 }

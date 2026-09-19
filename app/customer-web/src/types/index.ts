@@ -102,6 +102,8 @@ export interface PaymentDetails {
     phone?: string;
     email?: string;
   };
+  razorpayOrderId?: string;
+  razorpaySignature?: string;
 }
 
 export type CanonicalPaperFormat = 'A4' | 'A3' | 'Letter' | 'Legal' | '80mm';
