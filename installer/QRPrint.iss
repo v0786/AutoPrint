@@ -4,8 +4,8 @@
 ;   Output: release\QRPrint-Setup.exe
 ; ===============================================================================
 
-#define MyAppName "QRPrint"
-#define MyAppVersion "1.0.0"
+#define MyAppName "AutoPrint"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "AutoPrint Engineering"
 #define MyAppURL "https://autoprint.pagekite.me"
 #define MyAppExeName "AutoPrint.exe"
@@ -18,11 +18,11 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\QRPrint
-DefaultGroupName=QRPrint
+DefaultDirName={autopf}\AutoPrint
+DefaultGroupName=AutoPrint
 AllowNoIcons=yes
 OutputDir=..\release
-OutputBaseFilename=QRPrint-Setup
+OutputBaseFilename=AutoPrint-Setup
 SetupIconFile=..\assets\icon\autoprint.ico
 UninstallDisplayIcon={app}\assets\icon\autoprint.ico
 Compression=lzma2/ultra64
@@ -46,7 +46,7 @@ Name: "kiosk"; Description: "Customer Standalone Kiosk (Touchscreen Upload Termi
 Name: "custom"; Description: "Custom Installation Options"; Flags: iscustom
 
 [Components]
-Name: "core"; Description: "QRPrint Core Backend & SQLite Datastore"; Types: full merchant kiosk custom; Flags: fixed
+Name: "core"; Description: "AutoPrint Core Backend & SQLite Datastore"; Types: full merchant kiosk custom; Flags: fixed
 Name: "merchant"; Description: "Merchant Desktop (Cash Desk, Rate Cards, Verification Desk)"; Types: full merchant custom
 Name: "kiosk"; Description: "Customer Kiosk (Instant Document Upload & Preview)"; Types: full kiosk custom
 Name: "spooler"; Description: "Universal Windows Spooler & Hardware Integration"; Types: full merchant custom
@@ -67,7 +67,7 @@ Name: "{localappdata}\{#MyAppName}\settings"; Permissions: users-full
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startwithwindows"; Description: "Start QRPrint automatically when Windows starts"; GroupDescription: "Windows Startup Options:"
+Name: "startwithwindows"; Description: "Start AutoPrint automatically when Windows starts"; GroupDescription: "Windows Startup Options:"
 
 [Files]
 ; Embedded Official Node.js Prerequisite MSI (extracted to temp only if Node.js is missing on target PC)
@@ -85,7 +85,7 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"; IconFilename
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\assets\icon\autoprint.ico"
 
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "QRPrint"; ValueData: """{app}\{#MyAppExeName}"" --startup"; Flags: uninsdeletevalue; Tasks: startwithwindows
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AutoPrint"; ValueData: """{app}\{#MyAppExeName}"" --startup"; Flags: uninsdeletevalue; Tasks: startwithwindows
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent; Check: IsReadyToLaunch
@@ -105,15 +105,15 @@ procedure WriteInstallerLog(const Msg: String);
 var
   LogDir, LogFile, TimeStr, Line: String;
 begin
-  Log('[QRPrint] ' + Msg);
+  Log('[AutoPrint] ' + Msg);
   TimeStr := GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0);
   Line := '[' + TimeStr + '] ' + Msg + #13#10;
   try
-    LogDir := ExpandConstant('{commonappdata}\QRPrint\logs');
+    LogDir := ExpandConstant('{commonappdata}\AutoPrint\logs');
     ForceDirectories(LogDir);
     LogFile := LogDir + '\installer-' + GetDateTimeString('yyyymmdd', #0, #0) + '.log';
     SaveStringToFile(LogFile, Line, True);
-    SaveStringToFile(ExpandConstant('{tmp}\qrprint-installer.log'), Line, True);
+    SaveStringToFile(ExpandConstant('{tmp}\autoprint-installer.log'), Line, True);
   except
   end;
 end;

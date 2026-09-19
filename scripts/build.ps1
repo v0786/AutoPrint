@@ -166,25 +166,30 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "Inno Setup compilation failed with exit code $LASTEXITCODE!"
 }
 
-$setupExe = Join-Path $releaseDir "QRPrint-Setup.exe"
-$versionedSetupExe = Join-Path $releaseDir "QRPrint-1.0.0-Setup.exe"
+$setupExe = Join-Path $releaseDir "AutoPrint-Setup.exe"
+$versionedSetupExe = Join-Path $releaseDir "AutoPrint-1.0.0-Setup.exe"
 if (Test-Path $setupExe) {
     Copy-Item $setupExe $versionedSetupExe -Force
+    # Backwards compatibility alias
+    Copy-Item $setupExe (Join-Path $releaseDir "QRPrint-Setup.exe") -Force
+    Copy-Item $setupExe (Join-Path $releaseDir "QRPrint-1.0.0-Setup.exe") -Force
 } else {
     Write-Error "Expected installer output not found at: $setupExe"
 }
-Write-Host "   [PASS] Compiled QRPrint-Setup.exe and QRPrint-1.0.0-Setup.exe." -ForegroundColor Green
+Write-Host "   [PASS] Compiled AutoPrint-Setup.exe and AutoPrint-1.0.0-Setup.exe." -ForegroundColor Green
 
 # 7. Package Portable Distribution & Generate Checksums
 Write-Host "[7/7] Packaging portable distribution and computing SHA-256 checksums..." -ForegroundColor Yellow
 
-$portableZip = Join-Path $releaseDir "QRPrint-1.0.0-Portable.zip"
+$portableZip = Join-Path $releaseDir "AutoPrint-1.0.0-Portable.zip"
 if (Test-Path $portableZip) {
     Remove-Item $portableZip -Force
 }
 
 # Compress payload into portable zip
 Compress-Archive -Path "$payloadDir\*" -DestinationPath $portableZip -CompressionLevel Optimal
+# Backwards compatibility alias
+Copy-Item $portableZip (Join-Path $releaseDir "QRPrint-1.0.0-Portable.zip") -Force
 Write-Host "   [PASS] Created portable distribution: $portableZip" -ForegroundColor Green
 
 # Generate checksums.txt
