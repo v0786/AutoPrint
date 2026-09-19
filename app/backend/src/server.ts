@@ -23,7 +23,6 @@ import { RefundController } from './controllers/refundController';
 import { SetupController } from './controllers/setupController';
 import { PrinterService } from './services/printerService';
 import { tunnelService } from './services/tunnelService';
-import { CloudSyncService } from './services/cloudSyncService';
 
 import { requireAuth, requireAdmin, optionalAuth } from './middleware/auth';
 import { createRateLimiter } from './middleware/rateLimiter';
@@ -227,9 +226,6 @@ api.get('/printers', requireAuth, async (_req, res, next) => {
     next(err);
   }
 });
-
-// Start background Cloud Support Sync Worker
-CloudSyncService.startWorker(30000);
 
 app.use(CONFIG.API_PREFIX, api);
 
