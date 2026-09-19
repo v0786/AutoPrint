@@ -50,6 +50,25 @@ When AutoPrint is running, the local portals are accessible in any browser:
 | **Customer Kiosk** | `http://localhost:7000` | Customer mobile upload wizard, print configuration, price estimate, and 8-digit code. |
 | **Backend REST API** | `http://localhost:5000/api` | Core print spooler, database, rate limiter, and authentication gateway. |
 
+### Merchant interface modes
+
+AutoPrint keeps the browser-based Merchant Dashboard as the default interface. The native Windows launcher provides a system-tray menu for opening the Merchant Web UI and selecting the persisted interface preference:
+
+- **Web Mode** (default): opens the existing localhost Merchant Dashboard.
+- **GUI Mode**: uses the native launcher entry point while continuing to use the same Merchant UI, backend, queue, printer service, and database.
+
+The preference is stored in `C:\ProgramData\AutoPrint\config\installation.json` and defaults to `web` for existing installations.
+
+### Verification-page printing
+
+In Merchant Dashboard → Settings → Print Pricing, enable **Do not print verification page** to omit the verification page from future print jobs. When disabled, AutoPrint preserves the uploaded document and appends a separate black-and-white, landscape verification page with a large collection code as the final page.
+
+The setting is stored with the merchant print configuration and is backward-compatible with existing databases.
+
+### System tray
+
+The native `AutoPrint.exe` launcher supervises the backend, customer kiosk, merchant service, and optional PageKite tunnel. Its tray menu provides Merchant Web, service status, printer/payment settings, logs, restart, and exit actions. The launcher prevents duplicate service processes and keeps Web Mode available without requiring the native interface.
+
 ---
 
 ## 4. Key Development Commands
