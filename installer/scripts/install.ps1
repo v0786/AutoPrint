@@ -189,7 +189,8 @@ Write-Host "      Calculated SHA-256 : $calculatedHash" -ForegroundColor Gray
 
 $expectedHash = $null
 try {
-    $shaContent = (Invoke-WebRequest -Uri $shaUrl -UseBasicParsing -TimeoutSec 10).Content.Trim()
+    $shaRaw = Invoke-RestMethod -Uri $shaUrl -UseBasicParsing -TimeoutSec 10
+    $shaContent = "$shaRaw".Trim()
     # Extract 64-char hex hash
     if ($shaContent -match "([a-fA-F0-9]{64})") {
         $expectedHash = $matches[1].ToLower()
