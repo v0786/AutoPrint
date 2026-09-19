@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qrprint"
+version = "1.0.0"
+description = "QRPrint — Professional Offline Windows Kiosk & Print Shop Management System"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "AutoPrint Engineering", email = "engineering@autoprint.local" }
+]
+keywords = [
+    "qrprint",
+    "autoprint",
+    "print-shop",
+    "kiosk",
+    "windows7",
+    "windows10",
+    "windows11",
+    "pos",
+    "receipt",
+    "spooler"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: Customer Service",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: Microsoft :: Windows :: Windows 7",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Printing",
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+build = [
+    "pyinstaller>=5.0.0; python_version < '3.14'",
+]
+
+[project.urls]
+Homepage = "https://github.com/v0786/AutoPrint"
+Documentation = "https://github.com/v0786/AutoPrint#readme"

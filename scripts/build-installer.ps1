@@ -154,9 +154,9 @@ Copy-Item (Join-Path $merchSrc "dist\*") (Join-Path $merchDest "dist") -Recurse 
 Copy-Item (Join-Path $merchSrc "server.js") $merchDest -Force
 Copy-Item (Join-Path $merchSrc "package.json") $merchDest -Force
 
-# Connectors & Shared
-Copy-Item (Join-Path $rootDir "app\connectors") $targetAppDir -Recurse -Force
-Copy-Item (Join-Path $rootDir "app\shared") $targetAppDir -Recurse -Force
+# Connectors & Shared (optional legacy modules)
+if (Test-Path (Join-Path $rootDir "app\connectors")) { Copy-Item (Join-Path $rootDir "app\connectors") $targetAppDir -Recurse -Force }
+if (Test-Path (Join-Path $rootDir "app\shared")) { Copy-Item (Join-Path $rootDir "app\shared") $targetAppDir -Recurse -Force }
 
 # Stage Production Node Modules for Zero-Setup Offline Execution
 Write-Host "   Staging production node_modules (Backend, Customer, Merchant)..." -ForegroundColor Yellow

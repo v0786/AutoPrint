@@ -1,3 +1,21 @@
-# QRPrint currently contains no Python source files and has no Python package
-# dependencies. This file is kept so install.bat can provision a ready-to-use
-# virtual environment for future Python utilities without manual setup.
+# ==============================================================================
+# QRPrint / AutoPrint — Dependencies Specification
+# Target Systems: Windows 7 (SP1 64-bit), Windows 10, Windows 11
+# ==============================================================================
+#
+# ARCHITECTURAL NOTE:
+# QRPrint is engineered as a 100% self-contained offline application.
+# The primary desktop application and background service manager is compiled
+# into a native Windows binary (AutoPrint.exe) targeting .NET Framework 4.5.2,
+# which executes natively across Windows 7 SP1, Windows 10, and Windows 11
+# without requiring Python or Node.js to be installed by end customers.
+#
+# PYTHON WINDOWS 7 COMPATIBILITY MATRIX:
+# - Python 3.8.10: The last official CPython release supporting Windows 7 SP1.
+# - Python 3.9+: Dropped Windows 7 support entirely (requires undocumented shims).
+# - PySide6 (Qt 6): Requires Windows 10+ (does not support Windows 7).
+#   For Windows 7 Qt compatibility, PySide2 / PyQt5 (Qt 5.15) is required.
+#
+# OPTIONAL BUILD & PACKAGING DEPENDENCIES:
+# For operators building custom PyInstaller wrappers on compatible environments:
+# pyinstaller>=5.0.0; python_version <= '3.11'
