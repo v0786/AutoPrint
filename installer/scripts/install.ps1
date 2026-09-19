@@ -129,7 +129,7 @@ $installPaths = @(
 
 $existingInstallDir = $null
 foreach ($path in $installPaths) {
-    if (Test-Path "$path\AutoPrint.exe" -or Test-Path "$path\app\backend\dist\server.js") {
+    if ((Test-Path "$path\AutoPrint.exe") -or (Test-Path "$path\app\backend\dist\server.js")) {
         $existingInstallDir = $path
         break
     }
