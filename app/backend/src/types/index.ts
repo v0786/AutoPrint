@@ -23,10 +23,15 @@ export type PaymentAttemptStatus = 'SUCCESS' | 'FAILED' | 'TIMED_OUT';
 export type PrintJobStatus =
   | 'DRAFT'
   | 'UPLOAD_RECEIVED'
+  | 'UPLOADED'
+  | 'PRICE_CALCULATED'
   | 'PAYMENT_PENDING'
   | 'PAYMENT_PROCESSING'
+  | 'AWAITING_CASH_CONFIRMATION'
   | 'PAID'
   | 'PAYMENT_FAILED'
+  | 'PAYMENT_CANCELLED'
+  | 'PAYMENT_EXPIRED'
   | 'PAYMENT_REVIEW_REQUIRED'
   | 'READY_FOR_PRINT'
   | 'CREATED'
@@ -34,11 +39,14 @@ export type PrintJobStatus =
   | 'PRINTING'
   | 'PRINTED'
   | 'PRINT_COMPLETED'
+  | 'PRINT_FAILED'
   | 'READY_FOR_HANDOVER'
+  | 'READY_FOR_PICKUP'
   | 'READY_FOR_COLLECTION'
   | 'COMPLETED'
   | 'COLLECTED'
   | 'FAILED'
+  | 'EXPIRED'
   | 'REFUND_REQUESTED'
   | 'REFUND_UNDER_REVIEW'
   | 'REFUND_APPROVED'
@@ -147,6 +155,16 @@ export interface PrintJobRow {
   amount_minor_units: number;
   currency: string;
   payment_method: PaymentMethod;
+  payment_status?: string;
+  payment_transaction_id?: string | null;
+  print_status?: string;
+  paid_at?: string | null;
+  queued_at?: string | null;
+  printing_started_at?: string | null;
+  printed_at?: string | null;
+  ready_for_pickup_at?: string | null;
+  collected_at?: string | null;
+  pickup_code?: string | null;
   status: PrintJobStatus;
   created_at: string;
   updated_at: string;
@@ -160,6 +178,17 @@ export interface PrintJobResponse {
   customerName: string;
   printerName: string;
   status: PrintJobStatus;
+  paymentMethod: PaymentMethod;
+  paymentStatus: string;
+  paymentTransactionId?: string;
+  printStatus: string;
+  paidAt?: string;
+  queuedAt?: string;
+  printingStartedAt?: string;
+  printedAt?: string;
+  readyForPickupAt?: string;
+  collectedAt?: string;
+  pickupCode?: string;
   /** Amount as decimal (e.g. 24.50) */
   amountTotal: number;
   currency: string;

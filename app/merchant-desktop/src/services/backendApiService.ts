@@ -121,6 +121,22 @@ export class BackendApiService {
   }
 
   /**
+   * Retrieves all persistent verification records from backend.
+   */
+  public static async getVerificationRecords(): Promise<CollectionVerificationRecord[]> {
+    try {
+      const response = await fetch(`${getBaseUrl()}/verification/records`, {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) return [];
+      const json = await response.json();
+      return json.data || [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * Retrieves all active print jobs from backend.
    */
   public static async getAllJobs(traceId?: string): Promise<any[]> {
@@ -138,6 +154,26 @@ export class BackendApiService {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Merchant confirms cash payment received for a print job.
+   * Transitions job to PAID/QUEUED and triggers print execution.
+   */
+  public static async confirmCashPayment(jobId: string, staffId = 'STAFF-DESK-01', staffName = 'Counter Staff'): Promise<any> {
+    const response = await fetch(`${getBaseUrl()}/jobs/${jobId}/confirm-cash`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify({ staffId, staffName }),
+    });
+    const json = await response.json();
+    if (!response.ok || !json.ok) {
+      throw new Error(json.error || `Cash confirmation failed (HTTP ${response.status})`);
+    }
+    return json.data;
   }
 
   /**

@@ -23,7 +23,9 @@ import {
   Zap,
   HardDrive,
   X,
+  Banknote,
 } from 'lucide-react';
+import { BackendApiService } from '../services/backendApiService';
 
 interface ActiveQueueViewProps {
   jobs: PrintJob[];
@@ -69,6 +71,31 @@ export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
       setRefreshError(err.message || 'Failed to sync with backend');
     } finally {
       setIsRefreshing(false);
+    }
+  };
+  const [confirmingJobId, setConfirmingJobId] = useState<string | null>(null);
+
+  const isCashPending = (job: PrintJob) => {
+    const method = (job.paymentMethod || '').toUpperCase();
+    const status = (job.paymentStatus || '').toUpperCase();
+    return (
+      (method === 'CASH' && status !== 'PAID' && status !== 'CASH_COLLECTED') ||
+      status === 'CASH_REQUIRED' ||
+      status === 'AWAITING_CASH_CONFIRMATION'
+    );
+  };
+
+  const handleConfirmCash = async (jobId: string) => {
+    try {
+      setConfirmingJobId(jobId);
+      await BackendApiService.confirmCashPayment(jobId);
+      if (onRefreshQueue) {
+        await onRefreshQueue();
+      }
+    } catch (err: any) {
+      alert(`Error confirming cash payment: ${err.message || err}`);
+    } finally {
+      setConfirmingJobId(null);
     }
   };
 
@@ -386,12 +413,40 @@ export const ActiveQueueView: React.FC<ActiveQueueViewProps> = ({
 
                     {/* Status */}
                     <td className="py-3 px-4">
-                      {getStatusBadge(job.status)}
+                      {isCashPending(job) ? (
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
+                            <Banknote className="w-3 h-3" />
+                            Cash Required
+                          </span>
+                          <span className="text-[10px] font-mono text-zinc-400">
+                            Due: ₹{job.totalCost?.toFixed(2) || '0.00'}
+                          </span>
+                        </div>
+                      ) : (
+                        getStatusBadge(job.status)
+                      )}
                     </td>
 
                     {/* Actions */}
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {isCashPending(job) && (
+                          <button
+                            onClick={() => handleConfirmCash(job.id)}
+                            disabled={confirmingJobId === job.id}
+                            className="px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-[11px] flex items-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
+                            title="Confirm cash received from customer and trigger printing immediately"
+                          >
+                            {confirmingJobId === job.id ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            )}
+                            <span>Confirm Cash</span>
+                          </button>
+                        )}
+
                         <button
                           onClick={() => onPreviewJobDoc(job)}
                           className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"

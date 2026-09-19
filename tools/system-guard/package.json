@@ -1,0 +1,25 @@
+{
+  "name": "autoprint-system-guard",
+  "version": "1.0.0",
+  "description": "Comprehensive System Diagnostic, Monitoring, Self-Healing and AI Escalation Suite for AutoPrint",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "guard": "node dist/bin/guard-cli.js",
+    "test": "tsc && node --test dist/tests/guard.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5"
+  },
+  "keywords": [
+    "system-guard",
+    "diagnostics",
+    "self-healing",
+    "auto-recovery",
+    "crash-detection",
+    "ai-escalation"
+  ],
+  "author": "AutoPrint Engineering",
+  "license": "Apache-2.0"
+}

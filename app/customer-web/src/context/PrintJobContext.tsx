@@ -377,8 +377,10 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }).catch((e) => console.warn('Digital attempt registration:', e));
       }
 
+      const isInitiallyPaid = Boolean(finalPayment.gatewayPaymentId || finalPayment.paymentVerified);
+
       const initialJobStatus: JobStatus =
-        backendJob.status === 'PRINTED' || backendJob.status === 'READY_FOR_HANDOVER'
+        backendJob.status === 'PRINTED' || backendJob.status === 'READY_FOR_PICKUP' || backendJob.status === 'READY_FOR_HANDOVER'
           ? 'ready'
           : backendJob.status === 'PRINTING'
           ? 'printing'
@@ -397,8 +399,8 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         pricing: { ...pricing },
         payment: {
           ...finalPayment,
-          paymentVerified: backendPaymentMethod === 'UPI' || Boolean(finalPayment.paymentVerified),
-          paidAt: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }),
+          paymentVerified: isInitiallyPaid,
+          paidAt: isInitiallyPaid ? now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : undefined,
           transactionId: upiTxnId,
         },
         jobStatus: initialJobStatus,
@@ -415,16 +417,33 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // 3. Poll real job status from backend
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = setInterval(async () => {
-        const fresh = await CustomerApiClient.getJobById(backendJob.id);
+        const fresh: any = await CustomerApiClient.getJobById(backendJob.id);
         if (fresh) {
-          if (fresh.status === 'PRINTED' || fresh.status === 'READY_FOR_HANDOVER') {
+          const isPaid = fresh.paymentStatus === 'PAID' || fresh.status === 'PAID';
+          if (fresh.status === 'READY_FOR_PICKUP' || fresh.status === 'PRINTED' || fresh.status === 'READY_FOR_HANDOVER') {
             setJobStatus('ready');
-            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           } else if (fresh.status === 'PRINTING') {
             setJobStatus('printing');
+          } else if (fresh.status === 'QUEUED' || isPaid) {
+            setJobStatus('queued');
+          }
+
+          setCurrentOrder((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              payment: {
+                ...prev.payment,
+                paymentVerified: isPaid || prev.payment.paymentVerified,
+              },
+            };
+          });
+
+          if (fresh.status === 'READY_FOR_PICKUP' || fresh.status === 'COLLECTED' || fresh.status === 'READY_FOR_HANDOVER') {
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           }
         }
-      }, 3000);
+      }, 2500);
     } catch (err: any) {
       console.error('Job submission failed:', err);
       setSubmissionError(err.message || 'Failed to connect to print server.');

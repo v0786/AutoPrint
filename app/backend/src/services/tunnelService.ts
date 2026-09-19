@@ -80,6 +80,20 @@ class TunnelManagementService {
     return this.connector.getState();
   }
 
+  public async verifyPageKite(
+    subdomain: string,
+    secret: string,
+    domain = 'pagekite.me'
+  ): Promise<{ success: boolean; message: string; publicUrl: string; rawOutput?: string }> {
+    return PageKiteConnector.verifyCredentials({
+      subdomain,
+      domain,
+      secret,
+      localPort: CONFIG.CUSTOMER_PORT || 7000,
+      timeoutMs: 5000,
+    });
+  }
+
   public updateTunnelConfig(subdomain: string, enabled: boolean, secret?: string): TunnelState {
     const updated = this.connector.updateConfig({
       subdomain,
@@ -88,6 +102,34 @@ class TunnelManagementService {
       localPort: CONFIG.CUSTOMER_PORT,
     });
     this.computeActiveCustomerUrl();
+
+    // Persist configuration to appsettings.json if writable
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const possibleSettingsPaths = [
+        'C:\\ProgramData\\AutoPrint\\config\\appsettings.json',
+        path.resolve(process.cwd(), 'config/appsettings.json'),
+      ];
+
+      for (const p of possibleSettingsPaths) {
+        if (fs.existsSync(p)) {
+          const raw = fs.readFileSync(p, 'utf8');
+          const json = JSON.parse(raw);
+          json.pagekite = {
+            ...(json.pagekite || {}),
+            enabled,
+            subdomain: subdomain.toLowerCase().trim(),
+            domain: 'pagekite.me',
+            ...(secret ? { secret: secret.trim() } : {}),
+          };
+          fs.writeFileSync(p, JSON.stringify(json, null, 2), 'utf8');
+        }
+      }
+    } catch {
+      // ignore persistence error
+    }
+
     return updated;
   }
 

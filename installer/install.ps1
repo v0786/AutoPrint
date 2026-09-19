@@ -2,7 +2,7 @@
 .SYNOPSIS
     AutoPrint / QRPrint Production Windows Installation Wizard
 .DESCRIPTION
-    Interactive installation wizard for AutoPrint. Handles port configuration (5000/6000/7000),
+    Interactive installation wizard for AutoPrint. Handles port configuration (5000/8000/7000),
     PageKite public customer ingress setup, datastore hierarchy setup, dependency installation,
     TypeScript compilation, printer detection, shortcut creation, and automated verification.
 #>
@@ -135,7 +135,7 @@ if ($useDefaultPorts -notmatch "^[Yy]") {
     }
 
     $backendPort  = Prompt-ValidPort "Backend REST API" 5000
-    $merchantPort = Prompt-ValidPort "Merchant Desktop" 6000
+    $merchantPort = Prompt-ValidPort "Merchant Desktop" 8000
     $customerPort = Prompt-ValidPort "Customer Kiosk" 7000
 }
 
@@ -336,7 +336,7 @@ NODE_ENV=development
 API_PREFIX=/api
 MAX_DIGITAL_ATTEMPTS=3
 HMAC_SECRET=AP_VERIFY_HMAC_SECURE_2026_CHANGE_THIS_IN_PRODUCTION
-CORS_ORIGIN=http://localhost:$customerPort,http://localhost:$merchantPort,http://localhost:3000,http://localhost:3001,http://localhost:5000,http://localhost:6000,http://localhost:7000,https://$pagekiteName.pagekite.me
+CORS_ORIGIN=http://localhost:$customerPort,http://localhost:$merchantPort,http://localhost:$backendPort,https://$pagekiteName.pagekite.me
 CURRENCY=INR
 MAX_FILE_SIZE_MB=50
 AUTOPRINT_DATA_DIR=$dataDir

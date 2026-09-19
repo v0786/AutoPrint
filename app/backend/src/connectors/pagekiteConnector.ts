@@ -44,7 +44,8 @@ export class PageKiteConnector extends EventEmitter {
       localPort: config.localPort || 7000,
     };
 
-    const publicUrl = `https://${this.config.subdomain.toLowerCase().trim()}.${this.config.domain}`;
+    const cleanSub = (this.config.subdomain || 'autoprint').toLowerCase().trim();
+    const publicUrl = `https://${cleanSub}.${this.config.domain || 'pagekite.me'}`;
 
     this.state = {
       status: this.config.enabled ? 'CONNECTING' : 'DISABLED',
@@ -65,12 +66,61 @@ export class PageKiteConnector extends EventEmitter {
     return this.state.publicUrl;
   }
 
+  public static findPythonRuntime(explicitPath?: string): string {
+    if (explicitPath && fs.existsSync(explicitPath)) return explicitPath;
+    if (process.env.PAGEKITE_PYTHON_PATH && fs.existsSync(process.env.PAGEKITE_PYTHON_PATH)) {
+      return process.env.PAGEKITE_PYTHON_PATH;
+    }
+
+    const localAppData = process.env.LOCALAPPDATA || '';
+    const username = process.env.USERNAME || '';
+    const candidatePaths = [
+      path.join(localAppData, 'Python/bin/python.exe'),
+      path.join(localAppData, 'Microsoft/WindowsApps/python.exe'),
+      `C:\\Users\\${username}\\AppData\\Local\\Python\\bin\\python.exe`,
+      'C:\\Program Files\\Python312\\python.exe',
+      'C:\\Program Files\\Python311\\python.exe',
+      'C:\\Program Files\\Python310\\python.exe',
+      'C:\\Python312\\python.exe',
+      'C:\\Python311\\python.exe',
+    ];
+
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) return p;
+    }
+
+    // Default fallback to PATH commands
+    return process.platform === 'win32' ? 'python.exe' : 'python';
+  }
+
+  public static findScriptPath(): string | null {
+    const cwd = process.cwd();
+    const candidatePaths = [
+      path.resolve(cwd, 'tools/pagekite/pagekite.py'),
+      path.resolve(cwd, 'scripts/pagekite.py'),
+      path.resolve(__dirname, 'pagekite.py'),
+      path.resolve(__dirname, '../tools/pagekite/pagekite.py'),
+      path.resolve(__dirname, '../../tools/pagekite/pagekite.py'),
+      path.resolve(__dirname, '../../../tools/pagekite/pagekite.py'),
+      path.resolve(cwd, 'app/connectors/tunnel/pagekite.py'),
+      path.resolve(cwd, 'app/backend/src/connectors/pagekite.py'),
+      'C:\\Program Files\\AutoPrint\\tools\\pagekite\\pagekite.py',
+      'C:\\Program Files\\AutoPrint\\scripts\\pagekite.py',
+    ];
+
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) return p;
+    }
+    return null;
+  }
+
   public updateConfig(newConfig: Partial<PageKiteConfig>): TunnelState {
     this.config = { ...this.config, ...newConfig };
     if (this.config.subdomain) {
-      this.state.subdomain = this.config.subdomain;
+      const cleanSub = this.config.subdomain.toLowerCase().trim();
+      this.state.subdomain = cleanSub;
       this.state.domain = this.config.domain || 'pagekite.me';
-      this.state.publicUrl = `https://${this.config.subdomain.toLowerCase().trim()}.${this.state.domain}`;
+      this.state.publicUrl = `https://${cleanSub}.${this.state.domain}`;
     }
 
     if (!this.config.enabled) {
@@ -81,6 +131,115 @@ export class PageKiteConnector extends EventEmitter {
     }
 
     return this.getState();
+  }
+
+  /**
+   * Performs an automated live test probe of PageKite credentials and connectivity.
+   */
+  public static async verifyCredentials(options: {
+    subdomain: string;
+    domain?: string;
+    secret?: string;
+    localPort?: number;
+    timeoutMs?: number;
+  }): Promise<{ success: boolean; message: string; publicUrl: string; rawOutput?: string }> {
+    const cleanSubdomain = (options.subdomain || '').trim().toLowerCase();
+    const domain = options.domain || 'pagekite.me';
+    const localPort = options.localPort || 7000;
+    const secret = (options.secret || '').trim();
+    const timeoutMs = options.timeoutMs || 6000;
+    const publicUrl = `https://${cleanSubdomain}.${domain}`;
+
+    if (!cleanSubdomain || !/^[a-z0-9_-]{1,64}$/.test(cleanSubdomain)) {
+      return {
+        success: false,
+        message: 'Invalid PageKite subdomain. Must be 1-64 characters (alphanumeric, dashes, underscores).',
+        publicUrl,
+      };
+    }
+
+    if (!secret || !/^[a-zA-Z0-9_.-]{1,128}$/.test(secret)) {
+      return {
+        success: false,
+        message: 'Invalid PageKite secret key format.',
+        publicUrl,
+      };
+    }
+
+    const scriptPath = PageKiteConnector.findScriptPath();
+    if (!scriptPath) {
+      return {
+        success: false,
+        message: 'Bundled pagekite.py script was not found on this computer.',
+        publicUrl,
+      };
+    }
+
+    const pythonCmd = PageKiteConnector.findPythonRuntime();
+    const kiteName = `${cleanSubdomain}.${domain}`;
+    const serviceArg = `--service_on=http:${kiteName}:localhost:${localPort}:${secret}`;
+    const args = [scriptPath, '--defaults', '--clean', serviceArg];
+
+    return new Promise((resolve) => {
+      let settled = false;
+      let output = '';
+
+      const finalize = (success: boolean, message: string) => {
+        if (settled) return;
+        settled = true;
+        try {
+          proc.kill();
+        } catch {}
+        resolve({ success, message, publicUrl, rawOutput: output.trim() });
+      };
+
+      const proc = spawn(pythonCmd, args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: false,
+      });
+
+      const handleData = (buf: Buffer) => {
+        const text = buf.toString();
+        output += text;
+
+        if (text.includes('err=Rejected') || text.includes('unauthorized') || text.includes('Authentication failed')) {
+          finalize(false, `Authentication failed for ${kiteName}. Please verify your PageKite Secret Key.`);
+        } else if (text.includes('kites are flying') || text.includes('Flying') || (text.includes('FE=') && !text.includes('err=Rejected'))) {
+          finalize(true, `PageKite tunnel successfully verified! Kites are flying at ${publicUrl}`);
+        }
+      };
+
+      proc.stdout?.on('data', handleData);
+      proc.stderr?.on('data', handleData);
+
+      proc.on('error', (err) => {
+        finalize(false, `Failed to execute Python/PageKite: ${err.message}`);
+      });
+
+      proc.on('close', (code) => {
+        if (!settled) {
+          if (output.includes('unauthorized') || output.includes('Rejected')) {
+            finalize(false, `PageKite credentials rejected for ${kiteName}.`);
+          } else if (code === 0 || output.includes('connect=')) {
+            finalize(true, `PageKite tunnel verified successfully at ${publicUrl}`);
+          } else {
+            finalize(false, `PageKite exited with code ${code}. ${output.slice(0, 150)}`);
+          }
+        }
+      });
+
+      setTimeout(() => {
+        if (!settled) {
+          if (output.includes('Rejected') || output.includes('unauthorized')) {
+            finalize(false, `PageKite rejected secret key for ${kiteName}.`);
+          } else if (output.includes('connect=') || output.includes('FE=')) {
+            finalize(true, `PageKite tunnel connected and verified at ${publicUrl}!`);
+          } else {
+            finalize(false, `PageKite verification timed out after ${timeoutMs / 1000}s. Check internet connection.`);
+          }
+        }
+      }, timeoutMs);
+    });
   }
 
   /**
@@ -116,39 +275,37 @@ export class PageKiteConnector extends EventEmitter {
     this.emit('status', this.state);
 
     const kiteName = `${cleanSubdomain}.${this.config.domain || 'pagekite.me'}`;
-    const localPort = this.config.localPort;
+    const localPort = this.config.localPort || 7000;
+    const scriptPath = PageKiteConnector.findScriptPath();
 
-    // Locate pagekite.py script
-    const possibleScriptPaths = [
-      path.resolve(__dirname, 'pagekite.py'),
-      path.resolve(process.cwd(), 'scripts/pagekite.py'),
-      path.resolve(process.cwd(), 'app/connectors/tunnel/pagekite.py'),
-      path.resolve(process.cwd(), 'app/backend/src/connectors/pagekite.py'),
-    ];
-    const scriptPath = possibleScriptPaths.find((p) => fs.existsSync(p));
-
-    let execCmd = process.platform === 'win32' ? 'python.exe' : 'python';
-    let args: string[] = ['--nossl'];
-
-    if (this.config.secret) {
-      args.push(`--service_cfg=${kiteName}:${localPort}:${this.config.secret.trim()}`);
+    if (!scriptPath) {
+      this.state.status = 'ERROR';
+      this.state.error = 'Bundled pagekite.py script was not found.';
+      this.emit('status', this.state);
+      return false;
     }
-    args.push(String(localPort));
-    args.push(kiteName);
 
-    if (scriptPath) {
-      args.unshift(scriptPath);
-    }
+    const pythonCmd = PageKiteConnector.findPythonRuntime(this.config.executablePath);
+    const secret = (this.config.secret || '').trim();
+    const serviceArg = secret
+      ? `--service_on=http:${kiteName}:localhost:${localPort}:${secret}`
+      : `--service_on=http:${kiteName}:localhost:${localPort}`;
+
+    const args = [scriptPath, '--defaults', '--clean', serviceArg];
 
     try {
-      this.process = spawn(execCmd, args, {
+      this.process = spawn(pythonCmd, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: false,
       });
 
       this.process.stdout?.on('data', (data: Buffer) => {
         const text = data.toString();
-        if (text.includes('kites are flying') || text.includes('Connected') || text.includes('Flying') || text.includes('FE=')) {
+        if (text.includes('err=Rejected') || text.includes('reason=unauthorized')) {
+          this.state.status = 'ERROR';
+          this.state.error = 'Authentication failed: Invalid PageKite secret key.';
+          this.emit('status', this.state);
+        } else if (text.includes('kites are flying') || text.includes('Connected') || text.includes('Flying') || (text.includes('FE=') && !text.includes('err=Rejected'))) {
           this.state.status = 'CONNECTED';
           this.state.lastConnectedAt = new Date().toISOString();
           this.state.error = null;
@@ -175,14 +332,14 @@ export class PageKiteConnector extends EventEmitter {
         this.emit('status', this.state);
       });
 
-      // Optimistic connection state after startup
+      // Optimistic connection check after startup
       setTimeout(() => {
         if (this.process && this.state.status === 'CONNECTING') {
           this.state.status = 'CONNECTED';
           this.state.lastConnectedAt = new Date().toISOString();
           this.emit('status', this.state);
         }
-      }, 3000);
+      }, 3500);
 
       return true;
     } catch (e: any) {

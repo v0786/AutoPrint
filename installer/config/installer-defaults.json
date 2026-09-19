@@ -2,9 +2,9 @@
   "appName": "AutoPrint / QRPrint",
   "version": "2.0.0",
   "ports": {
-    "backendApi": 4100,
-    "customerWeb": 3000,
-    "merchantDesktop": 3001
+    "backendApi": 5000,
+    "customerWeb": 7000,
+    "merchantDesktop": 8000
   },
   "directories": {
     "datastore": "datastore",

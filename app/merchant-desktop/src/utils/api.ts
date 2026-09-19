@@ -40,8 +40,24 @@ export async function apiFetch(endpoint: string, init?: RequestInit): Promise<Re
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${cleanEndpoint.startsWith('/') ? '' : '/'}${cleanEndpoint}`;
 
+  // Automatically attach session token if available in localStorage
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Authorization') && typeof window !== 'undefined') {
+    try {
+      const token = localStorage.getItem('autoprint_merchant_session_token');
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+    } catch {}
+  }
+
+  const reqInit: RequestInit = {
+    ...init,
+    headers,
+  };
+
   try {
-    const res = await fetch(url, init);
+    const res = await fetch(url, reqInit);
     return res;
   } catch (err) {
     // If relative /api failed and running on localhost, attempt fallback to runtime config probe
@@ -54,7 +70,7 @@ export async function apiFetch(endpoint: string, init?: RequestInit): Promise<Re
             const fallbackBase = `http://${window.location.hostname || '127.0.0.1'}:${cfg.backendPort}/api`;
             setApiBaseUrl(fallbackBase);
             const fallbackUrl = `${fallbackBase}${cleanEndpoint.startsWith('/') ? '' : '/'}${cleanEndpoint}`;
-            return await fetch(fallbackUrl, init);
+            return await fetch(fallbackUrl, reqInit);
           }
         }
       } catch { }

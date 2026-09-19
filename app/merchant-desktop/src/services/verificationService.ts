@@ -12,8 +12,8 @@ import {
 } from '../types/verification';
 import { BackendApiService } from './backendApiService';
 
-const STORAGE_KEY_RECORDS = 'autoprint_verification_records_v1';
-const STORAGE_KEY_AUDIT_LOGS = 'autoprint_verification_audit_logs_v1';
+const STORAGE_KEY_RECORDS = 'autoprint_verification_records_v2';
+const STORAGE_KEY_AUDIT_LOGS = 'autoprint_verification_audit_logs_v2';
 const MAX_DIGITAL_ATTEMPTS = 3;
 
 class VerificationWorkflowService {
@@ -29,28 +29,54 @@ class VerificationWorkflowService {
 
   /**
    * Synchronizes state with backend REST API.
+   * Replaces local memory cache with authoritative backend state.
    */
   public async syncFromBackend(): Promise<void> {
     try {
-      const jobs = await BackendApiService.getAllJobs();
-      if (Array.isArray(jobs)) {
-        jobs.forEach((j: any) => {
-          if (j.verification) {
-            this.records.set(j.verification.verificationCode, j.verification);
+      // 1. Try dedicated verification records endpoint first
+      let records = await BackendApiService.getVerificationRecords();
+      
+      // 2. Fallback to extracting verification records from jobs
+      if (!Array.isArray(records) || records.length === 0) {
+        const jobs = await BackendApiService.getAllJobs();
+        if (Array.isArray(jobs)) {
+          records = jobs.map((j: any) => j.verification).filter(Boolean);
+        }
+      }
+
+      if (Array.isArray(records)) {
+        const newMap = new Map<string, CollectionVerificationRecord>();
+        records.forEach((r: CollectionVerificationRecord) => {
+          if (r && r.verificationCode) {
+            newMap.set(r.verificationCode, r);
           }
         });
+        this.records = newMap;
         this.saveToStorage();
         this.notifyListeners();
       }
 
       const logs = await BackendApiService.getAuditLogs();
-      if (Array.isArray(logs) && logs.length > 0) {
+      if (Array.isArray(logs)) {
         this.auditLogs = logs;
         this.saveAuditLogsToStorage();
       }
     } catch {
       // Offline fallback
     }
+  }
+
+  /**
+   * Clears all local records and audit logs to zero.
+   */
+  public clearAll(): void {
+    this.records.clear();
+    this.auditLogs = [];
+    try {
+      localStorage.removeItem(STORAGE_KEY_RECORDS);
+      localStorage.removeItem(STORAGE_KEY_AUDIT_LOGS);
+    } catch {}
+    this.notifyListeners();
   }
 
   /**
@@ -288,6 +314,10 @@ class VerificationWorkflowService {
 
   private loadFromStorage(): void {
     try {
+      // Purge legacy v1 stale cache containing old dummy records
+      localStorage.removeItem('autoprint_verification_records_v1');
+      localStorage.removeItem('autoprint_verification_audit_logs_v1');
+
       const rawRecords = localStorage.getItem(STORAGE_KEY_RECORDS);
       if (rawRecords) {
         const parsed = JSON.parse(rawRecords) as [string, CollectionVerificationRecord][];

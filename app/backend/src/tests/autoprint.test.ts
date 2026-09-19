@@ -281,6 +281,39 @@ test('=== AUTOPRINT BACKEND TEST SUITE ===', async (t) => {
     assert.equal(loadedDoc.getPageCount(), 2, 'Loaded stamped PDF must have 2 pages');
   });
 
+  await t.test('8b. Image (PNG/JPG) Document Conversion with Verification Stamp', async () => {
+    // Generate a valid PNG image buffer
+    const sharp = (await import('sharp')).default;
+    const pngImageBuffer = await sharp({
+      create: {
+        width: 200,
+        height: 200,
+        channels: 4,
+        background: { r: 255, g: 100, b: 50, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const result = await PdfOverlayService.embedVerificationStamp(
+      'AP-TEST-IMG-DOC',
+      pngImageBuffer,
+      '87654321',
+      '8765 4321',
+      'SEC-IMG-VALID',
+      { originalFileName: 'photo.png', orientation: 'portrait' }
+    );
+
+    assert.ok(result.processedFilePath, 'Processed file path must be returned');
+    assert.equal(result.pageCount, 1, 'Converted image must create 1 page PDF');
+    assert.equal(StorageService.fileExists(result.processedFilePath), true, 'Processed PDF must exist on disk');
+
+    const stampedBuffer = StorageService.readFile(result.processedFilePath);
+    const loadedDoc = await PDFDocument.load(stampedBuffer);
+    assert.equal(loadedDoc.getPageCount(), 1, 'Loaded stamped PDF must have 1 page');
+    assert.ok(stampedBuffer.length > 500, 'PDF must contain valid generated document structure');
+  });
+
   await t.test('9. Persistent Audit Logging', async () => {
     const job = await AutoPrintService.submitJob({
       fileName: 'Audit_Test.pdf',

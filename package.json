@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "description": "AutoPrint / QRPrint Unified Multi-App Production Workspace",
   "scripts": {
-    "install:all": "npm install --prefix app/backend && npm install --prefix app/merchant-desktop && npm install --prefix app/customer-web",
+    "install:all": "npm install --prefix app/backend && npm install --prefix app/merchant-desktop && npm install --prefix app/customer-web && npm install --prefix tools/system-guard",
     "dev:backend": "npm run dev --prefix app/backend",
     "dev:merchant": "npm run dev --prefix app/merchant-desktop",
     "dev:customer": "npm run dev --prefix app/customer-web",
@@ -14,8 +14,16 @@
     "build:launcher": "cmd /c src-launcher\\build-launcher.cmd",
     "build:all": "npm run build:backend && npm run build:merchant && npm run build:customer && npm run build:launcher",
     "test:backend": "npm test --prefix app/backend",
+    "test:config": "node scripts/test-config-consistency.cjs",
     "test:all": "npm test --prefix app/backend && npm run lint --prefix app/merchant-desktop && npm run lint --prefix app/customer-web",
     "start:backend": "npm start --prefix app/backend",
+    "guard": "npm run build --prefix tools/system-guard && npm run guard --prefix tools/system-guard -- status",
+    "guard:scan": "npm run build --prefix tools/system-guard && npm run guard --prefix tools/system-guard -- scan",
+    "guard:status": "npm run build --prefix tools/system-guard && npm run guard --prefix tools/system-guard -- status",
+    "guard:baseline": "npm run build --prefix tools/system-guard && npm run guard --prefix tools/system-guard -- baseline",
+    "guard:recover": "npm run build --prefix tools/system-guard && npm run guard --prefix tools/system-guard -- recover",
+    "guard:report": "npm run build --prefix tools/system-guard && npm run guard --prefix tools/system-guard -- report",
+    "guard:watch": "npm run build --prefix tools/system-guard && npm run guard --prefix tools/system-guard -- watch",
     "reset": "node scripts/reset-autoprint.cjs"
   },
   "keywords": [

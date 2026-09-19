@@ -55,26 +55,26 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
-echo   [CHECK 5/6] Checking Required Port Availability (4100, 3000, 3001)...
-netstat -ano | findstr ":4100 " >nul 2>&1
+echo   [CHECK 5/6] Checking Required Port Availability (5000, 7000, 8000)...
+netstat -ano | findstr ":5000 " >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    call "%~dp0common.cmd" :warn_msg "Port 4100 (Backend API) is currently active or in use."
+    call "%~dp0common.cmd" :warn_msg "Port 5000 (Backend API) is currently active or in use."
 ) else (
-    call "%~dp0common.cmd" :success_msg "Port 4100 is available for Backend API."
+    call "%~dp0common.cmd" :success_msg "Port 5000 is available for Backend API."
 )
 
-netstat -ano | findstr ":3000 " >nul 2>&1
+netstat -ano | findstr ":7000 " >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    call "%~dp0common.cmd" :warn_msg "Port 3000 (Customer Web) is currently in use."
+    call "%~dp0common.cmd" :warn_msg "Port 7000 (Customer Web) is currently in use."
 ) else (
-    call "%~dp0common.cmd" :success_msg "Port 3000 is available for Customer Web."
+    call "%~dp0common.cmd" :success_msg "Port 7000 is available for Customer Web."
 )
 
-netstat -ano | findstr ":3001 " >nul 2>&1
+netstat -ano | findstr ":8000 " >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    call "%~dp0common.cmd" :warn_msg "Port 3001 (Merchant Desktop) is currently in use."
+    call "%~dp0common.cmd" :warn_msg "Port 8000 (Merchant Desktop) is currently in use."
 ) else (
-    call "%~dp0common.cmd" :success_msg "Port 3001 is available for Merchant Desktop."
+    call "%~dp0common.cmd" :success_msg "Port 8000 is available for Merchant Desktop."
 )
 
 echo.

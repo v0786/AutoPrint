@@ -129,11 +129,11 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
         mappedJobs = backendJobs.map((bj: any) => {
           const statusLower = (bj.status || '').toLowerCase();
           const jobStatus =
-            statusLower === 'created' || statusLower === 'queued'
+            statusLower === 'created' || statusLower === 'queued' || statusLower === 'awaiting_cash_confirmation' || statusLower === 'payment_pending'
               ? 'queued'
               : statusLower === 'printing'
               ? 'printing'
-              : statusLower === 'printed' || statusLower === 'ready_for_handover' || statusLower === 'completed'
+              : statusLower === 'printed' || statusLower === 'ready_for_pickup' || statusLower === 'ready_for_handover' || statusLower === 'completed' || statusLower === 'collected'
               ? 'completed'
               : statusLower === 'failed'
               ? 'failed'
@@ -187,9 +187,11 @@ export class UniversalSpoolerEngine implements IpcBridgeInterface {
             spoolSpeedKbps: 512,
             latencyMs: 14,
             totalCost: bj.amountTotal || 0,
-            verificationCode: bj.verification?.verificationCode,
-            formattedVerificationCode: bj.verification?.formattedCode,
-            paymentStatus: bj.verification?.paymentStatus || 'PENDING',
+            verificationCode: bj.verification?.verificationCode || bj.pickupCode,
+            formattedVerificationCode: bj.verification?.formattedCode || (bj.pickupCode ? `${bj.pickupCode.slice(0, 4)} ${bj.pickupCode.slice(4)}` : undefined),
+            paymentMethod: bj.paymentMethod || (bj.paymentStatus === 'CASH_REQUIRED' || bj.status === 'AWAITING_CASH_CONFIRMATION' ? 'CASH' : 'UPI'),
+            paymentStatus: bj.paymentStatus || bj.verification?.paymentStatus || 'PENDING',
+            printStatus: bj.printStatus || 'PENDING',
             isCashLocked: bj.verification?.isCashLocked || false,
             customerName: bj.customerName || 'Walk-In Customer',
           };

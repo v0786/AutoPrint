@@ -7,6 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { VerificationService } from '../services/verificationService';
+import { AutoPrintService } from '../services/autoprintService';
 import { PaymentConfigRepository } from '../database/repositories/paymentConfigRepository';
 import { verificationRepository } from '../database/repositories/verificationRepository';
 
@@ -134,9 +135,15 @@ export class PaymentController {
         gatewayRef: razorpayPaymentId,
       });
 
+      // Confirm digital payment and trigger print job dispatch
+      await AutoPrintService.confirmDigitalPayment(
+        result.record.jobId,
+        razorpayPaymentId
+      );
+
       res.json({
         ok: true,
-        message: 'Payment successfully verified.',
+        message: 'Payment successfully verified and print job dispatched.',
         data: result.record,
       });
     } catch (err) {
@@ -148,7 +155,7 @@ export class PaymentController {
    * Records digital payment attempts and enforces 3-strike fail-safe.
    * Strictly disallows unauthenticated clients from self-reporting 'SUCCESS' to prevent free print fraud.
    */
-  public static recordDigitalAttempt(req: Request, res: Response, next: NextFunction): void {
+  public static async recordDigitalAttempt(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const parsed = digitalAttemptSchema.parse(req.body);
 
@@ -170,12 +177,20 @@ export class PaymentController {
         errorMessage: parsed.errorMessage,
       });
 
+      if (parsed.status === 'SUCCESS') {
+        await AutoPrintService.confirmDigitalPayment(
+          result.record.jobId,
+          parsed.gatewayRef || `STAFF-DIGITAL-${Date.now()}`,
+          parsed.vpa
+        );
+      }
+
       res.json({
         ok: true,
         message: result.strikeLockoutTriggered
           ? 'Digital payment failed 3 times. Job locked into Cash Collection mode exclusively.'
           : parsed.status === 'SUCCESS'
-          ? 'Digital payment successful.'
+          ? 'Digital payment successful and print job dispatched.'
           : 'Digital payment attempt recorded.',
         strikeLockoutTriggered: result.strikeLockoutTriggered,
         data: result.record,

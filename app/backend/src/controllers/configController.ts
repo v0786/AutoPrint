@@ -63,4 +63,45 @@ export class ConfigController {
       next(err);
     }
   }
+
+  /**
+   * Verifies PageKite credentials and connectivity with live probe.
+   */
+  public static async verifyPageKiteConfig(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const parsed = z
+        .object({
+          subdomain: z.string().min(1, 'Subdomain or Kite Name is required').regex(/^[a-zA-Z0-9_.-]{1,64}$/, 'Invalid subdomain characters'),
+          secret: z.string().min(1, 'Secret Key is required').regex(/^[a-zA-Z0-9_.-]{1,128}$/, 'Invalid secret format'),
+          domain: z.string().optional().default('pagekite.me'),
+        })
+        .parse(req.body);
+
+      // Clean domain suffix if included in subdomain
+      const cleanSub = parsed.subdomain.replace(/\.pagekite\.me$/i, '').trim().toLowerCase();
+      const result = await tunnelService.verifyPageKite(cleanSub, parsed.secret, parsed.domain);
+
+      if (result.success) {
+        res.status(200).json({
+          ok: true,
+          verified: true,
+          message: result.message,
+          publicUrl: result.publicUrl,
+        });
+      } else {
+        res.status(400).json({
+          ok: false,
+          verified: false,
+          error: result.message,
+          publicUrl: result.publicUrl,
+        });
+      }
+    } catch (err: any) {
+      if (err.errors) {
+        res.status(400).json({ ok: false, error: err.errors[0]?.message || 'Validation error.' });
+      } else {
+        next(err);
+      }
+    }
+  }
 }

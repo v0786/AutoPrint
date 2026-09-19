@@ -42,7 +42,7 @@ export const PaymentStep: React.FC = () => {
   const { t } = useLanguage();
 
   const isRazorpayConfigured = Boolean(currentShop?.paymentGateways?.razorpayEnabled);
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('upi');
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [selectedUpiApp, setSelectedUpiApp] = useState<UpiAppId>(paymentDetails.upiApp || 'gpay');
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -76,6 +76,8 @@ export const PaymentStep: React.FC = () => {
   };
 
   const handleProceed = () => {
+    if (!selectedMethod) return;
+
     if (selectedMethod === 'razorpay') {
       initiatePayment('razorpay', { gateway: 'razorpay' });
       setIsRazorpayOpen(true);
@@ -96,6 +98,7 @@ export const PaymentStep: React.FC = () => {
   };
 
   const handleFinalConfirm = () => {
+    if (!selectedMethod) return;
     setIsProcessing(true);
     setTimeout(() => {
       setIsProcessing(false);
@@ -397,11 +400,20 @@ export const PaymentStep: React.FC = () => {
 
           <button
             type="button"
+            disabled={!selectedMethod}
             onClick={handleProceed}
-            className="py-3.5 px-8 rounded-2xl bg-[#D0BCFF] hover:bg-[#decbf7] text-[#381E72] font-black text-sm shadow-xl shadow-[#D0BCFF]/15 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer"
+            className={`py-3.5 px-8 rounded-2xl font-black text-sm transition-all flex items-center gap-2 cursor-pointer ${
+              !selectedMethod
+                ? 'bg-white/10 text-zinc-500 cursor-not-allowed border border-white/5'
+                : 'bg-[#D0BCFF] hover:bg-[#decbf7] text-[#381E72] shadow-xl shadow-[#D0BCFF]/15 hover:scale-[1.02] active:scale-[0.98]'
+            }`}
           >
             <span>
-              {selectedMethod === 'cash' ? t('proceedWithCash') : t('payAndGenerateCode')}
+              {!selectedMethod
+                ? 'Select Payment Method'
+                : selectedMethod === 'cash'
+                ? t('proceedWithCash')
+                : t('payAndGenerateCode')}
             </span>
             <ArrowRight className="w-4 h-4" />
           </button>

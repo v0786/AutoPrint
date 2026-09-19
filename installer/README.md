@@ -4,7 +4,7 @@ A modular, production-safe Command Prompt (CMD) installer suite for Windows envi
 
 ## Features
 1. **Interactive Wizard**: Step-by-step guidance with ASCII art banners, colored status indicators, and clear option menus.
-2. **System Requirement Checks**: Automatically verifies Windows OS, Node.js ($\ge$ v18), npm, port availability (4100, 3000, 3001), and file write permissions.
+2. **System Requirement Checks**: Automatically verifies Windows OS, Node.js ($\ge$ v18), npm, port availability (5000, 7000, 8000), and file write permissions.
 3. **Permission Checkpoints**: Prompts for explicit user confirmation before creating folders, building projects, or installing packages.
 4. **Dry-Run / Preview Mode**: Inspect all planned actions and folder targets without modifying anything on disk (`install.cmd` $\rightarrow$ `[P]`).
 5. **Automated Safety Backups**: Generates timestamped backups in `datastore/backups/` before any upgrade or repair.

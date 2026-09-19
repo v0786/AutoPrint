@@ -42,7 +42,7 @@ export const PrinterFleetView: React.FC = () => {
     setErrorMessage(null);
     try {
       const [printerRes, profileRes] = await Promise.all([
-        apiFetch('/api/printers'),
+        apiFetch('/api/printers?refresh=true'),
         apiFetch('/api/merchant/profile'),
       ]);
 
@@ -62,6 +62,9 @@ export const PrinterFleetView: React.FC = () => {
         }
       } else {
         setPrinters([]);
+        if (pData.error) {
+          setErrorMessage(pData.error);
+        }
       }
     } catch {
       setErrorMessage('Failed to connect to backend printer spooler.');

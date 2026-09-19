@@ -220,6 +220,47 @@ export class JobController {
     }
   }
 
+  public static async confirmCash(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { staffId, staffName, tenderedMinorUnits } = req.body || {};
+
+      const updated = await AutoPrintService.confirmCashPayment(
+        id,
+        staffId || 'STAFF-DESK-01',
+        staffName || 'Counter Staff',
+        tenderedMinorUnits ? Number(tenderedMinorUnits) : undefined
+      );
+
+      res.json({
+        ok: true,
+        message: 'Cash payment confirmed and print job dispatched to printer spooler.',
+        data: updated,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public static async triggerPrint(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const job = await AutoPrintService.executePrintJob(id);
+      if (!job) {
+        res.status(404).json({ ok: false, error: 'Job not found or ineligible for printing' });
+        return;
+      }
+
+      res.json({
+        ok: true,
+        message: 'Print execution triggered.',
+        data: job,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   public static deleteJob(req: Request, res: Response, next: NextFunction): void {
     try {
       const { id } = req.params;

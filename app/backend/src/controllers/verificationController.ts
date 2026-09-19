@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { VerificationService } from '../services/verificationService';
+import { AutoPrintService } from '../services/autoprintService';
+import { verificationRepository } from '../database/repositories/verificationRepository';
+import { jobRepository } from '../database/repositories/jobRepository';
 import { auditLogger } from '../utils/auditLogger';
 import { AppError } from '../types';
 
@@ -41,7 +44,7 @@ export class VerificationController {
     }
   }
 
-  public static processCashCollection(req: Request, res: Response, next: NextFunction): void {
+  public static async processCashCollection(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const parsed = cashCollectionSchema.parse(req.body);
 
@@ -61,10 +64,20 @@ export class VerificationController {
         parsed.staffName
       );
 
+      // Confirm cash payment and trigger print execution idempotently
+      await AutoPrintService.confirmCashPayment(
+        record.jobId,
+        parsed.staffId,
+        parsed.staffName,
+        tenderedMinorUnits
+      );
+
+      const refreshedRecord = VerificationService.lookupByCode(parsed.verificationCode, parsed.staffId);
+
       res.json({
         ok: true,
-        message: 'Cash collection completed successfully.',
-        data: record,
+        message: 'Cash collection completed successfully and print job dispatched.',
+        data: refreshedRecord,
       });
     } catch (err) {
       next(err);
@@ -81,10 +94,27 @@ export class VerificationController {
         parsed.staffName
       );
 
+      if (record.jobId) {
+        jobRepository.markCollected(record.jobId);
+      }
+
       res.json({
         ok: true,
         message: 'Document handover confirmed successfully.',
         data: record,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public static getAllRecords(req: Request, res: Response, next: NextFunction): void {
+    try {
+      const records = verificationRepository.getAll();
+      res.json({
+        ok: true,
+        count: records.length,
+        data: records,
       });
     } catch (err) {
       next(err);

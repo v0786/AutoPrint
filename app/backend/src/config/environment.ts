@@ -161,7 +161,7 @@ function resolveCorsOrigins(): string[] {
     `http://localhost:${RESOLVED_CUSTOMER_PORT}`,
     `http://127.0.0.1:${RESOLVED_CUSTOMER_PORT}`,
   ];
-  const raw = process.env.CORS_ORIGIN || 'http://localhost:5000,http://localhost:6000,http://localhost:7000,http://localhost:8000,http://localhost:3000,http://localhost:3001,http://localhost:8085';
+  const raw = process.env.CORS_ORIGIN || 'http://localhost:5000,http://localhost:8000,http://localhost:7000,http://localhost:8085';
   const parsed = raw.split(',').map((o) => o.trim()).filter(Boolean);
   return Array.from(new Set([...parsed, ...dynamicOrigins]));
 }

@@ -1,10 +1,11 @@
 /**
  * Document Watermark & Verification Code Overlay Service
- * Uses pdf-lib to embed the 8-digit verification code, HMAC checksum, and timestamp
- * on the final page of actual PDF documents without corrupting document content.
+ * Uses pdf-lib and sharp to embed the 8-digit verification code, HMAC checksum, and timestamp
+ * on actual PDF documents, converted images (PNG, JPEG, WebP, GIF, etc.), and text files.
  */
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import sharp from 'sharp';
 import { StorageService } from './storageService';
 
 export interface WatermarkResult {
@@ -19,17 +20,25 @@ export interface WatermarkResult {
   };
 }
 
+export interface EmbedStampOptions {
+  originalFileName?: string;
+  mimeType?: string;
+  orientation?: 'portrait' | 'landscape';
+  paperFormat?: string;
+}
+
 export class PdfOverlayService {
   /**
-   * Embeds the AutoPrint verification stamp on the final page of an existing PDF buffer.
-   * If buffer is empty or invalid, creates a clean PDF document with the verification stamp.
+   * Embeds the AutoPrint verification stamp on the final page of an existing document.
+   * Seamlessly handles PDFs, images (PNG, JPG, WebP, GIF, etc.), and plain text.
    */
   public static async embedVerificationStamp(
     jobId: string,
-    pdfBuffer: Buffer | null,
+    rawBuffer: Buffer | null,
     verificationCode: string,
     formattedCode: string,
-    checksum: string
+    checksum: string,
+    options?: EmbedStampOptions
   ): Promise<WatermarkResult> {
     const timestamp = new Date().toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
@@ -37,15 +46,118 @@ export class PdfOverlayService {
       timeStyle: 'medium',
     });
 
-    let pdfDoc: PDFDocument;
+    let pdfDoc: PDFDocument = await PDFDocument.create();
 
-    if (pdfBuffer && pdfBuffer.length > 0) {
-      try {
-        pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
-      } catch (err) {
-        console.warn(`[WATERMARK] Could not parse uploaded PDF buffer for job ${jobId}. Generating stamp PDF.`, err);
-        pdfDoc = await PDFDocument.create();
-        pdfDoc.addPage([595.28, 841.89]); // A4 in points
+    if (rawBuffer && rawBuffer.length > 0) {
+      // 1. Check if the buffer is an authentic PDF
+      const isPdf =
+        rawBuffer.length >= 4 &&
+        rawBuffer[0] === 0x25 &&
+        rawBuffer[1] === 0x50 &&
+        rawBuffer[2] === 0x44 &&
+        rawBuffer[3] === 0x46; // %PDF
+
+      if (isPdf) {
+        try {
+          pdfDoc = await PDFDocument.load(rawBuffer, { ignoreEncryption: true });
+        } catch (err) {
+          console.warn(`[WATERMARK] Could not parse uploaded PDF buffer for job ${jobId}. Generating fallback.`, err);
+          pdfDoc = await PDFDocument.create();
+          pdfDoc.addPage([595.28, 841.89]);
+        }
+      } else {
+        // 2. Check if the buffer is an image (PNG, JPEG, WebP, TIFF, GIF, BMP, etc.)
+        let isImageHandled = false;
+        try {
+          const meta = await sharp(rawBuffer).metadata();
+          if (meta && meta.width && meta.height) {
+            // Convert any image format to standard high-resolution PNG buffer
+            const pngBuffer = await sharp(rawBuffer).png().toBuffer();
+            pdfDoc = await PDFDocument.create();
+            const embeddedImg = await pdfDoc.embedPng(pngBuffer);
+
+            // Determine page dimensions
+            const isLandscape =
+              options?.orientation === 'landscape' ||
+              (!options?.orientation && meta.width > meta.height);
+            const pageWidth = isLandscape ? 841.89 : 595.28;
+            const pageHeight = isLandscape ? 595.28 : 841.89;
+
+            const page = pdfDoc.addPage([pageWidth, pageHeight]);
+
+            // Layout image cleanly above the verification footer
+            const margin = 20;
+            const footerHeight = 65;
+            const availX = margin;
+            const availY = margin + footerHeight + 15;
+            const availWidth = pageWidth - margin * 2;
+            const availHeight = pageHeight - availY - margin;
+
+            const scale = Math.min(availWidth / embeddedImg.width, availHeight / embeddedImg.height);
+            const drawWidth = embeddedImg.width * scale;
+            const drawHeight = embeddedImg.height * scale;
+            const drawX = availX + (availWidth - drawWidth) / 2;
+            const drawY = availY + (availHeight - drawHeight) / 2;
+
+            page.drawImage(embeddedImg, {
+              x: drawX,
+              y: drawY,
+              width: drawWidth,
+              height: drawHeight,
+            });
+
+            isImageHandled = true;
+          }
+        } catch (imgErr) {
+          console.warn(`[WATERMARK] Sharp could not process image buffer for job ${jobId}:`, imgErr);
+        }
+
+        if (!isImageHandled) {
+          // 3. Plain text format
+          const isText =
+            options?.originalFileName?.match(/\.(txt|csv|log|json|md|tsv)$/i) ||
+            options?.mimeType?.startsWith('text/');
+
+          if (isText) {
+            pdfDoc = await PDFDocument.create();
+            const font = await pdfDoc.embedFont(StandardFonts.Courier);
+            const text = rawBuffer.toString('utf-8');
+            const lines = text.split(/\r?\n/);
+
+            let currentPage = pdfDoc.addPage([595.28, 841.89]);
+            let currentY = 841.89 - 40;
+            const fontSize = 10;
+            const lineHeight = 13;
+            const maxY = 100; // Above footer stamp
+
+            for (const line of lines) {
+              const maxChars = 80;
+              const subLines =
+                line.length > maxChars
+                  ? line.match(new RegExp(`.{1,${maxChars}}`, 'g')) || [line]
+                  : [line];
+
+              for (const sub of subLines) {
+                if (currentY < maxY) {
+                  currentPage = pdfDoc.addPage([595.28, 841.89]);
+                  currentY = 841.89 - 40;
+                }
+                currentPage.drawText(sub, {
+                  x: 30,
+                  y: currentY,
+                  size: fontSize,
+                  font,
+                  color: rgb(0.1, 0.1, 0.1),
+                });
+                currentY -= lineHeight;
+              }
+            }
+          } else {
+            // Fallback for unrecognized binary
+            pdfDoc = await PDFDocument.create();
+            pdfDoc.addPage([595.28, 841.89]);
+          }
+        }
       }
     } else {
       pdfDoc = await PDFDocument.create();
@@ -58,7 +170,7 @@ export class PdfOverlayService {
     }
 
     const lastPage = pages[pages.length - 1];
-    const { width, height } = lastPage.getSize();
+    const { width } = lastPage.getSize();
 
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);

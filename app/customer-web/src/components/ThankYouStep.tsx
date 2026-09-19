@@ -235,10 +235,21 @@ export const ThankYouStep: React.FC = () => {
 
         {/* Cash Notice Banner if Cash Method */}
         {isCash && (
-          <div className="mt-5 p-3.5 rounded-2xl bg-[#ffb77c]/15 border border-[#ffb77c]/30 text-[#ffdcc3] text-xs flex items-center justify-center gap-2 font-medium">
-            <Banknote className="w-4 h-4 text-[#ffb77c]" />
-            <span>
-              Cash Due at Counter: <strong className="text-white font-mono">₹{currentOrder.pricing.totalAmount.toFixed(2)}</strong>
+          <div className={`mt-5 p-3.5 rounded-2xl border text-xs flex flex-col items-center justify-center gap-1 font-medium text-center ${
+            currentOrder.payment.paymentVerified
+              ? 'bg-[#6dd58c]/15 border-[#6dd58c]/30 text-[#8cf6aa]'
+              : 'bg-[#ffb77c]/15 border-[#ffb77c]/30 text-[#ffdcc3]'
+          }`}>
+            <div className="flex items-center gap-2">
+              <Banknote className="w-4 h-4 text-[#ffb77c]" />
+              <span>
+                Cash Due at Counter: <strong className="text-white font-mono">₹{currentOrder.pricing.totalAmount.toFixed(2)}</strong>
+              </span>
+            </div>
+            <span className="text-[11px]">
+              {currentOrder.payment.paymentVerified
+                ? '✓ Cash Confirmed by Merchant — Print Queued / In Progress'
+                : '⏳ Waiting for merchant confirmation at the counter'}
             </span>
           </div>
         )}
@@ -294,38 +305,54 @@ export const ThankYouStep: React.FC = () => {
           </div>
         </div>
 
-        {/* Step progress timeline */}
-        <div className="grid grid-cols-3 gap-2.5 text-center pt-2">
-          {/* Step 1: Queued */}
-          <div className={`p-3.5 rounded-2xl border transition-all ${
-            jobStatus === 'queued'
-              ? 'bg-[#381E72]/60 border-[#D0BCFF] text-white shadow-md'
-              : 'bg-black/30 border-white/10 text-[#6dd58c]'
+        {/* Step progress timeline: Multi-State Tracker */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-2">
+          {/* Step 1: Payment Status */}
+          <div className={`p-3 rounded-2xl border transition-all ${
+            currentOrder.payment.paymentVerified
+              ? 'bg-[#005228]/40 border-[#6dd58c] text-[#8cf6aa]'
+              : 'bg-[#3A2A10]/60 border-amber-400 text-amber-300 shadow-md animate-pulse'
           }`}>
-            <div className="text-xs font-bold">1. Queued</div>
-            <div className="text-[10px] text-zinc-400 mt-0.5">Order Received</div>
+            <div className="text-[11px] font-bold">
+              {currentOrder.payment.paymentVerified ? '1. Paid ✓' : isCash ? '1. Cash Pending ⏳' : '1. Payment Pending'}
+            </div>
+            <div className="text-[9px] opacity-80 mt-0.5">
+              {currentOrder.payment.paymentVerified ? 'Confirmed' : 'At Counter'}
+            </div>
           </div>
 
-          {/* Step 2: Printing */}
-          <div className={`p-3.5 rounded-2xl border transition-all ${
+          {/* Step 2: Print Queued */}
+          <div className={`p-3 rounded-2xl border transition-all ${
+            jobStatus === 'queued' && currentOrder.payment.paymentVerified
+              ? 'bg-[#381E72]/60 border-[#D0BCFF] text-white shadow-md animate-pulse'
+              : jobStatus === 'printing' || jobStatus === 'ready'
+              ? 'bg-black/30 border-white/10 text-[#6dd58c]'
+              : 'bg-black/30 border-white/10 text-zinc-500'
+          }`}>
+            <div className="text-[11px] font-bold">2. Queued</div>
+            <div className="text-[9px] opacity-80 mt-0.5">Spooler Hold</div>
+          </div>
+
+          {/* Step 3: Printing */}
+          <div className={`p-3 rounded-2xl border transition-all ${
             jobStatus === 'printing'
               ? 'bg-[#381E72]/60 border-[#D0BCFF] text-white shadow-md animate-pulse'
               : jobStatus === 'ready'
               ? 'bg-black/30 border-white/10 text-[#6dd58c]'
               : 'bg-black/30 border-white/10 text-zinc-500'
           }`}>
-            <div className="text-xs font-bold">2. Printing</div>
-            <div className="text-[10px] text-zinc-400 mt-0.5">Laser Processing</div>
+            <div className="text-[11px] font-bold">3. Printing ⏳</div>
+            <div className="text-[9px] opacity-80 mt-0.5">Active Spool</div>
           </div>
 
-          {/* Step 3: Ready */}
-          <div className={`p-3.5 rounded-2xl border transition-all ${
+          {/* Step 4: Ready for Pickup */}
+          <div className={`p-3 rounded-2xl border transition-all ${
             jobStatus === 'ready'
               ? 'bg-[#005228]/50 border-[#6dd58c] text-[#8cf6aa] shadow-lg'
               : 'bg-black/30 border-white/10 text-zinc-500'
           }`}>
-            <div className="text-xs font-bold">3. Ready</div>
-            <div className="text-[10px] text-zinc-400 mt-0.5">At Counter</div>
+            <div className="text-[11px] font-bold">4. Ready 🎉</div>
+            <div className="text-[9px] opacity-80 mt-0.5">In Pickup Tray</div>
           </div>
         </div>
 

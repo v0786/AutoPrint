@@ -21,10 +21,11 @@ export class VerificationService {
   public static createVerificationRecord(
     jobId: string,
     jobNo: string,
-    request: PrintJobRequest
+    request: PrintJobRequest,
+    pregeneratedCode?: { raw: string; formatted: string }
   ): CollectionVerificationRecord {
     // Generate unique 8-digit verification code with DB collision retry
-    let codeData = generateSecureVerificationCode();
+    let codeData = pregeneratedCode || generateSecureVerificationCode();
     let retries = 0;
     while (verificationRepository.codeExists(codeData.raw) && retries < 10) {
       codeData = generateSecureVerificationCode();

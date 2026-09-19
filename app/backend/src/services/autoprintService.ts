@@ -1,6 +1,7 @@
+import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { CONFIG } from '../config/environment';
-import { PrintJobRequest, PrintJobResponse, PrintJobRow, CanonicalPrintSettings, AppError } from '../types';
+import { PrintJobRequest, PrintJobResponse, PrintJobRow, CanonicalPrintSettings, AppError, PrintJobStatus } from '../types';
 import { jobRepository } from '../database/repositories/jobRepository';
 import { verificationRepository } from '../database/repositories/verificationRepository';
 import { VerificationService } from './verificationService';
@@ -9,6 +10,7 @@ import { PdfOverlayService } from './pdfOverlayService';
 import { PrinterService } from './printerService';
 import { auditLogger } from '../utils/auditLogger';
 import { logTrace, generateTraceId } from '../utils/traceLogger';
+import { generateSecureVerificationCode } from '../utils/crypto';
 
 export class AutoPrintService {
   /**
@@ -101,14 +103,27 @@ export class AutoPrintService {
     const title = `${request.fileName} (${copies} copies, ${canonicalSettings.paperFormat}, ${colorMode})`;
     const currency = request.currency || CONFIG.CURRENCY;
 
-    // 1. Save uploaded file if buffer is provided
+    const isCash = request.paymentMethod === 'CASH';
+    const initialStatus: PrintJobStatus = isCash ? 'AWAITING_CASH_CONFIRMATION' : 'PAYMENT_PENDING';
+    const initialPaymentStatus = isCash ? 'AWAITING_CASH_CONFIRMATION' : 'PAYMENT_PENDING';
+    const initialPrintStatus = 'AWAITING_PAYMENT';
+
+    // 1. Generate unique 8-digit verification code with DB collision retry
+    let codeData = generateSecureVerificationCode();
+    let retries = 0;
+    while (verificationRepository.codeExists(codeData.raw) && retries < 10) {
+      codeData = generateSecureVerificationCode();
+      retries++;
+    }
+
+    // 2. Save uploaded file if buffer is provided
     let uploadedFilePath = '';
     if (fileBuffer && fileBuffer.length > 0) {
       const saved = StorageService.saveUploadedFile(id, fileBuffer, request.fileName);
       uploadedFilePath = saved.absolutePath;
 
       auditLogger.logEvent({
-        verificationCode: 'PENDING',
+        verificationCode: codeData.raw,
         jobId: id,
         jobNo,
         action: 'FILE_UPLOADED',
@@ -121,7 +136,7 @@ export class AutoPrintService {
       });
     }
 
-    // 2. Create Job in Database FIRST (so verification foreign key is satisfied)
+    // 3. Create Job in Database FIRST (so verification foreign key is satisfied)
     const jobRow = jobRepository.create({
       id,
       job_no: jobNo,
@@ -143,18 +158,22 @@ export class AutoPrintService {
       amount_minor_units: request.amountMinorUnits,
       currency: currency,
       payment_method: request.paymentMethod,
-      status: 'QUEUED',
+      payment_status: initialPaymentStatus,
+      print_status: initialPrintStatus,
+      pickup_code: codeData.raw,
+      status: initialStatus,
     });
 
     logTrace(activeTraceId, 'JOB_SAVED', `Job ${id} inserted into SQLite database`, {
       databasePath: CONFIG.PATHS.DB_FILE,
       jobId: id,
       jobNo,
-      status: 'QUEUED',
+      status: initialStatus,
+      paymentStatus: initialPaymentStatus,
     });
 
-    // 3. Create verification record (includes unique 8-digit code + HMAC)
-    const verification = VerificationService.createVerificationRecord(id, jobNo, request);
+    // 4. Create verification record (includes unique 8-digit code + HMAC)
+    const verification = VerificationService.createVerificationRecord(id, jobNo, request, codeData);
 
     logTrace(activeTraceId, 'JOB_DATABASE_ID_CREATED', `Verification code generated for job ${id}`, {
       jobId: id,
@@ -162,9 +181,9 @@ export class AutoPrintService {
       verificationCode: verification.verificationCode,
     });
 
-    this.recordStatusTransition(id, null, 'QUEUED', 'CUSTOMER_TERMINAL', 'Initial job submission');
+    this.recordStatusTransition(id, null, initialStatus, 'CUSTOMER_TERMINAL', 'Initial job submission');
 
-    console.log(`[JOB CREATED] Job ID: ${id} | Customer: ${jobRow.customer_name} | Code: ${verification.verificationCode} | Status: QUEUED | Backend Port: ${CONFIG.PORT} | DB: ${CONFIG.PATHS.DB_FILE} | Time: ${new Date().toISOString()}`);
+    console.log(`[JOB CREATED] Job ID: ${id} | Customer: ${jobRow.customer_name} | Code: ${verification.verificationCode} | Status: ${initialStatus} | Backend Port: ${CONFIG.PORT} | DB: ${CONFIG.PATHS.DB_FILE} | Time: ${new Date().toISOString()}`);
 
     auditLogger.logEvent({
       verificationCode: verification.verificationCode,
@@ -184,15 +203,26 @@ export class AutoPrintService {
       },
     });
 
-    // 4. Process PDF watermarking on final page
+    // 5. Process PDF watermarking on final page (so print document is ready immediately when paid)
     let processedFilePath: string | null = null;
     try {
+      let bufferToProcess = fileBuffer;
+      if ((!bufferToProcess || bufferToProcess.length === 0) && uploadedFilePath && fs.existsSync(uploadedFilePath)) {
+        bufferToProcess = fs.readFileSync(uploadedFilePath);
+      }
+
       const watermarkResult = await PdfOverlayService.embedVerificationStamp(
         id,
-        fileBuffer || null,
+        bufferToProcess || null,
         verification.verificationCode,
         verification.formattedCode,
-        verification.securityChecksum
+        verification.securityChecksum,
+        {
+          originalFileName: request.fileName,
+          mimeType: request.mimeType,
+          orientation: canonicalSettings.orientation,
+          paperFormat: canonicalSettings.paperFormat,
+        }
       );
       processedFilePath = watermarkResult.processedFilePath;
       jobRepository.updateProcessedFilePath(id, processedFilePath);
@@ -213,16 +243,8 @@ export class AutoPrintService {
       console.error(`[AUTOPRINT] Watermarking error for job ${id}:`, err);
     }
 
-    // 5. Dispatch print job to spooler subsystem
-    if (processedFilePath) {
-      PrinterService.dispatchPrintJob(
-        id,
-        jobNo,
-        verification.verificationCode,
-        processedFilePath,
-        jobRow.printer_name
-      ).catch((err) => console.warn(`[PRINTER] Background dispatch error:`, err));
-    }
+    // NOTE: Print is NOT dispatched here.
+    // Printing is strictly decoupled from job creation and will only be triggered after payment confirmation.
 
     return this.mapRowToResponse(jobRow, verification);
   }
@@ -400,6 +422,212 @@ export class AutoPrintService {
     };
   }
 
+  /**
+   * Confirms cash payment received by merchant at the counter.
+   * Transitions job to PAID/QUEUED and triggers print execution idempotently.
+   */
+  public static async confirmCashPayment(
+    jobId: string,
+    staffId = 'STAFF-01',
+    staffName = 'Duty Station Cashier',
+    tenderedMinorUnits?: number
+  ): Promise<PrintJobResponse> {
+    const job = jobRepository.getById(jobId);
+    if (!job) {
+      throw new AppError(`Print job not found: ${jobId}`, 404);
+    }
+
+    if (job.payment_status === 'PAID') {
+      return this.getJobById(jobId)!;
+    }
+
+    const previousStatus = job.status;
+    const txnId = `CASH-${Date.now()}`;
+    jobRepository.markPaid(jobId, txnId);
+
+    this.recordStatusTransition(
+      jobId,
+      previousStatus,
+      'QUEUED',
+      staffName,
+      `Cash payment confirmed by staff ${staffName} (${staffId})`,
+      txnId
+    );
+
+    auditLogger.logEvent({
+      verificationCode: job.pickup_code || 'CASH',
+      jobId: job.id,
+      jobNo: job.job_no,
+      action: 'CASH_COLLECTION_COMPLETED',
+      actor: 'STAFF_TERMINAL',
+      staffId,
+      staffName,
+      details: {
+        jobNo: job.job_no,
+        amountMinorUnits: job.amount_minor_units,
+        tenderedMinorUnits: tenderedMinorUnits || job.amount_minor_units,
+      },
+    });
+
+    const ver = verificationRepository.getByJobId(jobId);
+    if (ver && ver.paymentStatus !== 'CASH_COLLECTED') {
+      const tendered = tenderedMinorUnits || job.amount_minor_units;
+      verificationRepository.updateCashCollected({
+        code: ver.verificationCode,
+        tenderedMinorUnits: tendered,
+        changeMinorUnits: Math.max(0, tendered - job.amount_minor_units),
+        staffId,
+        staffName,
+      });
+    }
+
+    // Execute print job idempotently
+    await this.executePrintJob(jobId);
+
+    return this.getJobById(jobId)!;
+  }
+
+  /**
+   * Confirms digital payment (UPI / Gateway) verification.
+   * Transitions job to PAID/QUEUED and triggers print execution idempotently.
+   */
+  public static async confirmDigitalPayment(
+    jobId: string,
+    transactionId: string,
+    payerVpa?: string
+  ): Promise<PrintJobResponse> {
+    const job = jobRepository.getById(jobId);
+    if (!job) {
+      throw new AppError(`Print job not found: ${jobId}`, 404);
+    }
+
+    if (job.payment_status === 'PAID') {
+      return this.getJobById(jobId)!;
+    }
+
+    const previousStatus = job.status;
+    jobRepository.markPaid(jobId, transactionId);
+
+    this.recordStatusTransition(
+      jobId,
+      previousStatus,
+      'QUEUED',
+      'PAYMENT_GATEWAY',
+      `UPI digital payment confirmed (Txn: ${transactionId})`,
+      transactionId
+    );
+
+    auditLogger.logEvent({
+      verificationCode: job.pickup_code || 'UPI',
+      jobId: job.id,
+      jobNo: job.job_no,
+      action: 'UPI_PAYMENT_CONFIRMED',
+      actor: 'PAYMENT_GATEWAY',
+      details: {
+        jobNo: job.job_no,
+        amountMinorUnits: job.amount_minor_units,
+        gatewayRef: transactionId,
+        vpa: payerVpa,
+      },
+    });
+
+    const ver = verificationRepository.getByJobId(jobId);
+    if (ver && ver.paymentStatus !== 'UPI_SUCCESS') {
+      verificationRepository.updatePaymentSuccess({
+        code: ver.verificationCode,
+        upiTransactionId: transactionId,
+        upiPayerVpa: payerVpa,
+      });
+    }
+
+    // Execute print job idempotently
+    await this.executePrintJob(jobId);
+
+    return this.getJobById(jobId)!;
+  }
+
+  /**
+   * Executes print job dispatching idempotently.
+   * Ensures only jobs with payment_status = 'PAID' can be claimed and printed.
+   */
+  public static async executePrintJob(jobId: string): Promise<PrintJobResponse | null> {
+    const claimed = jobRepository.claimForPrinting(jobId);
+    if (!claimed) {
+      return this.getJobById(jobId);
+    }
+
+    const job = jobRepository.getById(jobId);
+    if (!job) return null;
+
+    this.recordStatusTransition(jobId, 'QUEUED', 'PRINTING', 'SYSTEM_AUTOPRINT', 'Print execution claimed by spooler');
+
+    const verification = verificationRepository.getByJobId(jobId);
+    const code = verification?.verificationCode || job.pickup_code || 'PENDING';
+    const printSettings = this.normalizePrintSettings(job);
+
+    let filePath = job.processed_file_path;
+    const isProcessedMissingOrEmpty =
+      !filePath ||
+      !fs.existsSync(filePath) ||
+      (fs.statSync(filePath).size < 1500 &&
+        job.file_path &&
+        fs.existsSync(job.file_path) &&
+        fs.statSync(job.file_path).size > 10000);
+
+    if (isProcessedMissingOrEmpty && job.file_path && fs.existsSync(job.file_path)) {
+      try {
+        const rawBuffer = fs.readFileSync(job.file_path);
+        const watermarkResult = await PdfOverlayService.embedVerificationStamp(
+          job.id,
+          rawBuffer,
+          code,
+          verification?.formattedCode || code,
+          verification?.securityChecksum || 'SEC-VALID',
+          {
+            originalFileName: job.file_name,
+            orientation: printSettings.orientation,
+            paperFormat: printSettings.paperFormat,
+          }
+        );
+        filePath = watermarkResult.processedFilePath;
+        jobRepository.updateProcessedFilePath(job.id, filePath);
+      } catch (err) {
+        console.warn(`[EXECUTE_PRINT] Re-processing file for job ${jobId} failed:`, err);
+        filePath = job.file_path;
+      }
+    } else if (!filePath) {
+      filePath = job.file_path;
+    }
+
+    try {
+      const result = await PrinterService.dispatchPrintJob(
+        job.id,
+        job.job_no,
+        code,
+        filePath,
+        job.printer_name,
+        printSettings
+      );
+
+      if (result.success) {
+        jobRepository.markPrinted(jobId);
+        verificationRepository.updateTrayReady(jobId);
+        this.recordStatusTransition(jobId, 'PRINTING', 'READY_FOR_PICKUP', 'SYSTEM_AUTOPRINT', 'Print completed, ready for pickup in tray');
+      } else {
+        jobRepository.updateStatus(jobId, 'PRINT_FAILED');
+        jobRepository.updatePrintStatus(jobId, 'PRINT_FAILED');
+        this.recordStatusTransition(jobId, 'PRINTING', 'PRINT_FAILED', 'SYSTEM_AUTOPRINT', result.message);
+      }
+    } catch (err: any) {
+      console.error(`[EXECUTE_PRINT] Printing error for job ${jobId}:`, err);
+      jobRepository.updateStatus(jobId, 'PRINT_FAILED');
+      jobRepository.updatePrintStatus(jobId, 'PRINT_FAILED');
+      this.recordStatusTransition(jobId, 'PRINTING', 'PRINT_FAILED', 'SYSTEM_AUTOPRINT', err.message || 'Printer error');
+    }
+
+    return this.getJobById(jobId);
+  }
+
   private static mapRowToResponse(
     row: PrintJobRow,
     verification?: any
@@ -412,6 +640,17 @@ export class AutoPrintService {
       customerName: row.customer_name,
       printerName: row.printer_name,
       status: row.status,
+      paymentMethod: row.payment_method,
+      paymentStatus: row.payment_status || (row.status === 'PAID' ? 'PAID' : (row.status === 'AWAITING_CASH_CONFIRMATION' ? 'AWAITING_CASH_CONFIRMATION' : 'PAYMENT_PENDING')),
+      paymentTransactionId: row.payment_transaction_id ?? undefined,
+      printStatus: row.print_status || 'PENDING',
+      paidAt: row.paid_at ?? undefined,
+      queuedAt: row.queued_at ?? undefined,
+      printingStartedAt: row.printing_started_at ?? undefined,
+      printedAt: row.printed_at ?? undefined,
+      readyForPickupAt: row.ready_for_pickup_at ?? undefined,
+      collectedAt: row.collected_at ?? undefined,
+      pickupCode: row.pickup_code || (verification ? verification.verificationCode : undefined),
       amountTotal: +(row.amount_minor_units / 100).toFixed(2),
       currency: row.currency,
       printSettings: this.normalizePrintSettings(row),

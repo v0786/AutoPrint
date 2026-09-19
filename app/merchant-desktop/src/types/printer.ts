@@ -208,7 +208,9 @@ export interface PrintJob {
   latencyMs: number;
   verificationCode?: string;
   formattedVerificationCode?: string;
-  paymentStatus?: 'PENDING' | 'UPI_INITIATED' | 'UPI_SUCCESS' | 'UPI_FAILED' | 'CASH_REQUIRED' | 'CASH_COLLECTED' | 'CASH_LOCKED' | 'CANCELLED';
+  paymentMethod?: string;
+  paymentStatus?: string;
+  printStatus?: string;
   isCashLocked?: boolean;
   customerName?: string;
   totalCost?: number;

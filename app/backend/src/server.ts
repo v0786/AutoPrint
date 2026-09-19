@@ -21,6 +21,7 @@ import { FeedbackController } from './controllers/feedbackController';
 import { SupportController } from './controllers/supportController';
 import { RefundController } from './controllers/refundController';
 import { SetupController } from './controllers/setupController';
+import { SystemGuardController } from './controllers/systemGuardController';
 import { PrinterService } from './services/printerService';
 import { tunnelService } from './services/tunnelService';
 
@@ -153,15 +154,18 @@ api.get('/jobs', requireAuth, JobController.getAllJobs);
 api.get('/jobs/:id', JobController.getJobById);
 api.patch('/jobs/:id/status', requireAuth, JobController.updateJobStatus);
 api.post('/jobs/:id/cancel', requireAuth, JobController.cancelJob);
+api.post('/jobs/:id/confirm-cash', optionalAuth, JobController.confirmCash);
+api.post('/jobs/:id/print', optionalAuth, JobController.triggerPrint);
 api.delete('/jobs/:id', requireAdmin, JobController.deleteJob);
 
 // Verification & Staff Desk Routes
+api.get('/verification/records', optionalAuth, VerificationController.getAllRecords);
+api.get('/verification/audit-logs', requireAuth, VerificationController.getAuditLogs);
 api.get('/verification/lookup/:code', codeLookupLimiter, VerificationController.lookupByCode);
 api.get('/verification/:code', codeLookupLimiter, VerificationController.lookupByCode);
 api.post('/verification/lookup', codeLookupLimiter, VerificationController.lookupByCode);
 api.post('/verification/collect-cash', requireAuth, VerificationController.processCashCollection);
 api.post('/verification/handover', requireAuth, VerificationController.confirmHandover);
-api.get('/verification/audit-logs', requireAuth, VerificationController.getAuditLogs);
 
 // Merchant Auth & Management Routes
 api.get('/merchant/auth/check', MerchantController.checkAuth);
@@ -191,10 +195,16 @@ api.post('/payment/digital-attempt', optionalAuth, PaymentController.recordDigit
 // System Workload & Dynamic Queue Routes
 api.get('/system/workload', SystemController.getWorkload);
 
+// SystemGuard diagnostics and operator-triggered recovery
+api.get('/system/guard/health', SystemGuardController.health);
+api.get('/system/guard/status', SystemGuardController.command);
+api.post('/system/guard/:command', requireAdmin, SystemGuardController.command);
+
 // System Configuration & QR Ingress Routes
 api.get('/config/public', ConfigController.getPublicConfig);
 api.get('/config/qr-code', ConfigController.getQrCodeImage);
-api.post('/config/pagekite', requireAdmin, ConfigController.updatePageKiteConfig);
+api.post('/config/pagekite', optionalAuth, ConfigController.updatePageKiteConfig);
+api.post('/config/pagekite/verify', optionalAuth, ConfigController.verifyPageKiteConfig);
 
 // Customer Feedback & Intelligence Routes
 api.get('/feedback/eligibility/:code', FeedbackController.checkEligibility);
@@ -217,10 +227,11 @@ api.get('/refunds', requireAuth, RefundController.getAll);
 api.get('/refunds/:id', requireAuth, RefundController.getById);
 api.patch('/refunds/:id/status', requireAuth, RefundController.updateStatus);
 
-// Printer Fleet Discovery
-api.get('/printers', requireAuth, async (_req, res, next) => {
+// Printer Fleet Discovery - allow optional auth so unauthenticated onboarding/kiosk can discover printers
+api.get('/printers', optionalAuth, async (req, res, next) => {
   try {
-    const printers = await PrinterService.getAvailablePrinters();
+    const forceRefresh = req.query.refresh === 'true' || req.query.force === '1';
+    const printers = await PrinterService.getAvailablePrinters(forceRefresh);
     res.json({ ok: true, count: printers.length, data: printers });
   } catch (err) {
     next(err);

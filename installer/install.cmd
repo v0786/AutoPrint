@@ -65,8 +65,8 @@ if /i "!PROMPT_RESULT!"=="N" (
     set /p "CUSTOM_API_PORT=Enter Backend API Port [Default 5000]: "
     if "!CUSTOM_API_PORT!"=="" set "CUSTOM_API_PORT=5000"
     
-    set /p "CUSTOM_MERCHANT_PORT=Enter Merchant Desktop Port [Default 6000]: "
-    if "!CUSTOM_MERCHANT_PORT!"=="" set "CUSTOM_MERCHANT_PORT=6000"
+    set /p "CUSTOM_MERCHANT_PORT=Enter Merchant Desktop Port [Default 8000]: "
+    if "!CUSTOM_MERCHANT_PORT!"=="" set "CUSTOM_MERCHANT_PORT=8000"
 
     set /p "CUSTOM_CUSTOMER_PORT=Enter Customer Kiosk Port [Default 7000]: "
     if "!CUSTOM_CUSTOMER_PORT!"=="" set "CUSTOM_CUSTOMER_PORT=7000"
@@ -75,7 +75,7 @@ if /i "!PROMPT_RESULT!"=="N" (
     if "!CUSTOM_DATA_DIR!"=="" set "CUSTOM_DATA_DIR=%PROJECT_ROOT%\datastore"
 ) else (
     set "CUSTOM_API_PORT=5000"
-    set "CUSTOM_MERCHANT_PORT=6000"
+    set "CUSTOM_MERCHANT_PORT=8000"
     set "CUSTOM_CUSTOMER_PORT=7000"
     set "CUSTOM_DATA_DIR=%PROJECT_ROOT%\datastore"
 )
@@ -145,7 +145,7 @@ echo NODE_ENV=development
 echo API_PREFIX=/api
 echo MAX_DIGITAL_ATTEMPTS=3
 echo HMAC_SECRET=AP_VERIFY_HMAC_SECURE_2026_CHANGE_THIS_IN_PRODUCTION
-echo CORS_ORIGIN=http://localhost:!CUSTOM_CUSTOMER_PORT!,http://localhost:!CUSTOM_MERCHANT_PORT!,http://localhost:3000,http://localhost:3001,http://localhost:5000,http://localhost:6000,http://localhost:7000,https://!PAGEKITE_NAME!.pagekite.me
+echo CORS_ORIGIN=http://localhost:!CUSTOM_CUSTOMER_PORT!,http://localhost:!CUSTOM_MERCHANT_PORT!,http://localhost:!CUSTOM_API_PORT!,https://!PAGEKITE_NAME!.pagekite.me
 echo CURRENCY=INR
 echo MAX_FILE_SIZE_MB=50
 echo AUTOPRINT_DATA_DIR=%PROJECT_ROOT%\datastore

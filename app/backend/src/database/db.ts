@@ -49,7 +49,7 @@ export function closeDatabase(): void {
 
 // ─── Schema Migration ─────────────────────────────────────────────────────────
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 function runMigrations(db: Database.Database): void {
   // Create migration tracking table
@@ -116,6 +116,15 @@ function runMigrations(db: Database.Database): void {
     });
     migrate6();
     console.log('[DB] Applied migration 6 (Canonical Print Settings JSON column and legacy normalization)');
+  }
+
+  if (currentVersion < 7) {
+    const migrate7 = db.transaction(() => {
+      runMigration7(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(7);
+    });
+    migrate7();
+    console.log('[DB] Applied migration 7 (Post-Payment Print Workflow, State Machine & Pickup Tracking)');
   }
 }
 
@@ -493,4 +502,58 @@ function runMigration6(db: Database.Database): void {
       updateStmt.run(JSON.stringify(settings), row.id);
     }
   }
+}
+
+function runMigration7(db: Database.Database): void {
+  const columns = db.prepare("PRAGMA table_info(print_jobs)").all() as Array<{ name: string }>;
+  const colNames = new Set(columns.map((c) => c.name));
+
+  if (!colNames.has('payment_status')) {
+    db.exec(`ALTER TABLE print_jobs ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'PAYMENT_PENDING';`);
+  }
+  if (!colNames.has('payment_transaction_id')) {
+    db.exec(`ALTER TABLE print_jobs ADD COLUMN payment_transaction_id TEXT;`);
+  }
+  if (!colNames.has('print_status')) {
+    db.exec(`ALTER TABLE print_jobs ADD COLUMN print_status TEXT NOT NULL DEFAULT 'AWAITING_PAYMENT';`);
+  }
+  if (!colNames.has('paid_at')) {
+    db.exec(`ALTER TABLE print_jobs ADD COLUMN paid_at TEXT;`);
+  }
+  if (!colNames.has('queued_at')) {
+    db.exec(`ALTER TABLE print_jobs ADD COLUMN queued_at TEXT;`);
+  }
+  if (!colNames.has('printing_started_at')) {
+    db.exec(`ALTER TABLE print_jobs ADD COLUMN printing_started_at TEXT;`);
+  }
+  if (!colNames.has('printed_at')) {
+    db.exec(`ALTER TABLE print_jobs ADD COLUMN printed_at TEXT;`);
+  }
+  if (!colNames.has('ready_for_pickup_at')) {
+    db.exec(`ALTER TABLE print_jobs ADD COLUMN ready_for_pickup_at TEXT;`);
+  }
+  if (!colNames.has('collected_at')) {
+    db.exec(`ALTER TABLE print_jobs ADD COLUMN collected_at TEXT;`);
+  }
+  if (!colNames.has('pickup_code')) {
+    db.exec(`ALTER TABLE print_jobs ADD COLUMN pickup_code TEXT;`);
+  }
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_jobs_payment_status ON print_jobs(payment_status);
+    CREATE INDEX IF NOT EXISTS idx_jobs_print_status ON print_jobs(print_status);
+    CREATE INDEX IF NOT EXISTS idx_jobs_pickup_code ON print_jobs(pickup_code);
+  `);
+
+  try {
+    db.exec(`
+      UPDATE print_jobs
+      SET pickup_code = (SELECT verification_code FROM verification_records WHERE verification_records.job_id = print_jobs.id)
+      WHERE pickup_code IS NULL;
+
+      UPDATE print_jobs
+      SET payment_status = 'PAID', print_status = 'PRINTED'
+      WHERE status IN ('PRINTED', 'READY_FOR_HANDOVER', 'COMPLETED', 'COLLECTED');
+    `);
+  } catch {}
 }

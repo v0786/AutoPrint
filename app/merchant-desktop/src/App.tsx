@@ -156,6 +156,7 @@ export default function App() {
       setLogs(initialLogs || []);
       if (currentMetrics) setMetrics(currentMetrics);
       try {
+        await verificationService.syncFromBackend();
         setVerificationRecords(verificationService.getAllRecords() || []);
       } catch {
         setVerificationRecords([]);
