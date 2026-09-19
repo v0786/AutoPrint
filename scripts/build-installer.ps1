@@ -110,6 +110,8 @@ if (Test-Path (Join-Path $rootDir "package-lock.json")) {
     Copy-Item (Join-Path $rootDir "package-lock.json") $payloadDir -Force
 }
 Copy-Item (Join-Path $rootDir ".env.example") $payloadDir -Force
+Get-ChildItem -Path $rootDir -Filter "*.cmd" | Copy-Item -Destination $payloadDir -Force
+Get-ChildItem -Path $rootDir -Filter "*.bat" | Copy-Item -Destination $payloadDir -Force
 
 # Copy tools directory (PageKite CLI and helper tools) with SHA-256 integrity check
 if (Test-Path (Join-Path $rootDir "tools")) {
