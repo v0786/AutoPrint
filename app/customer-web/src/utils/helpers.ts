@@ -1,25 +1,6 @@
 import { PrintOrder, ShopInfo } from '../types';
 
 /**
- * Generates an 8-digit unique collection code formatted with a hyphen: "XXXX-XXXX"
- * e.g., "8492-1057"
- */
-export function generateCollectionCode(): string {
-  const part1 = Math.floor(1000 + Math.random() * 9000).toString();
-  const part2 = Math.floor(1000 + Math.random() * 9000).toString();
-  return `${part1}-${part2}`;
-}
-
-export function generateOrderId(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let result = 'AP-';
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
-
-/**
  * Format bytes to readable string (e.g. 2.4 MB)
  */
 export function formatBytes(bytes: number, decimals = 1): string {

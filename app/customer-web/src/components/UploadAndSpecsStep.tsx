@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DocumentPreview } from './DocumentPreview';
+import { AnimatedGroup } from './motion-primitives/AnimatedGroup';
 
 export const UploadAndSpecsStep: React.FC = () => {
   const {
@@ -252,7 +253,7 @@ export const UploadAndSpecsStep: React.FC = () => {
             <span>{t('colorMode')}</span>
             <span className="text-[11px] text-zinc-400 font-normal">{t('avgPrintSpeed')} Instant</span>
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <AnimatedGroup preset="blur-slide" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               {
                 id: 'bw' as ColorMode,
@@ -293,7 +294,7 @@ export const UploadAndSpecsStep: React.FC = () => {
                 </button>
               );
             })}
-          </div>
+          </AnimatedGroup>
         </div>
 
         {/* 2. Paper Size & Duplex */}

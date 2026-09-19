@@ -5,6 +5,8 @@ import { LanguageSwitcher } from './LanguageSwitcher';
 import { Printer, Zap, CheckCircle2, ArrowRight, ShieldCheck, FileText, QrCode, Store, Clock, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { DEFAULT_SHOP_ID } from '../data/shops';
+import { TextEffect } from './motion-primitives/TextEffect';
+import { AnimatedGroup } from './motion-primitives/AnimatedGroup';
 
 export const SplashScreen: React.FC = () => {
   const { currentShop, isShopOnline, setStep, setShopModalOpen, setQrModalOpen, connectShop } = usePrintJob();
@@ -103,9 +105,9 @@ export const SplashScreen: React.FC = () => {
           <h1 className="text-4xl font-extrabold tracking-tight text-white mb-1">
             Auto<span className="text-[#D0BCFF]">Print</span>
           </h1>
-          <p className="text-sm text-zinc-400 max-w-xs mx-auto mb-6">
+          <TextEffect per="word" preset="blur" delay={0.2} className="text-sm text-zinc-400 max-w-xs mx-auto mb-6">
             {t('contactlessPrintShop')}
-          </p>
+          </TextEffect>
         </motion.div>
 
         {/* Conditional Scanned Shop Card */}
@@ -218,19 +220,21 @@ export const SplashScreen: React.FC = () => {
       </div>
 
       {/* Footer Feature Badges */}
-      <footer className="w-full max-w-md z-10 pt-4 border-t border-white/5 flex items-center justify-between text-[11px] text-zinc-400">
-        <div className="flex items-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#6dd58c]" />
-          <span>{t('encryptedUpload')}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <FileText className="w-3.5 h-3.5 text-[#D0BCFF]" />
-          <span>{t('supportedFormats')}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Zap className="w-3.5 h-3.5 text-[#ffb77c]" />
-          <span>{t('paymentMethods')}</span>
-        </div>
+      <footer className="w-full max-w-md z-10 pt-4 border-t border-white/5">
+        <AnimatedGroup preset="blur-slide" className="flex items-center justify-between text-[11px] text-zinc-400">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#6dd58c]" />
+            <span>{t('encryptedUpload')}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5 text-[#D0BCFF]" />
+            <span>{t('supportedFormats')}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5 text-[#ffb77c]" />
+            <span>{t('paymentMethods')}</span>
+          </div>
+        </AnimatedGroup>
       </footer>
     </div>
   );

@@ -27,6 +27,7 @@ import {
   Zap
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { AnimatedGroup } from './motion-primitives/AnimatedGroup';
 
 export const ThankYouStep: React.FC = () => {
   const { currentOrder, currentShop, jobStatus, isHeavyWorkload, resetJob } = usePrintJob();
@@ -198,7 +199,7 @@ export const ThankYouStep: React.FC = () => {
         </div>
 
         {/* Action Pills: Speak Code, Copy, Share */}
-        <div className="flex flex-wrap items-center justify-center gap-2.5 pt-3">
+        <AnimatedGroup preset="blur-slide" className="flex flex-wrap items-center justify-center gap-2.5 pt-3">
           {/* Speak aloud */}
           <button
             onClick={handleSpeak}
@@ -230,7 +231,7 @@ export const ThankYouStep: React.FC = () => {
             <Share2 className="w-4 h-4" />
             <span>Share</span>
           </button>
-        </div>
+        </AnimatedGroup>
 
         {/* Cash Notice Banner if Cash Method */}
         {isCash && (

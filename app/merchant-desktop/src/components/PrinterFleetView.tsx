@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../utils/api';
 import { spoolerService } from '../services/electronBridge';
+import { AnimatedGroup } from './motion-primitives/AnimatedGroup';
 
 export interface SystemPrinter {
   id: string;
@@ -193,7 +194,7 @@ export const PrinterFleetView: React.FC = () => {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <AnimatedGroup preset="blur-slide" className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {printers.map((printer) => {
             const isActive = activePrinterName === printer.name;
             const isTesting = testingPrinterId === printer.id;
@@ -336,7 +337,7 @@ export const PrinterFleetView: React.FC = () => {
               </div>
             );
           })}
-        </div>
+        </AnimatedGroup>
       )}
     </div>
   );

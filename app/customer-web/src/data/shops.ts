@@ -39,9 +39,3 @@ export const DEFAULT_OFFLINE_SHOP: ShopInfo = {
     payeeName: '',
   },
 };
-
-export const SHOPS_DATABASE: Record<string, ShopInfo> = {};
-
-export function resolveShopFromUrl(): ShopInfo | null {
-  return null;
-}

@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RazorpayModal } from './RazorpayModal';
+import { AnimatedGroup } from './motion-primitives/AnimatedGroup';
+import { InView } from './motion-primitives/InView';
 
 export const PaymentStep: React.FC = () => {
   const {
@@ -139,7 +141,14 @@ export const PaymentStep: React.FC = () => {
       </div>
 
       {/* SECTION 1: ORDER SUMMARY OVERVIEW */}
-      <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/40 space-y-5">
+      <InView
+        variants={{
+          hidden: { opacity: 0, y: 15 },
+          visible: { opacity: 1, y: 0 },
+        }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/40 space-y-5"
+      >
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-[#D0BCFF]/15 text-[#D0BCFF] flex items-center justify-center border border-[#D0BCFF]/30">
@@ -200,7 +209,7 @@ export const PaymentStep: React.FC = () => {
             ₹{pricing.totalAmount.toFixed(2)}
           </span>
         </div>
-      </div>
+      </InView>
 
       {/* SECTION 2: PAYMENT METHOD SELECTION */}
       <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/40 space-y-5">
@@ -211,7 +220,7 @@ export const PaymentStep: React.FC = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <AnimatedGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3.5" preset="blur-slide">
           
           {/* Option 1: Shop Direct UPI QR (Primary Default) */}
           <div
@@ -322,7 +331,7 @@ export const PaymentStep: React.FC = () => {
             </div>
           )}
 
-        </div>
+        </AnimatedGroup>
 
         {/* Dynamic Details for Selected Mode */}
         {selectedMethod === 'upi' && (

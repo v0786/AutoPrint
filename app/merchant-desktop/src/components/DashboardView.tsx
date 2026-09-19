@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { PrintJob, PrinterDevice, SpoolerMetrics } from '../types/printer';
 import { CollectionVerificationRecord } from '../types/verification';
+import { AnimatedGroup } from './motion-primitives/AnimatedGroup';
 
 interface DashboardViewProps {
   metrics: SpoolerMetrics;
@@ -128,7 +129,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {/* 2. Top Operational Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3.5">
+      <AnimatedGroup preset="blur-slide" className="grid grid-cols-2 lg:grid-cols-6 gap-3.5">
         {/* Card 1: Shop Status */}
         <div className="bg-[#141419] border border-white/10 p-4 rounded-2xl flex flex-col justify-between">
           <div className="flex items-center justify-between">
@@ -252,7 +253,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <ArrowRight className="w-3 h-3" />
           </div>
         </div>
-      </div>
+      </AnimatedGroup>
 
       {/* 3. Operational Quick Action Bar */}
       <div className="bg-[#141419] p-4 rounded-2xl border border-white/10 flex flex-wrap items-center justify-between gap-3">

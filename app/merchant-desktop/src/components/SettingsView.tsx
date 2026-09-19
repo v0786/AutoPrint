@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { UserManagementView } from './UserManagementView';
 import { apiFetch } from '../utils/api';
+import { Disclosure } from './motion-primitives/Disclosure';
 
 interface SettingsViewProps {
   userRole?: 'admin' | 'staff';
@@ -600,9 +601,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="w-full px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
               />
             </div>
+          </div>
 
+          {/* Razorpay Gateway Expansion */}
+          <Disclosure
+            title={
+              <div className="flex items-center gap-2.5">
+                <CreditCard className="w-4 h-4 text-blue-400" />
+                <span className="font-bold text-xs text-white">Online Gateway (Razorpay Integration)</span>
+                <span className="text-[10px] font-normal text-zinc-400 px-2 py-0.5 rounded-full bg-white/5 border border-white/10">Optional</span>
+              </div>
+            }
+            defaultOpen={Boolean(razorpayKeyId)}
+            className="w-full"
+            headerClassName="p-4 rounded-2xl bg-black/40 border border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
+            contentClassName="p-4 bg-black/30 rounded-2xl border border-white/5 mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4"
+          >
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-zinc-300">Razorpay Key ID (Optional)</label>
+              <label className="text-xs font-semibold text-zinc-300">Razorpay Key ID</label>
               <input
                 type="text"
                 value={razorpayKeyId}
@@ -613,7 +629,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-zinc-300">Razorpay Secret (Optional)</label>
+              <label className="text-xs font-semibold text-zinc-300">Razorpay Secret</label>
               <input
                 type="password"
                 value={razorpayKeySecret}
@@ -622,7 +638,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="w-full px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-mono"
               />
             </div>
-          </div>
+          </Disclosure>
         </div>
       )}
 
