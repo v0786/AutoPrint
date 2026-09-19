@@ -1,0 +1,566 @@
+{
+  "version": "1.0.0",
+  "createdAt": "2026-09-19T18:47:17.025Z",
+  "totalFiles": 79,
+  "systemMetadata": {
+    "platform": "win32",
+    "nodeVersion": "v24.18.0",
+    "osRelease": "10.0.26200",
+    "arch": "x64"
+  },
+  "files": {
+    "package.json": {
+      "relativePath": "package.json",
+      "absolutePath": "D:\\AutoPrint\\package.json",
+      "sha256": "77e33e3762a78b63253a659021502b17340c7a887060fe3aef12e26e74bfd5fd",
+      "sizeBytes": 2296,
+      "lastModifiedMs": 1789827247283.6362
+    },
+    "app/backend/package.json": {
+      "relativePath": "app/backend/package.json",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\package.json",
+      "sha256": "1a1df4e7810ab12a7230a8eb720de4d39c3fca6af5e1816f74e70f491db8b631",
+      "sizeBytes": 1226,
+      "lastModifiedMs": 1789829013843.3665
+    },
+    "app/backend/tsconfig.json": {
+      "relativePath": "app/backend/tsconfig.json",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\tsconfig.json",
+      "sha256": "53be513570beb0c4ff39b6c40e463f962a717c6b441a0a15435fca7c0616cd9d",
+      "sizeBytes": 366,
+      "lastModifiedMs": 1788308685951.1653
+    },
+    "app/backend/src/server.ts": {
+      "relativePath": "app/backend/src/server.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\server.ts",
+      "sha256": "8fa1923b11e910b85731a71453cc71892951be27a64b739675f969c8b682231e",
+      "sizeBytes": 13800,
+      "lastModifiedMs": 1789829473913.492
+    },
+    "app/backend/src/config/environment.ts": {
+      "relativePath": "app/backend/src/config/environment.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\config\\environment.ts",
+      "sha256": "57b396464cb23801e72f0095805a752fb7e7073f4b73961fd6460c3b7cf0aa17",
+      "sizeBytes": 7944,
+      "lastModifiedMs": 1789828642583.3325
+    },
+    "app/backend/src/connectors/pagekiteConnector.ts": {
+      "relativePath": "app/backend/src/connectors/pagekiteConnector.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\connectors\\pagekiteConnector.ts",
+      "sha256": "d208e9a876f3c81df4886d07e550e122618279dfe94ebd5346116dd90a5a242d",
+      "sizeBytes": 12207,
+      "lastModifiedMs": 1789828317656.7444
+    },
+    "app/backend/src/controllers/configController.ts": {
+      "relativePath": "app/backend/src/controllers/configController.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\controllers\\configController.ts",
+      "sha256": "1bf7e6cd2e7b78fc60aba5eaf8779280c7dd2a596c4df2d13cb14bd96ee273ef",
+      "sizeBytes": 3728,
+      "lastModifiedMs": 1789823450949.8308
+    },
+    "app/backend/src/controllers/feedbackController.ts": {
+      "relativePath": "app/backend/src/controllers/feedbackController.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\controllers\\feedbackController.ts",
+      "sha256": "38276c3360738e2791b1fdd9c8cec2afcf6bf1efbf3fcc02777ab70fc7d5dd64",
+      "sizeBytes": 2074,
+      "lastModifiedMs": 1788473512722.5151
+    },
+    "app/backend/src/controllers/jobController.ts": {
+      "relativePath": "app/backend/src/controllers/jobController.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\controllers\\jobController.ts",
+      "sha256": "6e2d8acb7a44fbbdbcd430fc00683c9a2276bfbb14fdcb9734c08bb8044c00c8",
+      "sizeBytes": 9872,
+      "lastModifiedMs": 1789824592032.4958
+    },
+    "app/backend/src/controllers/merchantController.ts": {
+      "relativePath": "app/backend/src/controllers/merchantController.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\controllers\\merchantController.ts",
+      "sha256": "05b71638a70b10fa57da21c815d9a7c9bfe157a0a6a56e2390a0b8804d7e3676",
+      "sizeBytes": 23714,
+      "lastModifiedMs": 1789830352500.3237
+    },
+    "app/backend/src/controllers/paymentController.ts": {
+      "relativePath": "app/backend/src/controllers/paymentController.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\controllers\\paymentController.ts",
+      "sha256": "3eb74b08e334943561b1a0f6e3b7fc494daf7421fd1025cab9323872950f8938",
+      "sizeBytes": 9520,
+      "lastModifiedMs": 1789829473913.492
+    },
+    "app/backend/src/controllers/refundController.ts": {
+      "relativePath": "app/backend/src/controllers/refundController.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\controllers\\refundController.ts",
+      "sha256": "b0a17cedcf9eb1825242cde264daf9d4fd449abac21f29bf132b5b5a52dc6c3e",
+      "sizeBytes": 2417,
+      "lastModifiedMs": 1788473524764.589
+    },
+    "app/backend/src/controllers/setupController.ts": {
+      "relativePath": "app/backend/src/controllers/setupController.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\controllers\\setupController.ts",
+      "sha256": "3612a372d1b88cccd4112484f2d8f6145cbfeae1a83650283fd918e210032240",
+      "sizeBytes": 3954,
+      "lastModifiedMs": 1788784683175.1582
+    },
+    "app/backend/src/controllers/supportController.ts": {
+      "relativePath": "app/backend/src/controllers/supportController.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\controllers\\supportController.ts",
+      "sha256": "8d48f98bb785efcc053ad0789e9d2cf062f676e89a5408c21c2f5ca56e82835e",
+      "sizeBytes": 4548,
+      "lastModifiedMs": 1788473519263.9612
+    },
+    "app/backend/src/controllers/systemController.ts": {
+      "relativePath": "app/backend/src/controllers/systemController.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\controllers\\systemController.ts",
+      "sha256": "e28036b45ef0a574aee972e6f88c93de9d8b31c8d81ef3277d80ed7523ab3507",
+      "sizeBytes": 2942,
+      "lastModifiedMs": 1789804280108.861
+    },
+    "app/backend/src/controllers/systemGuardController.ts": {
+      "relativePath": "app/backend/src/controllers/systemGuardController.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\controllers\\systemGuardController.ts",
+      "sha256": "94955d61504c66d718fda834ce119ff152a663b5b230a6bc9afb9ac393c4a3f8",
+      "sizeBytes": 3639,
+      "lastModifiedMs": 1789827247298.3933
+    },
+    "app/backend/src/controllers/verificationController.ts": {
+      "relativePath": "app/backend/src/controllers/verificationController.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\controllers\\verificationController.ts",
+      "sha256": "167371c5599b8f82768effa5dc54e6015d2dcde143ef4287f270a9692a835ca1",
+      "sizeBytes": 4288,
+      "lastModifiedMs": 1789824554062.3933
+    },
+    "app/backend/src/database/db.ts": {
+      "relativePath": "app/backend/src/database/db.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\database\\db.ts",
+      "sha256": "82b105a4f5cc4caaa3de0491d89bbbd3f261e86a8498fa3b907678ce60fd1654",
+      "sizeBytes": 23631,
+      "lastModifiedMs": 1789830114053.1252
+    },
+    "app/backend/src/database/repositories/auditRepository.ts": {
+      "relativePath": "app/backend/src/database/repositories/auditRepository.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\database\\repositories\\auditRepository.ts",
+      "sha256": "fa8316f29017e0e4949984483b1893a699a6849892bd6f04cc51488b8570c39a",
+      "sizeBytes": 3292,
+      "lastModifiedMs": 1788308685941.1633
+    },
+    "app/backend/src/database/repositories/feedbackRepository.ts": {
+      "relativePath": "app/backend/src/database/repositories/feedbackRepository.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\database\\repositories\\feedbackRepository.ts",
+      "sha256": "ee61c9e0a078c34a28ab4b9b6d53dc11cdff712e85a1f7fb94e680736f49c3ff",
+      "sizeBytes": 5511,
+      "lastModifiedMs": 1788473454313.265
+    },
+    "app/backend/src/database/repositories/jobRepository.ts": {
+      "relativePath": "app/backend/src/database/repositories/jobRepository.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\database\\repositories\\jobRepository.ts",
+      "sha256": "a428f57859c551fe9628d5415df7b8e44aa018e7b38d8cb9cd54a402c9357d69",
+      "sizeBytes": 6302,
+      "lastModifiedMs": 1789824470285.846
+    },
+    "app/backend/src/database/repositories/merchantRepository.ts": {
+      "relativePath": "app/backend/src/database/repositories/merchantRepository.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\database\\repositories\\merchantRepository.ts",
+      "sha256": "2630d886b4ede7f9776c201b638d51579088894f270b748157a8cbe3d756af6d",
+      "sizeBytes": 16419,
+      "lastModifiedMs": 1789830352500.3237
+    },
+    "app/backend/src/database/repositories/paymentConfigRepository.ts": {
+      "relativePath": "app/backend/src/database/repositories/paymentConfigRepository.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\database\\repositories\\paymentConfigRepository.ts",
+      "sha256": "fe35205dbfb0e9860f2ec297bfd924a0b300f9be2aa7fdfb9ac27fcb3f17aa08",
+      "sizeBytes": 3280,
+      "lastModifiedMs": 1789829226935.4475
+    },
+    "app/backend/src/database/repositories/refundRepository.ts": {
+      "relativePath": "app/backend/src/database/repositories/refundRepository.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\database\\repositories\\refundRepository.ts",
+      "sha256": "aa190638fad1fe9620a088bcc5963f06bcdbd146b1d108f74c2634b255b46860",
+      "sizeBytes": 4092,
+      "lastModifiedMs": 1788473461016.2441
+    },
+    "app/backend/src/database/repositories/supportRepository.ts": {
+      "relativePath": "app/backend/src/database/repositories/supportRepository.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\database\\repositories\\supportRepository.ts",
+      "sha256": "c2f1599c6221b9062b153333e79587524df2197325951ca9ca653227013cf06c",
+      "sizeBytes": 10443,
+      "lastModifiedMs": 1788473446576.747
+    },
+    "app/backend/src/database/repositories/verificationRepository.ts": {
+      "relativePath": "app/backend/src/database/repositories/verificationRepository.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\database\\repositories\\verificationRepository.ts",
+      "sha256": "76adefe519663473c5ed8fa7a7cd898dede9de1142b06930867a94af45b98c37",
+      "sizeBytes": 12696,
+      "lastModifiedMs": 1788475325396.1985
+    },
+    "app/backend/src/middleware/auth.ts": {
+      "relativePath": "app/backend/src/middleware/auth.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\middleware\\auth.ts",
+      "sha256": "932ee8407b2e629ebe2c75d8e134d88718aec7790fafd2aeae5df354bd01509c",
+      "sizeBytes": 2607,
+      "lastModifiedMs": 1789804364125.007
+    },
+    "app/backend/src/middleware/errorHandler.ts": {
+      "relativePath": "app/backend/src/middleware/errorHandler.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\middleware\\errorHandler.ts",
+      "sha256": "ecf662d53892f49e46e47ad943424b0e7d2d80cf1ceb8b7c6f412fa33abcaee2",
+      "sizeBytes": 1396,
+      "lastModifiedMs": 1788308685942.8586
+    },
+    "app/backend/src/middleware/rateLimiter.ts": {
+      "relativePath": "app/backend/src/middleware/rateLimiter.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\middleware\\rateLimiter.ts",
+      "sha256": "055d96d86e6f23dffb4c363357a73d5c5b510f7894e955dab4481152838a0eb4",
+      "sizeBytes": 2319,
+      "lastModifiedMs": 1789804194974.313
+    },
+    "app/backend/src/middleware/upload.ts": {
+      "relativePath": "app/backend/src/middleware/upload.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\middleware\\upload.ts",
+      "sha256": "131240f7eef6832696e08a728c23c2d699ddb4a14ae068c216a168af964c6c4f",
+      "sizeBytes": 988,
+      "lastModifiedMs": 1788308685942.8586
+    },
+    "app/backend/src/middleware/validate.ts": {
+      "relativePath": "app/backend/src/middleware/validate.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\middleware\\validate.ts",
+      "sha256": "35f6a3560416879dc1f2abe9752fe61061bc675ec2226a719a136433084c9ada",
+      "sizeBytes": 1151,
+      "lastModifiedMs": 1788308685943.8682
+    },
+    "app/backend/src/services/autoprintService.ts": {
+      "relativePath": "app/backend/src/services/autoprintService.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\services\\autoprintService.ts",
+      "sha256": "5c942b033cf6d22c3430bf32ac56b762a2245210fe04f0fd060d51af45241048",
+      "sizeBytes": 23672,
+      "lastModifiedMs": 1789830374435.306
+    },
+    "app/backend/src/services/feedbackService.ts": {
+      "relativePath": "app/backend/src/services/feedbackService.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\services\\feedbackService.ts",
+      "sha256": "129b88b4d31a4c43fc8952740f1de29b6d83221472364f00bbd798cff62364fc",
+      "sizeBytes": 3259,
+      "lastModifiedMs": 1788473487639.9963
+    },
+    "app/backend/src/services/pdfOverlayService.ts": {
+      "relativePath": "app/backend/src/services/pdfOverlayService.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\services\\pdfOverlayService.ts",
+      "sha256": "9933b45aaeb02a268d45170384a07c2e6fd4643e93eaa0e0e9271f393b4021a4",
+      "sizeBytes": 9231,
+      "lastModifiedMs": 1789830374434.7925
+    },
+    "app/backend/src/services/printerService.ts": {
+      "relativePath": "app/backend/src/services/printerService.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\services\\printerService.ts",
+      "sha256": "bfbc767223a0645b7a17687a62660cc797dc68810ca75cd0c82be8bdf5ad7666",
+      "sizeBytes": 9139,
+      "lastModifiedMs": 1789825447142.0627
+    },
+    "app/backend/src/services/qrCodeService.ts": {
+      "relativePath": "app/backend/src/services/qrCodeService.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\services\\qrCodeService.ts",
+      "sha256": "482f30dd0d7bc7287fe9191b2f25a6467a61b8e1cd3dfd931b86456618a5a720",
+      "sizeBytes": 2119,
+      "lastModifiedMs": 1788310372413.3198
+    },
+    "app/backend/src/services/refundService.ts": {
+      "relativePath": "app/backend/src/services/refundService.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\services\\refundService.ts",
+      "sha256": "a96e3bebe54e28e6dc127113bef506202de68e5c5a1ba654614dd18182ebca1a",
+      "sizeBytes": 3079,
+      "lastModifiedMs": 1788473500324.9492
+    },
+    "app/backend/src/services/storageService.ts": {
+      "relativePath": "app/backend/src/services/storageService.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\services\\storageService.ts",
+      "sha256": "b1bfee65c8cd9b181be75416d30577b9e63824ea127e60bc8494ca84cb316fd3",
+      "sizeBytes": 2764,
+      "lastModifiedMs": 1788308685946.869
+    },
+    "app/backend/src/services/supportService.ts": {
+      "relativePath": "app/backend/src/services/supportService.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\services\\supportService.ts",
+      "sha256": "aaabfd3c9ca33ac59b6aad5addb8e0b7536343e6caf107b97d042e2e8d3ce27d",
+      "sizeBytes": 4422,
+      "lastModifiedMs": 1788473494677.895
+    },
+    "app/backend/src/services/tunnelService.ts": {
+      "relativePath": "app/backend/src/services/tunnelService.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\services\\tunnelService.ts",
+      "sha256": "4581cb5813c7e5e38d2a9a5fa2448e347db44f17d8ea854a444840feaca550a3",
+      "sizeBytes": 4633,
+      "lastModifiedMs": 1789828317656.7444
+    },
+    "app/backend/src/services/verificationService.ts": {
+      "relativePath": "app/backend/src/services/verificationService.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\services\\verificationService.ts",
+      "sha256": "240eeb2f05fa2b68f4ab9ca9b98f701a148b939a8c6e247c43b819393f0bf233",
+      "sizeBytes": 11602,
+      "lastModifiedMs": 1789824497880.4553
+    },
+    "app/backend/src/tests/autoprint.test.ts": {
+      "relativePath": "app/backend/src/tests/autoprint.test.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\tests\\autoprint.test.ts",
+      "sha256": "a82ba81e856ff917a8eb81e6a074d61725723aa5908716a2061067c40e2cf6ae",
+      "sizeBytes": 13072,
+      "lastModifiedMs": 1789826026745.3552
+    },
+    "app/backend/src/tests/print_settings_contract.test.ts": {
+      "relativePath": "app/backend/src/tests/print_settings_contract.test.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\tests\\print_settings_contract.test.ts",
+      "sha256": "b2c0f9fa0cf30c5d1f321c5c5649984c3554d1cd53c1c0fb05e5d4bd5dbb9299",
+      "sizeBytes": 9213,
+      "lastModifiedMs": 1788475434070.436
+    },
+    "app/backend/src/tests/print_workflow_lifecycle.test.ts": {
+      "relativePath": "app/backend/src/tests/print_workflow_lifecycle.test.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\tests\\print_workflow_lifecycle.test.ts",
+      "sha256": "f94da5fea19184f33daa8431db65e65273d1ad9ad6bd349de2e82ca011138ba5",
+      "sizeBytes": 7139,
+      "lastModifiedMs": 1789824886356.2505
+    },
+    "app/backend/src/tests/reliability_support.test.ts": {
+      "relativePath": "app/backend/src/tests/reliability_support.test.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\tests\\reliability_support.test.ts",
+      "sha256": "0c9b96187f10614a5a7556b7ff824363f87e97eed46585fd2c131d94a850c75d",
+      "sizeBytes": 7415,
+      "lastModifiedMs": 1788473612306.5537
+    },
+    "app/backend/src/tests/security_audit.test.ts": {
+      "relativePath": "app/backend/src/tests/security_audit.test.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\tests\\security_audit.test.ts",
+      "sha256": "0d0641516e265cd39da80a972e90689e94376474e6b0f545e45b37bdeb715689",
+      "sizeBytes": 12029,
+      "lastModifiedMs": 1789804610597.2773
+    },
+    "app/backend/src/types/index.ts": {
+      "relativePath": "app/backend/src/types/index.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\types\\index.ts",
+      "sha256": "5eb83cb3d3ea309a2f99bd91fdcdc49a5cb4670a3575bfb9a4147fbf3ced3c2a",
+      "sizeBytes": 9028,
+      "lastModifiedMs": 1789824369724.5205
+    },
+    "app/backend/src/utils/auditLogger.ts": {
+      "relativePath": "app/backend/src/utils/auditLogger.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\utils\\auditLogger.ts",
+      "sha256": "6295673fe9fcb66cf7667407f691532b8b04ca4a87c392bfc9cb2f106826bad9",
+      "sizeBytes": 1168,
+      "lastModifiedMs": 1788308685950.163
+    },
+    "app/backend/src/utils/crypto.ts": {
+      "relativePath": "app/backend/src/utils/crypto.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\utils\\crypto.ts",
+      "sha256": "b9a636d62f7502ffb3ea966e27bd56e21d0f27ddceb9dd4f5c802c4dca3470ea",
+      "sizeBytes": 4033,
+      "lastModifiedMs": 1788308685951.1653
+    },
+    "app/backend/src/utils/diagnosticCollector.ts": {
+      "relativePath": "app/backend/src/utils/diagnosticCollector.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\utils\\diagnosticCollector.ts",
+      "sha256": "ec50bda6884f25411c1f4b5b765e40d56564357e8369051f64a4e7f3df8babbc",
+      "sizeBytes": 2750,
+      "lastModifiedMs": 1788473474435.828
+    },
+    "app/backend/src/utils/logRedactor.ts": {
+      "relativePath": "app/backend/src/utils/logRedactor.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\utils\\logRedactor.ts",
+      "sha256": "b4303d12ec5456b977f97a8029ec47f21c6fbe3b7670993025ef9b6d241cc602",
+      "sizeBytes": 3128,
+      "lastModifiedMs": 1788473467910.0952
+    },
+    "app/backend/src/utils/traceLogger.ts": {
+      "relativePath": "app/backend/src/utils/traceLogger.ts",
+      "absolutePath": "D:\\AutoPrint\\app\\backend\\src\\utils\\traceLogger.ts",
+      "sha256": "93031ca6396bc7d7ebafd300a9e8e81d368ce3e509f972f4e1e01d32acef10a4",
+      "sizeBytes": 1669,
+      "lastModifiedMs": 1788507520140.1528
+    },
+    "scripts/audit-win7.cjs": {
+      "relativePath": "scripts/audit-win7.cjs",
+      "absolutePath": "D:\\AutoPrint\\scripts\\audit-win7.cjs",
+      "sha256": "713c7c92277f8967de8f920fd74d2a8ed2fd8470f0d2fc24bb10fdef93dc3b4f",
+      "sizeBytes": 1298,
+      "lastModifiedMs": 1788788627967.705
+    },
+    "scripts/backup-autoprint.cmd": {
+      "relativePath": "scripts/backup-autoprint.cmd",
+      "absolutePath": "D:\\AutoPrint\\scripts\\backup-autoprint.cmd",
+      "sha256": "07c2a4933b7dcdb71819e821368ee68deb249c1582297ba910c79f9f1bf05fd3",
+      "sizeBytes": 1403,
+      "lastModifiedMs": 1788408589736.5957
+    },
+    "scripts/build-installer.ps1": {
+      "relativePath": "scripts/build-installer.ps1",
+      "absolutePath": "D:\\AutoPrint\\scripts\\build-installer.ps1",
+      "sha256": "6647a852ac20088db6b125a4fabb561ac9c83f3ad71e9381d58bf25ac8e9850f",
+      "sizeBytes": 11788,
+      "lastModifiedMs": 1789807203202.57
+    },
+    "scripts/build.ps1": {
+      "relativePath": "scripts/build.ps1",
+      "absolutePath": "D:\\AutoPrint\\scripts\\build.ps1",
+      "sha256": "280ebf9d1e03f88fd6af68e492e27743100438ade3dd9e72843ddaa37cf86232",
+      "sizeBytes": 9963,
+      "lastModifiedMs": 1789813654056.7783
+    },
+    "scripts/clean.ps1": {
+      "relativePath": "scripts/clean.ps1",
+      "absolutePath": "D:\\AutoPrint\\scripts\\clean.ps1",
+      "sha256": "9d53522a0af91d6c1b7e1ffe5d631d5ad5376c318ed8117eb6386364e6ff41e4",
+      "sizeBytes": 1442,
+      "lastModifiedMs": 1789807283298.3223
+    },
+    "scripts/health-check.cmd": {
+      "relativePath": "scripts/health-check.cmd",
+      "absolutePath": "D:\\AutoPrint\\scripts\\health-check.cmd",
+      "sha256": "d538210f2c149615599dbf931e6ea7e3db7b4f1cb93f51d01a771344fab4ac36",
+      "sizeBytes": 1255,
+      "lastModifiedMs": 1788474594849.2705
+    },
+    "scripts/inspect-db.cjs": {
+      "relativePath": "scripts/inspect-db.cjs",
+      "absolutePath": "D:\\AutoPrint\\scripts\\inspect-db.cjs",
+      "sha256": "64fd7f9dd3ef8de03e2524966f9a9695d1d10664a66d8447e48e289af85d9050",
+      "sizeBytes": 853,
+      "lastModifiedMs": 1789823275687.6863
+    },
+    "scripts/launch.bat": {
+      "relativePath": "scripts/launch.bat",
+      "absolutePath": "D:\\AutoPrint\\scripts\\launch.bat",
+      "sha256": "6bd14c1ee70eaede3bf4b0eb881e4cdeef9b5e3cdab5eb1ac2b74c7c78f6dfc4",
+      "sizeBytes": 609,
+      "lastModifiedMs": 1788320167596.3057
+    },
+    "scripts/make-icon.ps1": {
+      "relativePath": "scripts/make-icon.ps1",
+      "absolutePath": "D:\\AutoPrint\\scripts\\make-icon.ps1",
+      "sha256": "5e14b14391db7cc45b2499ca371dc368b49d8eef7ae309753ad814b3bba7c8a3",
+      "sizeBytes": 1024,
+      "lastModifiedMs": 1789831933004.5945
+    },
+    "scripts/reset-autoprint.cjs": {
+      "relativePath": "scripts/reset-autoprint.cjs",
+      "absolutePath": "D:\\AutoPrint\\scripts\\reset-autoprint.cjs",
+      "sha256": "1d89073752f44bd02ba29ae24809fea37d25076d52cef32aee69521ec3b5ad67",
+      "sizeBytes": 11968,
+      "lastModifiedMs": 1788786006567.473
+    },
+    "scripts/reset-fresh-install.cjs": {
+      "relativePath": "scripts/reset-fresh-install.cjs",
+      "absolutePath": "D:\\AutoPrint\\scripts\\reset-fresh-install.cjs",
+      "sha256": "06b7b5efed25d9b75b3e4c46186e75135a37f1f1275b4498e823a278d5981c3e",
+      "sizeBytes": 1367,
+      "lastModifiedMs": 1788785023595.6042
+    },
+    "scripts/reset-zeros.cjs": {
+      "relativePath": "scripts/reset-zeros.cjs",
+      "absolutePath": "D:\\AutoPrint\\scripts\\reset-zeros.cjs",
+      "sha256": "fa6ae791bcd945c1b27430f12fff044b8e95ac3a7b5eaf0cfdc3a5e23b550f31",
+      "sizeBytes": 2612,
+      "lastModifiedMs": 1789823367331.7163
+    },
+    "scripts/restart-autoprint.cmd": {
+      "relativePath": "scripts/restart-autoprint.cmd",
+      "absolutePath": "D:\\AutoPrint\\scripts\\restart-autoprint.cmd",
+      "sha256": "0b6cac21dff3392812290a2d52b64ff5a19119c5c09f84617183be52ad0b4b7d",
+      "sizeBytes": 468,
+      "lastModifiedMs": 1788310372428.4526
+    },
+    "scripts/restore-autoprint.cmd": {
+      "relativePath": "scripts/restore-autoprint.cmd",
+      "absolutePath": "D:\\AutoPrint\\scripts\\restore-autoprint.cmd",
+      "sha256": "6aaa1f607b2612936e4b6a0c3d9a0e4c63ea5014ba0d5c7cad1209929f34239c",
+      "sizeBytes": 2371,
+      "lastModifiedMs": 1788408597013.546
+    },
+    "scripts/start-all.cmd": {
+      "relativePath": "scripts/start-all.cmd",
+      "absolutePath": "D:\\AutoPrint\\scripts\\start-all.cmd",
+      "sha256": "e0fd58636e7a69cfffab2796aab5631937a453f54fddf4abcfd8a643bb48eee3",
+      "sizeBytes": 1231,
+      "lastModifiedMs": 1789821149122.7368
+    },
+    "scripts/start-autoprint.cmd": {
+      "relativePath": "scripts/start-autoprint.cmd",
+      "absolutePath": "D:\\AutoPrint\\scripts\\start-autoprint.cmd",
+      "sha256": "da310d58de0ee0bc7fda8f8fe0b96a13859671be9d35bc64244469e40e9f0d42",
+      "sizeBytes": 5365,
+      "lastModifiedMs": 1789828317656.7444
+    },
+    "scripts/status-autoprint.cmd": {
+      "relativePath": "scripts/status-autoprint.cmd",
+      "absolutePath": "D:\\AutoPrint\\scripts\\status-autoprint.cmd",
+      "sha256": "8e1f2b0c8ddd59239d914db81608e0970830736763e4a590a44affff53cbbdb8",
+      "sizeBytes": 3439,
+      "lastModifiedMs": 1788474606146.7256
+    },
+    "scripts/stop-all.cmd": {
+      "relativePath": "scripts/stop-all.cmd",
+      "absolutePath": "D:\\AutoPrint\\scripts\\stop-all.cmd",
+      "sha256": "c0c46f68407ccd84b6b0164f2de6d36f292bedb409aa091d9438b063932c09e2",
+      "sizeBytes": 460,
+      "lastModifiedMs": 1788308686101.3335
+    },
+    "scripts/stop-autoprint.cmd": {
+      "relativePath": "scripts/stop-autoprint.cmd",
+      "absolutePath": "D:\\AutoPrint\\scripts\\stop-autoprint.cmd",
+      "sha256": "7df4c8024f975bb0f7386a4cc15553ebc3d4ef23387aab060a11d6f903926eb5",
+      "sizeBytes": 1127,
+      "lastModifiedMs": 1788472529204.0037
+    },
+    "scripts/stop.bat": {
+      "relativePath": "scripts/stop.bat",
+      "absolutePath": "D:\\AutoPrint\\scripts\\stop.bat",
+      "sha256": "04421e7a0e051891f019146ce5fe93106c6f1dc5dfa37ec34302ceb14dfd5bd0",
+      "sizeBytes": 1165,
+      "lastModifiedMs": 1788474617671.416
+    },
+    "scripts/test-config-consistency.cjs": {
+      "relativePath": "scripts/test-config-consistency.cjs",
+      "absolutePath": "D:\\AutoPrint\\scripts\\test-config-consistency.cjs",
+      "sha256": "43165a8ccdeee17c45e74363a05991c3a7f05f8db68bbbe7f0f1d5be6e4f3ff3",
+      "sizeBytes": 2302,
+      "lastModifiedMs": 1789821149128.5212
+    },
+    "scripts/test-e2e-integration.mjs": {
+      "relativePath": "scripts/test-e2e-integration.mjs",
+      "absolutePath": "D:\\AutoPrint\\scripts\\test-e2e-integration.mjs",
+      "sha256": "a5d885d1ff573c3251c93adbf7ab2b001aaf0d6cf99632ab1ac9a7ac4f3bf822",
+      "sizeBytes": 16679,
+      "lastModifiedMs": 1788407832054.2107
+    },
+    "scripts/test-first-run-flow.cjs": {
+      "relativePath": "scripts/test-first-run-flow.cjs",
+      "absolutePath": "D:\\AutoPrint\\scripts\\test-first-run-flow.cjs",
+      "sha256": "083d2e8bd09f27a342cea4af6958fff9bf5618a820a73e6b9783145f1ee51fb4",
+      "sizeBytes": 6056,
+      "lastModifiedMs": 1788785090855.431
+    },
+    "scripts/test-installer-prerequisites.cjs": {
+      "relativePath": "scripts/test-installer-prerequisites.cjs",
+      "absolutePath": "D:\\AutoPrint\\scripts\\test-installer-prerequisites.cjs",
+      "sha256": "1c1950eb5cd449703c98c5b6a8c0e02bf198705dd487f1a32855e3deb17ed291",
+      "sizeBytes": 8747,
+      "lastModifiedMs": 1788790781219.532
+    },
+    "scripts/test-pagekite-security.ps1": {
+      "relativePath": "scripts/test-pagekite-security.ps1",
+      "absolutePath": "D:\\AutoPrint\\scripts\\test-pagekite-security.ps1",
+      "sha256": "bf13ca87e92e2ee4ae4eab967202e8e62d5d9da446c67a0a9cc64d8365435f55",
+      "sizeBytes": 7023,
+      "lastModifiedMs": 1788472539074.102
+    },
+    "scripts/test-port-configuration.mjs": {
+      "relativePath": "scripts/test-port-configuration.mjs",
+      "absolutePath": "D:\\AutoPrint\\scripts\\test-port-configuration.mjs",
+      "sha256": "ca48863f5674fe3fecfff63edd0895f7916696328f5c620cccc37685501e5159",
+      "sizeBytes": 10678,
+      "lastModifiedMs": 1788474645091.9126
+    },
+    "scripts/test-queue-synchronization.mjs": {
+      "relativePath": "scripts/test-queue-synchronization.mjs",
+      "absolutePath": "D:\\AutoPrint\\scripts\\test-queue-synchronization.mjs",
+      "sha256": "a3dc8ac362d4bad73535964f4c93e816c54cc40830236f220c0580e2a77f40de",
+      "sizeBytes": 11297,
+      "lastModifiedMs": 1788508234278.1646
+    }
+  }
+}

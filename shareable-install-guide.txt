@@ -1,0 +1,15 @@
+AutoPrint Windows 7 Shareable Package
+
+Recommended installation:
+1. Run AutoPrint-Setup.exe as Administrator.
+2. Complete the installer and restart Windows if requested.
+3. Start AutoPrint from the desktop or Start Menu shortcut.
+4. Open the Merchant Dashboard at http://localhost:8000.
+
+The installer includes the bundled Node.js runtime, backend, customer kiosk,
+merchant dashboard, printer services, database migrations, and native tray
+launcher. It is designed for Windows 7 and newer supported Windows systems.
+
+Do not copy an existing datastore or .env file from another computer unless
+you intentionally want to migrate that shop's data. Configure the new shop
+through the onboarding and Settings screens.

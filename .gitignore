@@ -14,6 +14,7 @@ dist-installer/
 dist-electron/
 AutoPrint-FreshPC-Transfer-Pack*
 *.zip
+AutoPrint installer/
 installer/prerequisites/
 runtime/node/
 build/*
@@ -24,6 +25,7 @@ out/
 release/
 .next/
 *.old.exe
+
 
 # Environment & Secrets (Preserve templates only)
 .env

@@ -37,6 +37,7 @@ All project architecture, specifications, engineering, security, and operational
 | **Phase 4: Testing & Security** | [🧪 `04_TESTING_AND_SECURITY.md`](docs/04_TESTING_AND_SECURITY.md) | Testing pyramid, test suite inventory (34/34 passing tests), STRIDE threat model, security controls (timing-safe auth, rate limiting), and CI/CD matrix. |
 | **Phase 5: Deployment & Packaging** | [📦 `05_DEPLOYMENT_AND_PACKAGING.md`](docs/05_DEPLOYMENT_AND_PACKAGING.md) | Windows 7–11 compatibility matrix, Inno Setup 6 pipeline (`AutoPrint-Setup.exe`), portable distribution, and 20-step shop owner setup guide. |
 | **Phase 6: Operations & Maintenance** | [👨‍💼 `06_OPERATIONS_AND_MAINTENANCE.md`](docs/06_OPERATIONS_AND_MAINTENANCE.md) | Merchant operations manual, duplicate print prevention, logging and monitoring, automated SQLite backups, troubleshooting guide, and product roadmap. |
+| **SystemGuard Diagnostics** | [🛡️ `docs/SYSTEM_GUARD.md`](docs/SYSTEM_GUARD.md) / [`tools/system-guard/README.md`](tools/system-guard/README.md) | Continuous watchdog monitoring, automated self-healing, SHA-256 baseline rollback, crash loop limiting, and AI incident escalation. |
 
 ---
 
@@ -49,49 +50,86 @@ When AutoPrint is running, the local portals are accessible in any browser:
 | **Merchant Dashboard** | `http://localhost:8000` | Staff queue management, cash confirmation, printer fleet status, and settings. |
 | **Customer Kiosk** | `http://localhost:7000` | Customer mobile upload wizard, print configuration, price estimate, and 8-digit code. |
 | **Backend REST API** | `http://localhost:5000/api` | Core print spooler, database, rate limiter, and authentication gateway. |
+| **SystemGuard Health API** | `http://localhost:5000/api/system/guard/health` | Live diagnostic health scores, daemon latency probes, memory gauges, and datastore status. |
 
-### Merchant interface modes
+### Merchant Interface Modes
 
 AutoPrint keeps the browser-based Merchant Dashboard as the default interface. The native Windows launcher provides a system-tray menu for opening the Merchant Web UI and selecting the persisted interface preference:
 
-- **Web Mode** (default): opens the existing localhost Merchant Dashboard.
+- **Web Mode** (default): opens the existing localhost Merchant Dashboard in the user's default browser.
 - **GUI Mode**: uses the native launcher entry point while continuing to use the same Merchant UI, backend, queue, printer service, and database.
 
 The preference is stored in `C:\ProgramData\AutoPrint\config\installation.json` and defaults to `web` for existing installations.
 
-### Verification-page printing
+### Verification-Page Printing
 
-In Merchant Dashboard → Settings → Print Pricing, enable **Do not print verification page** to omit the verification page from future print jobs. When disabled, AutoPrint preserves the uploaded document and appends a separate black-and-white, landscape verification page with a large collection code as the final page.
+In **Merchant Dashboard → Settings → Print Pricing**, enable **Do not print verification page** to omit the verification slip from future print jobs. When disabled, AutoPrint preserves the uploaded document and appends a separate black-and-white, landscape verification page with a large collection code as the final page.
 
-The setting is stored with the merchant print configuration and is backward-compatible with existing databases.
-
-### System tray
+### System Tray & Service Supervisor
 
 The native `AutoPrint.exe` launcher supervises the backend, customer kiosk, merchant service, and optional PageKite tunnel. Its tray menu provides Merchant Web, service status, printer/payment settings, logs, restart, and exit actions. The launcher prevents duplicate service processes and keeps Web Mode available without requiring the native interface.
 
 ---
 
-## 4. Key Development Commands
+## 4. SystemGuard: Automated Self-Healing & Diagnostics
+
+AutoPrint includes **SystemGuard** (`tools/system-guard/`), an autonomous diagnostic watchdog that prevents downtime:
+
+* **Process Heartbeats**: Real-time health monitoring of Backend (5000), Kiosk (7000), and Merchant POS (8000).
+* **Resource Leak Detection**: Continuous sampling of V8 heap and system RAM to catch memory leaks early.
+* **Integrity Engine & Rollback**: Uses content-addressable `.bak` snapshots in `datastore/guard/baselines/` to instantly restore corrupted or deleted application files.
+* **Automated Lock & Zombie Cleaner**: Automatically clears stale SQLite `.db-wal` locks and terminates orphan processes holding system ports.
+* **AI Escalation Reports**: Generates sanitized markdown and JSON reports in `logs/incidents/` containing stack traces and ready-to-run AI prompts.
+
+---
+
+## 5. Key Development & Operational Commands
 
 ```bash
-# Install dependencies across all packages
+# === DEPENDENCIES & COMPILATION ===
+# Install dependencies across all packages (Backend, Merchant, Customer, SystemGuard)
 npm run install:all
 
-# Run backend automated test suite (34 tests)
-npm run test:backend
-
-# Run full test & linting verification
-npm run test:all
-
-# Compile all components (Backend, Merchant, Customer, C# Launcher)
+# Compile all components (Backend, Merchant, Customer, Launcher)
 npm run build:all
 
+# === TESTING & VERIFICATION ===
+# Run backend test suite (lifecycle, security, spooler)
+npm run test:backend
+
+# Run SystemGuard automated diagnostic & recovery test suite
+npm test --prefix tools/system-guard
+
+# Run full test & linting verification across apps
+npm run test:all
+
+# === SYSTEMGUARD OPERATIONS ===
+# Display ANSI health dashboard and live resource score
+npm run guard:status
+
+# Run deep static analysis and file integrity scan
+npm run guard:scan
+
+# Execute automated self-healing (stale locks, zombie ports, file restore)
+npm run guard:recover
+
+# Update clean baseline snapshots after intentional code changes
+npm run guard:baseline
+
+# Start background continuous watchdog daemon (auto-recovers on crash)
+npm run guard:watch
+
+# Compile on-demand AI escalation diagnostic incident report
+npm run guard:report
+
+# === PACKAGING ===
 # Build standalone Windows Inno Setup installer
 powershell -File scripts/build.ps1
 ```
 
 ---
 
-## 5. License
+## 6. License
 
 AutoPrint is released under the [Apache-2.0 License](LICENSE).
+

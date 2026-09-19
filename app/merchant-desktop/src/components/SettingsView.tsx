@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Sliders,
   ShieldCheck,
+  RotateCcw,
   Power,
   Copy,
   Check,
@@ -43,7 +44,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onToggleOnline,
   onProfileUpdated,
 }) => {
-  const [activeTab, setActiveTab] = useState<'store' | 'pricing' | 'payments' | 'station' | 'users'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'pricing' | 'payments' | 'station' | 'factory' | 'users'>('store');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -300,6 +301,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setCopiedKioskUrl(false), 2000);
   };
 
+  const handlePrintStandee = () => {
+    if (!qrCodeDataUrl) {
+      setErrorMessage('QR code is not available yet. Please refresh the Station settings and try again.');
+      return;
+    }
+    const printWindow = window.open('', '_blank', 'width=850,height=1000');
+    if (!printWindow) {
+      setErrorMessage('Please allow pop-ups to print the QR standee.');
+      return;
+    }
+    const safeShopName = (shopName || 'AutoPrint Store').replace(/[<>&\"]/g, '');
+    const safeCounter = (kioskNumber || 'Counter #01').replace(/[<>&\"]/g, '');
+    printWindow.document.write(`<!doctype html><html><head><title>AutoPrint QR Standee</title><style>
+      @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,sans-serif;text-align:center}
+      .page{width:210mm;min-height:297mm;padding:24mm 18mm;display:flex;align-items:center;justify-content:center}.card{width:100%;border:3px solid #381e72;border-radius:18px;padding:18mm 12mm}.brand{font-size:18px;font-weight:800;letter-spacing:3px;color:#381e72}.shop{font-size:30px;font-weight:800;margin:10mm 0 4mm}.qr{width:125mm;height:125mm;object-fit:contain;border:1px solid #ddd;padding:5mm}.counter{font-size:22px;font-weight:700;letter-spacing:2px;margin-top:8mm}.url{font-size:12px;color:#555;margin-top:4mm;word-break:break-all}@media print{.page{min-height:100vh}}
+    </style></head><body><main class="page"><section class="card"><div class="brand">AUTOPRINT</div><div class="shop">${safeShopName}</div><img class="qr" src="${qrCodeDataUrl}"/><div class="counter">${safeCounter} &bull; SCAN TO PRINT</div><div class="url">${kioskUrl}</div></section></main><script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}</script></body></html>`);
+    printWindow.document.close();
+  };
+
   const handleVerifyPageKite = async () => {
     if (!pagekiteSubdomain.trim() || !pagekiteSecret.trim()) {
       setVerifyResult({
@@ -386,6 +406,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     { id: 'pricing', label: 'Print Pricing', icon: DollarSign },
     { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'station', label: 'Station & Kiosk', icon: QrCode },
+    { id: 'factory', label: 'Factory Reset', icon: RotateCcw },
     ...(userRole === 'admin'
       ? [{ id: 'users', label: 'Staff & Users', icon: Users, badge: 'Admin' }]
       : []),
@@ -408,7 +429,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Global Save Button (for store, pricing, payments) */}
-        {activeTab !== 'users' && activeTab !== 'station' && (
+        {activeTab !== 'users' && activeTab !== 'station' && activeTab !== 'factory' && (
           <button
             onClick={activeTab === 'payments' ? handleSavePayments : handleSaveStoreAndPricing}
             disabled={saving}
@@ -789,6 +810,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
+      {activeTab === 'factory' && (
+        <div className="bg-[#141419] border border-rose-500/25 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl">
+          <div className="border-b border-white/5 pb-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-rose-500/15 text-rose-300 flex items-center justify-center"><RotateCcw className="h-5 w-5" /></div>
+            <div><h2 className="text-sm font-bold text-white">Factory Reset</h2><p className="text-xs text-zinc-400 mt-1">Reset AutoPrint to a clean installation state.</p></div>
+          </div>
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200 space-y-2">
+            <p className="font-bold">Destructive operation — backup first.</p>
+            <p>This removes merchant accounts, payment settings, print history, verification records, uploaded documents, sessions, and local operational state. Application binaries remain installed.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 text-xs">
+            <div className="rounded-xl border border-white/10 bg-black/30 p-4"><h3 className="font-bold text-white mb-2">Reset includes</h3><ul className="list-disc list-inside space-y-1 text-zinc-400"><li>SQLite database and merchant users</li><li>Jobs, payments, audits, and codes</li><li>Uploaded and processed documents</li><li>Runtime queue and sessions</li></ul></div>
+            <div className="rounded-xl border border-white/10 bg-black/30 p-4"><h3 className="font-bold text-white mb-2">Preserved</h3><ul className="list-disc list-inside space-y-1 text-zinc-400"><li>Application binaries and source</li><li>Configuration templates</li><li>Backups made before reset</li></ul></div>
+          </div>
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-4 text-xs text-blue-200">Stop AutoPrint, create a backup, then run:<code className="block mt-2 rounded-lg bg-black/40 p-3 font-mono text-blue-100">npm run reset</code><span className="block mt-2 text-blue-300/80">The command requires explicit confirmation. Use --force only for controlled deployments.</span></div>
+        </div>
+      )}
+
       {/* TAB 4: STATION & KIOSK */}
       {activeTab === 'station' && (
         <div className="bg-[#141419] border border-white/10 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl">
@@ -866,6 +905,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">
                 {kioskNumber} • SCAN TO PRINT
               </div>
+              <button
+                type="button"
+                onClick={handlePrintStandee}
+                disabled={!qrCodeDataUrl}
+                className="mt-4 w-full rounded-xl bg-[#381E72] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#4b2a91] disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+              >
+                Print QR Standee
+              </button>
             </div>
           </div>
 
