@@ -105,7 +105,11 @@ export class PaymentController {
         .update(body.toString())
         .digest('hex');
 
-      const isSignatureValid = expectedSignature === razorpaySignature;
+      const expectedBuf = Buffer.from(expectedSignature, 'utf8');
+      const providedBuf = Buffer.from(razorpaySignature, 'utf8');
+      const isSignatureValid =
+        expectedBuf.length === providedBuf.length &&
+        crypto.timingSafeEqual(expectedBuf, providedBuf);
 
       if (!isSignatureValid) {
         // Record failed attempt (counts towards 3-strike lockout)
@@ -141,11 +145,22 @@ export class PaymentController {
   }
 
   /**
-   * Records digital payment attempts and enforces 3-strike fail-safe
+   * Records digital payment attempts and enforces 3-strike fail-safe.
+   * Strictly disallows unauthenticated clients from self-reporting 'SUCCESS' to prevent free print fraud.
    */
   public static recordDigitalAttempt(req: Request, res: Response, next: NextFunction): void {
     try {
       const parsed = digitalAttemptSchema.parse(req.body);
+
+      // Free print fraud defense: only authenticated staff can manually mark SUCCESS without gateway verification
+      const user = (req as any).user;
+      if (parsed.status === 'SUCCESS' && !user) {
+        res.status(403).json({
+          ok: false,
+          error: 'Self-reported payment success is not permitted. Digital payments require cryptographic gateway verification or merchant staff counter confirmation.',
+        });
+        return;
+      }
 
       const result = VerificationService.processDigitalPaymentAttempt(parsed.verificationCode, {
         status: parsed.status,

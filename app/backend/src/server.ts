@@ -25,23 +25,29 @@ import { PrinterService } from './services/printerService';
 import { tunnelService } from './services/tunnelService';
 import { CloudSyncService } from './services/cloudSyncService';
 
+import { requireAuth, requireAdmin, optionalAuth } from './middleware/auth';
+import { createRateLimiter } from './middleware/rateLimiter';
+
 // 1. Initialize data storage directories and database
 ensureDataDirectories();
 initDatabase();
 
 const app = express();
 
-// 2. CORS configuration (production safe with configurable origin whitelist)
+// 2. CORS configuration (production safe with exact domain validation)
+const allowedOrigins = new Set(CONFIG.CORS_ORIGINS);
+const configuredPagekite = `https://${(CONFIG.PAGEKITE.subdomain || 'autoprint').toLowerCase().trim()}.${CONFIG.PAGEKITE.domain || 'pagekite.me'}`;
+
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       if (
-        CONFIG.CORS_ORIGINS.includes('*') ||
-        CONFIG.CORS_ORIGINS.includes(origin) ||
+        allowedOrigins.has('*') ||
+        allowedOrigins.has(origin) ||
         origin.startsWith('http://localhost:') ||
         origin.startsWith('http://127.0.0.1:') ||
-        origin.includes('.pagekite.me')
+        origin === configuredPagekite
       ) {
         return callback(null, true);
       }
@@ -123,7 +129,19 @@ app.get('/api/setup/status', SetupController.getStatus);
 app.post('/setup/create-first-user', SetupController.createFirstUser);
 app.post('/api/setup/create-first-user', SetupController.createFirstUser);
 
-// 4. API Routes
+// 4. Rate Limiters & API Routes
+const codeLookupLimiter = createRateLimiter({
+  windowMs: 60000,
+  max: 40,
+  message: 'Too many verification code lookup attempts. Please wait before trying again.',
+});
+
+const authLimiter = createRateLimiter({
+  windowMs: 60000,
+  max: 15,
+  message: 'Too many login attempts. Please wait before retrying.',
+});
+
 const api = express.Router();
 api.get('/health', healthHandler);
 api.get('/config/runtime', runtimeConfigHandler);
@@ -132,44 +150,44 @@ api.post('/setup/create-first-user', SetupController.createFirstUser);
 
 // Job Management Routes (supports multipart file upload)
 api.post('/jobs', upload.single('file'), JobController.submitJob);
-api.get('/jobs', JobController.getAllJobs);
+api.get('/jobs', requireAuth, JobController.getAllJobs);
 api.get('/jobs/:id', JobController.getJobById);
-api.patch('/jobs/:id/status', JobController.updateJobStatus);
-api.post('/jobs/:id/cancel', JobController.cancelJob);
-api.delete('/jobs/:id', JobController.deleteJob);
+api.patch('/jobs/:id/status', requireAuth, JobController.updateJobStatus);
+api.post('/jobs/:id/cancel', requireAuth, JobController.cancelJob);
+api.delete('/jobs/:id', requireAdmin, JobController.deleteJob);
 
 // Verification & Staff Desk Routes
-api.get('/verification/lookup/:code', VerificationController.lookupByCode);
-api.get('/verification/:code', VerificationController.lookupByCode);
-api.post('/verification/lookup', VerificationController.lookupByCode);
-api.post('/verification/collect-cash', VerificationController.processCashCollection);
-api.post('/verification/handover', VerificationController.confirmHandover);
-api.get('/verification/audit-logs', VerificationController.getAuditLogs);
+api.get('/verification/lookup/:code', codeLookupLimiter, VerificationController.lookupByCode);
+api.get('/verification/:code', codeLookupLimiter, VerificationController.lookupByCode);
+api.post('/verification/lookup', codeLookupLimiter, VerificationController.lookupByCode);
+api.post('/verification/collect-cash', requireAuth, VerificationController.processCashCollection);
+api.post('/verification/handover', requireAuth, VerificationController.confirmHandover);
+api.get('/verification/audit-logs', requireAuth, VerificationController.getAuditLogs);
 
 // Merchant Auth & Management Routes
 api.get('/merchant/auth/check', MerchantController.checkAuth);
 api.post('/merchant/auth/onboard', MerchantController.onboard);
-api.post('/merchant/auth/login', MerchantController.login);
-api.post('/merchant/auth/signup', MerchantController.signup);
+api.post('/merchant/auth/login', authLimiter, MerchantController.login);
+api.post('/merchant/auth/signup', requireAdmin, MerchantController.signup);
 api.post('/merchant/auth/logout', MerchantController.logout);
-api.get('/merchant/profile', MerchantController.getProfile);
-api.put('/merchant/profile', MerchantController.updateProfile);
-api.post('/merchant/profile', MerchantController.updateProfile);
+api.get('/merchant/profile', requireAuth, MerchantController.getProfile);
+api.put('/merchant/profile', requireAuth, MerchantController.updateProfile);
+api.post('/merchant/profile', requireAuth, MerchantController.updateProfile);
 api.get('/merchant/public-profile', MerchantController.getPublicProfile);
-api.post('/merchant/payment-receiver', MerchantController.updatePaymentReceiver);
-api.post('/merchant/printer', MerchantController.updatePrinter);
-api.post('/merchant/toggle-online', MerchantController.toggleOnline);
+api.post('/merchant/payment-receiver', requireAdmin, MerchantController.updatePaymentReceiver);
+api.post('/merchant/printer', requireAuth, MerchantController.updatePrinter);
+api.post('/merchant/toggle-online', requireAuth, MerchantController.toggleOnline);
 
 // Admin User Management Routes (RBAC Protected)
-api.get('/merchant/users', MerchantController.getUsers);
-api.post('/merchant/users', MerchantController.addUser);
-api.delete('/merchant/users/:id', MerchantController.deleteUser);
-api.post('/merchant/users/:id/reset-password', MerchantController.resetUserPassword);
+api.get('/merchant/users', requireAdmin, MerchantController.getUsers);
+api.post('/merchant/users', requireAdmin, MerchantController.addUser);
+api.delete('/merchant/users/:id', requireAdmin, MerchantController.deleteUser);
+api.post('/merchant/users/:id/reset-password', requireAdmin, MerchantController.resetUserPassword);
 
 // Digital Payment Gateway Routes
 api.post('/payment/create-order', PaymentController.createOrder);
 api.post('/payment/verify-razorpay', PaymentController.verifyRazorpay);
-api.post('/payment/digital-attempt', PaymentController.recordDigitalAttempt);
+api.post('/payment/digital-attempt', optionalAuth, PaymentController.recordDigitalAttempt);
 
 // System Workload & Dynamic Queue Routes
 api.get('/system/workload', SystemController.getWorkload);
@@ -177,31 +195,31 @@ api.get('/system/workload', SystemController.getWorkload);
 // System Configuration & QR Ingress Routes
 api.get('/config/public', ConfigController.getPublicConfig);
 api.get('/config/qr-code', ConfigController.getQrCodeImage);
-api.post('/config/pagekite', ConfigController.updatePageKiteConfig);
+api.post('/config/pagekite', requireAdmin, ConfigController.updatePageKiteConfig);
 
 // Customer Feedback & Intelligence Routes
 api.get('/feedback/eligibility/:code', FeedbackController.checkEligibility);
 api.post('/feedback', FeedbackController.submit);
-api.get('/feedback', FeedbackController.getAllFeedback);
-api.get('/feedback/analytics', FeedbackController.getAnalytics);
+api.get('/feedback', requireAuth, FeedbackController.getAllFeedback);
+api.get('/feedback/analytics', requireAuth, FeedbackController.getAnalytics);
 
 // Unified Customer & Merchant Support Routes
 api.post('/support/customer', SupportController.createCustomerTicket);
-api.post('/support/merchant', SupportController.createMerchantTicket);
-api.get('/support/tickets', SupportController.getAllTickets);
-api.get('/support/tickets/:id', SupportController.getTicketById);
-api.patch('/support/tickets/:id/status', SupportController.updateTicketStatus);
-api.get('/support/diagnostics/preview', SupportController.previewDiagnostics);
-api.get('/support/sync/status', SupportController.getSyncStatus);
+api.post('/support/merchant', requireAuth, SupportController.createMerchantTicket);
+api.get('/support/tickets', requireAuth, SupportController.getAllTickets);
+api.get('/support/tickets/:id', requireAuth, SupportController.getTicketById);
+api.patch('/support/tickets/:id/status', requireAuth, SupportController.updateTicketStatus);
+api.get('/support/diagnostics/preview', requireAuth, SupportController.previewDiagnostics);
+api.get('/support/sync/status', requireAuth, SupportController.getSyncStatus);
 
 // Refund Management Routes
 api.post('/refunds', RefundController.create);
-api.get('/refunds', RefundController.getAll);
-api.get('/refunds/:id', RefundController.getById);
-api.patch('/refunds/:id/status', RefundController.updateStatus);
+api.get('/refunds', requireAuth, RefundController.getAll);
+api.get('/refunds/:id', requireAuth, RefundController.getById);
+api.patch('/refunds/:id/status', requireAuth, RefundController.updateStatus);
 
 // Printer Fleet Discovery
-api.get('/printers', async (_req, res, next) => {
+api.get('/printers', requireAuth, async (_req, res, next) => {
   try {
     const printers = await PrinterService.getAvailablePrinters();
     res.json({ ok: true, count: printers.length, data: printers });

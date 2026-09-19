@@ -111,6 +111,29 @@ app.get('*', (_req, res) => {
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+process.on('uncaughtException', (err) => {
+  console.error('[MERCHANT DESKTOP FATAL]', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[MERCHANT DESKTOP UNHANDLED REJECTION]', reason);
+});
+
+const server = http.createServer(app);
+
+server.on('error', (err) => {
+  console.error(`[MERCHANT DESKTOP ERROR] Failed to bind on 0.0.0.0:${PORT}:`, err.message);
+  if (err.code === 'EADDRNOTAVAIL' || err.code === 'EACCES') {
+    console.log(`[MERCHANT DESKTOP FALLBACK] Attempting fallback bind to 127.0.0.1:${PORT}...`);
+    server.listen(PORT, '127.0.0.1', () => {
+      console.log(`[MERCHANT DESKTOP] Running on http://127.0.0.1:${PORT} (Proxying /api -> ${BACKEND_HOST}:${BACKEND_PORT})`);
+    });
+  } else {
+    process.exit(1);
+  }
+});
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`[MERCHANT DESKTOP] Running on http://0.0.0.0:${PORT} (Proxying /api -> ${BACKEND_HOST}:${BACKEND_PORT})`);
 });

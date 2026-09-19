@@ -92,9 +92,19 @@ export class PageKiteConnector extends EventEmitter {
       return false;
     }
 
-    if (!this.config.subdomain) {
+    // Strict alphanumeric/hyphen validation to prevent command injection
+    const cleanSubdomain = (this.config.subdomain || '').trim().toLowerCase();
+    if (!/^[a-z0-9_-]{1,64}$/.test(cleanSubdomain)) {
       this.state.status = 'ERROR';
-      this.state.error = 'PageKite subdomain is not configured.';
+      this.state.error = 'Invalid PageKite subdomain. Subdomain may only contain alphanumeric characters, dashes, and underscores.';
+      this.emit('status', this.state);
+      return false;
+    }
+
+    if (this.config.secret && !/^[a-zA-Z0-9_.-]{1,128}$/.test(this.config.secret.trim())) {
+      this.state.status = 'ERROR';
+      this.state.error = 'Invalid PageKite secret format.';
+      this.emit('status', this.state);
       return false;
     }
 
@@ -105,7 +115,7 @@ export class PageKiteConnector extends EventEmitter {
     this.state.status = 'CONNECTING';
     this.emit('status', this.state);
 
-    const kiteName = `${this.config.subdomain.toLowerCase().trim()}.${this.config.domain}`;
+    const kiteName = `${cleanSubdomain}.${this.config.domain || 'pagekite.me'}`;
     const localPort = this.config.localPort;
 
     // Locate pagekite.py script
@@ -117,11 +127,11 @@ export class PageKiteConnector extends EventEmitter {
     ];
     const scriptPath = possibleScriptPaths.find((p) => fs.existsSync(p));
 
-    let execCmd = 'python';
+    let execCmd = process.platform === 'win32' ? 'python.exe' : 'python';
     let args: string[] = ['--nossl'];
 
     if (this.config.secret) {
-      args.push(`--service_cfg=${kiteName}:${localPort}:${this.config.secret}`);
+      args.push(`--service_cfg=${kiteName}:${localPort}:${this.config.secret.trim()}`);
     }
     args.push(String(localPort));
     args.push(kiteName);
@@ -133,7 +143,7 @@ export class PageKiteConnector extends EventEmitter {
     try {
       this.process = spawn(execCmd, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        shell: true,
+        shell: false,
       });
 
       this.process.stdout?.on('data', (data: Buffer) => {

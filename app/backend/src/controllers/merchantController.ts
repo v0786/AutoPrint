@@ -100,7 +100,7 @@ export class MerchantController {
   public static async checkAuth(req: Request, res: Response): Promise<void> {
     const merchantCount = MerchantRepository.getCount();
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
 
     let authenticatedMerchant = null;
     if (token) {
@@ -317,14 +317,7 @@ export class MerchantController {
    * Get All Users (Admin Only)
    */
   public static async getUsers(req: Request, res: Response): Promise<void> {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
-    if (!token) {
-      res.status(401).json({ ok: false, error: 'Authentication required.' });
-      return;
-    }
-
-    const requester = MerchantRepository.verifySession(token);
+    const requester = (req as any).user || (req.headers.authorization?.startsWith('Bearer ') ? MerchantRepository.verifySession(req.headers.authorization.substring(7).trim()) : null);
     if (!requester || requester.role !== 'admin') {
       res.status(403).json({ ok: false, error: 'Access denied: Only administrators can view user accounts.' });
       return;
@@ -339,14 +332,7 @@ export class MerchantController {
    */
   public static async addUser(req: Request, res: Response): Promise<void> {
     try {
-      const authHeader = req.headers.authorization;
-      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
-      if (!token) {
-        res.status(401).json({ ok: false, error: 'Authentication required.' });
-        return;
-      }
-
-      const requester = MerchantRepository.verifySession(token);
+      const requester = (req as any).user || (req.headers.authorization?.startsWith('Bearer ') ? MerchantRepository.verifySession(req.headers.authorization.substring(7).trim()) : null);
       if (!requester || requester.role !== 'admin') {
         res.status(403).json({ ok: false, error: 'Access denied: User cannot add another user. Only administrators can add users.' });
         return;
@@ -385,14 +371,7 @@ export class MerchantController {
    */
   public static async deleteUser(req: Request, res: Response): Promise<void> {
     try {
-      const authHeader = req.headers.authorization;
-      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
-      if (!token) {
-        res.status(401).json({ ok: false, error: 'Authentication required.' });
-        return;
-      }
-
-      const requester = MerchantRepository.verifySession(token);
+      const requester = (req as any).user || (req.headers.authorization?.startsWith('Bearer ') ? MerchantRepository.verifySession(req.headers.authorization.substring(7).trim()) : null);
       if (!requester || requester.role !== 'admin') {
         res.status(403).json({ ok: false, error: 'Access denied: Only administrators can remove users.' });
         return;
@@ -411,14 +390,7 @@ export class MerchantController {
    */
   public static async resetUserPassword(req: Request, res: Response): Promise<void> {
     try {
-      const authHeader = req.headers.authorization;
-      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
-      if (!token) {
-        res.status(401).json({ ok: false, error: 'Authentication required.' });
-        return;
-      }
-
-      const requester = MerchantRepository.verifySession(token);
+      const requester = (req as any).user || (req.headers.authorization?.startsWith('Bearer ') ? MerchantRepository.verifySession(req.headers.authorization.substring(7).trim()) : null);
       if (!requester || requester.role !== 'admin') {
         res.status(403).json({ ok: false, error: 'Access denied: Only administrators can reset passwords.' });
         return;

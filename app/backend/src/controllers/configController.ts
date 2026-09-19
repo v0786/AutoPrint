@@ -9,9 +9,9 @@ import { tunnelService } from '../services/tunnelService';
 import { QrCodeService } from '../services/qrCodeService';
 
 const updatePageKiteSchema = z.object({
-  subdomain: z.string().min(1, 'Subdomain is required'),
+  subdomain: z.string().min(1, 'Subdomain is required').regex(/^[a-zA-Z0-9_-]{1,64}$/, 'Subdomain may only contain alphanumeric characters, hyphens, and underscores'),
   enabled: z.boolean().default(true),
-  secret: z.string().optional(),
+  secret: z.string().regex(/^[a-zA-Z0-9_.-]{1,128}$/, 'Invalid secret format').optional().or(z.literal('')),
 });
 
 export class ConfigController {

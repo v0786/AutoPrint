@@ -13,17 +13,7 @@ export class SystemController {
   public static async getWorkload(_req: Request, res: Response): Promise<void> {
     const db = getDb();
 
-    // 1. Clean up stale/abandoned test jobs created > 2 hours ago that never got processed
-    try {
-      db.prepare(`
-        UPDATE print_jobs 
-        SET status = 'CANCELLED' 
-        WHERE status IN ('CREATED', 'QUEUED') 
-          AND created_at < datetime('now', '-2 hours')
-      `).run();
-    } catch {}
-
-    // 2. Query active/pending jobs in queue
+    // Query active/pending jobs in queue
     const queueStats = db.prepare(`
       SELECT 
         COUNT(*) as totalActive,

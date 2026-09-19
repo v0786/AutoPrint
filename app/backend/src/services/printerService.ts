@@ -7,6 +7,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
+import path from 'path';
 import { PrintJobStatus } from '../types';
 import { auditLogger } from '../utils/auditLogger';
 import { jobRepository } from '../database/repositories/jobRepository';
@@ -72,8 +73,15 @@ export class PrinterService {
     // On Windows, if a specific physical printer is configured, attempt Windows Spooler print
     if (process.platform === 'win32' && printerName && printerName !== 'Default Spooler' && printerName !== 'AutoPrint Spooler') {
       try {
-        // Use PowerShell Start-Process with -Verb PrintTo for Windows
-        const psCommand = `powershell -NoProfile -Command "Start-Process -FilePath '${filePath.replace(/'/g, "''")}' -Verb PrintTo -ArgumentList '${printerName.replace(/'/g, "''")}' -PassThru | Select-Object -ExpandProperty Id"`;
+        // Sanitize printerName to prevent command injection
+        const cleanPrinter = printerName.replace(/[^a-zA-Z0-9\s_\-\.\(\)]/g, '').trim();
+        const resolvedPath = path.resolve(filePath);
+
+        // Encode PowerShell command in UTF-16LE base64 to completely eliminate shell quoting & subexpression vulnerabilities
+        const psScript = `Start-Process -FilePath '${resolvedPath.replace(/'/g, "''")}' -Verb PrintTo -ArgumentList '${cleanPrinter.replace(/'/g, "''")}' -PassThru | Select-Object -ExpandProperty Id`;
+        const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+        const psCommand = `powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`;
+
         const { stdout } = await execAsync(psCommand, { timeout: 10000 });
         const processId = stdout.trim();
 
@@ -86,13 +94,13 @@ export class PrinterService {
           jobNo,
           action: 'JOB_PRINT_COMPLETED',
           actor: 'SYSTEM_AUTOPRINT',
-          details: { printerName, hardwareProcessId: processId },
+          details: { printerName: cleanPrinter, hardwareProcessId: processId },
         });
 
         return {
           success: true,
           status: 'PRINTED',
-          message: `Document dispatched to Windows printer: ${printerName}`,
+          message: `Document dispatched to Windows printer: ${cleanPrinter}`,
           hardwareJobId: processId,
         };
       } catch (err: any) {
@@ -130,27 +138,38 @@ export class PrinterService {
     };
   }
 
+  private static printerCache: { data: PrinterDevice[]; timestamp: number } | null = null;
+
   /**
-   * Retrieves list of available system printers on Windows or Unix.
+   * Retrieves list of available system printers on Windows or Unix with 30s cache.
    */
   public static async getAvailablePrinters(): Promise<PrinterDevice[]> {
+    if (this.printerCache && Date.now() - this.printerCache.timestamp < 30000) {
+      return this.printerCache.data;
+    }
+
     if (process.platform === 'win32') {
       try {
-        const psCommand = `powershell -NoProfile -Command "Get-CimInstance Win32_Printer | Select-Object Name, Default, PrinterStatus, DriverName, PortName | ConvertTo-Json"`;
+        const psScript = `Get-CimInstance Win32_Printer | Select-Object Name, Default, PrinterStatus, DriverName, PortName | ConvertTo-Json`;
+        const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+        const psCommand = `powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`;
         const { stdout } = await execAsync(psCommand, { timeout: 5000 });
-        if (!stdout.trim()) return [];
+        if (stdout.trim()) {
+          const parsed = JSON.parse(stdout);
+          const list = Array.isArray(parsed) ? parsed : [parsed];
 
-        const parsed = JSON.parse(stdout);
-        const list = Array.isArray(parsed) ? parsed : [parsed];
+          const devices = list.map((p: any) => ({
+            id: p.Name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'printer',
+            name: p.Name || 'Unknown Printer',
+            isDefault: Boolean(p.Default),
+            isOnline: p.PrinterStatus === 3 || p.PrinterStatus === undefined,
+            driverName: p.DriverName,
+            portName: p.PortName,
+          }));
 
-        return list.map((p: any) => ({
-          id: p.Name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'printer',
-          name: p.Name || 'Unknown Printer',
-          isDefault: Boolean(p.Default),
-          isOnline: p.PrinterStatus === 3 || p.PrinterStatus === undefined,
-          driverName: p.DriverName,
-          portName: p.PortName,
-        }));
+          this.printerCache = { data: devices, timestamp: Date.now() };
+          return devices;
+        }
       } catch (e) {
         console.warn('[PRINTER] Failed to enumerate Windows printers:', e);
       }

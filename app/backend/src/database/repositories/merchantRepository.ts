@@ -3,9 +3,8 @@
  * Authentication, Sessions, and Shop Configuration.
  */
 
-import crypto from 'crypto';
+import crypto, { randomUUID as uuidv4 } from 'crypto';
 import { getDb } from '../db';
-import { v4 as uuidv4 } from 'uuid';
 
 export interface StructuredShopRates {
   bwSingle: number;
@@ -353,7 +352,9 @@ export class MerchantRepository {
     if (!row) return null;
 
     const { hash } = this.hashPassword(password, row.password_salt);
-    if (hash === row.password_hash) {
+    const hashBuf = Buffer.from(hash, 'hex');
+    const storedBuf = Buffer.from(row.password_hash, 'hex');
+    if (hashBuf.length === storedBuf.length && crypto.timingSafeEqual(hashBuf, storedBuf)) {
       return row;
     }
     return null;

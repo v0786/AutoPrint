@@ -5,7 +5,7 @@
 
 set "CHECKS_FAILED=0"
 
-echo   [CHECK 1/5] Verifying Windows Environment...
+echo   [CHECK 1/6] Verifying Windows Environment...
 if not "%OS%"=="Windows_NT" (
     call "%~dp0common.cmd" :error_msg "AutoPrint Windows Installer requires Windows NT/10/11/Server."
     set "CHECKS_FAILED=1"
@@ -14,7 +14,20 @@ if not "%OS%"=="Windows_NT" (
 )
 
 echo.
-echo   [CHECK 2/5] Checking Global Node.js Runtime...
+echo   [CHECK 2/6] Checking Microsoft .NET Framework Runtime (CLR v4.0.30319)...
+reg query "HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" /v Install >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    for /f "tokens=3" %%a in ('reg query "HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" /v Version 2^>nul') do set "DOTNET_VER=%%a"
+    call "%~dp0common.cmd" :success_msg "Microsoft .NET Framework verified: v!DOTNET_VER!"
+) else if exist "%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\clr.dll" (
+    call "%~dp0common.cmd" :success_msg "Microsoft .NET CLR v4.0.30319 runtime engine verified."
+) else (
+    call "%~dp0common.cmd" :error_msg "Microsoft .NET Framework v4.0.30319 is missing. AutoPrint.exe requires .NET Framework 4.0 or higher."
+    set "CHECKS_FAILED=1"
+)
+
+echo.
+echo   [CHECK 3/6] Checking Global Node.js Runtime...
 where node >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo   Node.js not in active PATH. Invoking automated global runtime detection...
@@ -31,7 +44,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
-echo   [CHECK 3/5] Checking npm Package Manager...
+echo   [CHECK 4/6] Checking npm Package Manager...
 where npm >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     call "%~dp0common.cmd" :error_msg "npm is not found in system PATH."
@@ -42,7 +55,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
-echo   [CHECK 4/5] Checking Required Port Availability (4100, 3000, 3001)...
+echo   [CHECK 5/6] Checking Required Port Availability (4100, 3000, 3001)...
 netstat -ano | findstr ":4100 " >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     call "%~dp0common.cmd" :warn_msg "Port 4100 (Backend API) is currently active or in use."
@@ -65,7 +78,7 @@ if %ERRORLEVEL% EQU 0 (
 )
 
 echo.
-echo   [CHECK 5/5] Checking Datastore Directory Permissions...
+echo   [CHECK 6/6] Checking Datastore Directory Permissions...
 set "TEST_FILE=%~dp0..\..\datastore\.perm_test"
 echo test > "%TEST_FILE%" 2>nul
 if exist "%TEST_FILE%" (

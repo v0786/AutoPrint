@@ -9,6 +9,17 @@ import { getApiBaseUrl } from '../utils/api';
 
 const getBaseUrl = (): string => getApiBaseUrl();
 
+const getAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const token = localStorage.getItem('autoprint_merchant_session_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  } catch {}
+  return headers;
+};
+
 export class BackendApiService {
   /**
    * Looks up a print job and verification record by 8-digit verification code.
@@ -46,7 +57,7 @@ export class BackendApiService {
   ): Promise<CollectionVerificationRecord> {
     const response = await fetch(`${getBaseUrl()}/verification/collect-cash`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         verificationCode,
         tenderedAmount,
@@ -73,7 +84,7 @@ export class BackendApiService {
   ): Promise<CollectionVerificationRecord> {
     const response = await fetch(`${getBaseUrl()}/verification/handover`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         verificationCode,
         staffId,
@@ -98,7 +109,9 @@ export class BackendApiService {
         ? `${getBaseUrl()}/verification/audit-logs?code=${encodeURIComponent(verificationCode)}`
         : `${getBaseUrl()}/verification/audit-logs`;
 
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
       if (!response.ok) return [];
       const json = await response.json();
       return json.data || [];
@@ -115,6 +128,7 @@ export class BackendApiService {
       const activeTraceId = traceId || `TRACE-QUEUE-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       const response = await fetch(`${getBaseUrl()}/jobs`, {
         headers: {
+          ...getAuthHeaders(),
           'x-trace-id': activeTraceId,
         },
       });
@@ -131,7 +145,9 @@ export class BackendApiService {
    */
   public static async getPrinters(): Promise<any[]> {
     try {
-      const response = await fetch(`${getBaseUrl()}/printers`);
+      const response = await fetch(`${getBaseUrl()}/printers`, {
+        headers: getAuthHeaders(),
+      });
       if (!response.ok) return [];
       const json = await response.json();
       return json.data || [];
@@ -147,7 +163,7 @@ export class BackendApiService {
     try {
       const response = await fetch(`${getBaseUrl()}/jobs/${jobId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ status }),
       });
       const json = await response.json();
@@ -164,6 +180,7 @@ export class BackendApiService {
     try {
       const response = await fetch(`${getBaseUrl()}/jobs/${jobId}`, {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
       const json = await response.json();
       return json.data;
@@ -185,7 +202,7 @@ export class BackendApiService {
   }): Promise<{ record: CollectionVerificationRecord; strikeLockoutTriggered: boolean }> {
     const response = await fetch(`${getBaseUrl()}/payment/digital-attempt`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(params),
     });
 
@@ -204,7 +221,9 @@ export class BackendApiService {
   public static async getRefunds(status?: string): Promise<any[]> {
     try {
       const url = status ? `${getBaseUrl()}/refunds?status=${encodeURIComponent(status)}` : `${getBaseUrl()}/refunds`;
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
       const json = await res.json();
       return json.data || [];
     } catch {
@@ -220,7 +239,7 @@ export class BackendApiService {
   }): Promise<any> {
     const res = await fetch(`${getBaseUrl()}/refunds`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(params),
     });
     const json = await res.json();
@@ -239,7 +258,7 @@ export class BackendApiService {
   }): Promise<any> {
     const res = await fetch(`${getBaseUrl()}/refunds/${params.id}/status`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(params),
     });
     const json = await res.json();
@@ -257,7 +276,9 @@ export class BackendApiService {
         const query = new URLSearchParams(filters as any).toString();
         url += `?${query}`;
       }
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
       const json = await res.json();
       return json.data || [];
     } catch {
@@ -267,7 +288,9 @@ export class BackendApiService {
 
   public static async getSupportTicketById(id: string): Promise<any> {
     try {
-      const res = await fetch(`${getBaseUrl()}/support/tickets/${id}`);
+      const res = await fetch(`${getBaseUrl()}/support/tickets/${id}`, {
+        headers: getAuthHeaders(),
+      });
       const json = await res.json();
       return json.data || null;
     } catch {
@@ -289,7 +312,7 @@ export class BackendApiService {
   }): Promise<any> {
     const res = await fetch(`${getBaseUrl()}/support/merchant`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(params),
     });
     const json = await res.json();
@@ -302,7 +325,7 @@ export class BackendApiService {
   public static async updateSupportTicketStatus(id: string, status: string, notes?: string): Promise<any> {
     const res = await fetch(`${getBaseUrl()}/support/tickets/${id}/status`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ status, notes, actor: 'STAFF_DESK' }),
     });
     const json = await res.json();
@@ -314,7 +337,9 @@ export class BackendApiService {
 
   public static async previewDiagnostics(): Promise<any> {
     try {
-      const res = await fetch(`${getBaseUrl()}/support/diagnostics/preview`);
+      const res = await fetch(`${getBaseUrl()}/support/diagnostics/preview`, {
+        headers: getAuthHeaders(),
+      });
       const json = await res.json();
       return json.data || null;
     } catch {
@@ -325,7 +350,9 @@ export class BackendApiService {
   // ─── Customer Feedback Intelligence ──────────────────────────────────────────
   public static async getFeedbackAnalytics(): Promise<any> {
     try {
-      const res = await fetch(`${getBaseUrl()}/feedback/analytics`);
+      const res = await fetch(`${getBaseUrl()}/feedback/analytics`, {
+        headers: getAuthHeaders(),
+      });
       const json = await res.json();
       return json.data || null;
     } catch {
@@ -335,7 +362,9 @@ export class BackendApiService {
 
   public static async getAllFeedback(): Promise<any[]> {
     try {
-      const res = await fetch(`${getBaseUrl()}/feedback`);
+      const res = await fetch(`${getBaseUrl()}/feedback`, {
+        headers: getAuthHeaders(),
+      });
       const json = await res.json();
       return json.data || [];
     } catch {

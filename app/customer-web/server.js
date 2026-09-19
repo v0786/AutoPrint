@@ -111,6 +111,29 @@ app.get('*', (_req, res) => {
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+process.on('uncaughtException', (err) => {
+  console.error('[CUSTOMER WEB FATAL]', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[CUSTOMER WEB UNHANDLED REJECTION]', reason);
+});
+
+const server = http.createServer(app);
+
+server.on('error', (err) => {
+  console.error(`[CUSTOMER WEB ERROR] Failed to bind on 0.0.0.0:${PORT}:`, err.message);
+  if (err.code === 'EADDRNOTAVAIL' || err.code === 'EACCES') {
+    console.log(`[CUSTOMER WEB FALLBACK] Attempting fallback bind to 127.0.0.1:${PORT}...`);
+    server.listen(PORT, '127.0.0.1', () => {
+      console.log(`[CUSTOMER WEB] Running on http://127.0.0.1:${PORT} (Proxying /api -> ${BACKEND_HOST}:${BACKEND_PORT})`);
+    });
+  } else {
+    process.exit(1);
+  }
+});
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`[CUSTOMER WEB] Running on http://0.0.0.0:${PORT} (Proxying /api -> ${BACKEND_HOST}:${BACKEND_PORT})`);
 });

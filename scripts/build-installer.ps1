@@ -17,19 +17,46 @@ Write-Host "   AUTOPRINT PRODUCTION SINGLE-EXE INSTALLER BUILD PIPELINE      " -
 Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 0. Validate Prerequisite Node.js MSI
-Write-Host "[1/6] Validating embedded Node.js prerequisite MSI..." -ForegroundColor Yellow
-$msiPath = Join-Path $rootDir "installer\prerequisites\node-v20.18.0-x64.msi"
-if (-not (Test-Path $msiPath)) {
-    Write-Host "   Downloading official Node.js v20.18.0 x64 MSI prerequisite..." -ForegroundColor Yellow
-    New-Item -ItemType Directory -Path (Join-Path $rootDir "installer\prerequisites") -Force | Out-Null
-    Invoke-WebRequest -Uri "https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi" -OutFile $msiPath -UseBasicParsing
+# 0. Validate Embedded Prerequisites (Node.js & Microsoft .NET Framework 4.5.2)
+Write-Host "[1/6] Validating embedded prerequisites (Node.js & .NET Framework 4.5.2)..." -ForegroundColor Yellow
+$prereqDir = Join-Path $rootDir "installer\prerequisites"
+if (-not (Test-Path $prereqDir)) {
+    New-Item -ItemType Directory -Path $prereqDir -Force | Out-Null
 }
-if (-not (Test-Path $msiPath)) {
+
+# (a) Node.js v20.18.0 x64 MSI
+$nodeMsi = Join-Path $prereqDir "node-v20.18.0-x64.msi"
+if (-not (Test-Path $nodeMsi)) {
+    Write-Host "   Downloading official Node.js v20.18.0 x64 MSI prerequisite..." -ForegroundColor Yellow
+    Invoke-WebRequest -Uri "https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi" -OutFile $nodeMsi -UseBasicParsing
+}
+if (-not (Test-Path $nodeMsi)) {
     Write-Error "CRITICAL: node-v20.18.0-x64.msi is missing from installer\prerequisites!"
 }
-$msiSizeMb = [Math]::Round((Get-Item $msiPath).Length / 1MB, 2)
-Write-Host "   [PASS] Found embedded Node.js prerequisite ($msiSizeMb MB): $msiPath" -ForegroundColor Green
+$nodeExpectedHash = "93D1D30341D7D38B7A8F3AB0FA3BE1F9E6436B90338B2BD8B8AF4E80D00BD036"
+$nodeActualHash = (Get-FileHash -Path $nodeMsi -Algorithm SHA256).Hash
+if ($nodeActualHash -ne $nodeExpectedHash) {
+    Write-Error "CRITICAL: node-v20.18.0-x64.msi SHA-256 checksum mismatch! Expected $nodeExpectedHash, got $nodeActualHash"
+}
+$nodeSizeMb = [Math]::Round((Get-Item $nodeMsi).Length / 1MB, 2)
+Write-Host "   [PASS] Verified Node.js v20.18.0 x64 prerequisite ($nodeSizeMb MB, SHA-256: $nodeActualHash)" -ForegroundColor Green
+
+# (b) Microsoft .NET Framework 4.5.2 Offline Standalone Installer
+$dotnetExe = Join-Path $prereqDir "NDP452-KB2901907-x86-x64-AllOS-ENU.exe"
+if (-not (Test-Path $dotnetExe)) {
+    Write-Host "   Downloading official Microsoft .NET Framework 4.5.2 standalone installer..." -ForegroundColor Yellow
+    Invoke-WebRequest -Uri "https://download.microsoft.com/download/E/2/1/E21644B5-2DF2-47C2-91BD-63C560427900/NDP452-KB2901907-x86-x64-AllOS-ENU.exe" -OutFile $dotnetExe -UseBasicParsing
+}
+if (-not (Test-Path $dotnetExe)) {
+    Write-Error "CRITICAL: NDP452-KB2901907-x86-x64-AllOS-ENU.exe is missing from installer\prerequisites!"
+}
+$dotnetExpectedHash = "6C2C589132E830A185C5F40F82042BEE3022E721A216680BD9B3995BA86F3781"
+$dotnetActualHash = (Get-FileHash -Path $dotnetExe -Algorithm SHA256).Hash
+if ($dotnetActualHash -ne $dotnetExpectedHash) {
+    Write-Error "CRITICAL: NDP452-KB2901907-x86-x64-AllOS-ENU.exe SHA-256 checksum mismatch! Expected $dotnetExpectedHash, got $dotnetActualHash"
+}
+$dotnetSizeMb = [Math]::Round((Get-Item $dotnetExe).Length / 1MB, 2)
+Write-Host "   [PASS] Verified Microsoft .NET Framework 4.5.2 prerequisite ($dotnetSizeMb MB, SHA-256: $dotnetActualHash)" -ForegroundColor Green
 
 # 1. Compile Native Launcher (AutoPrint.exe)
 Write-Host "[2/6] Compiling native Windows System Tray Launcher (AutoPrint.exe)..." -ForegroundColor Yellow
@@ -75,6 +102,9 @@ Write-Host "[5/6] Copying application binaries, assets, and production modules..
 
 # Copy root executables, scripts, and dependency locks
 Copy-Item (Join-Path $rootDir "AutoPrint.exe") $payloadDir -Force
+if (Test-Path (Join-Path $rootDir "AutoPrint.exe.config")) {
+    Copy-Item (Join-Path $rootDir "AutoPrint.exe.config") $payloadDir -Force
+}
 Copy-Item (Join-Path $rootDir "package.json") $payloadDir -Force
 if (Test-Path (Join-Path $rootDir "package-lock.json")) {
     Copy-Item (Join-Path $rootDir "package-lock.json") $payloadDir -Force

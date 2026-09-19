@@ -4,8 +4,7 @@
  */
 
 import Database from 'better-sqlite3';
-import crypto from 'crypto';
-import { v4 as uuidv4 } from 'uuid';
+import crypto, { randomUUID as uuidv4 } from 'crypto';
 import { PATHS, ensureDataDirectories } from '../config/environment';
 
 let _db: Database.Database | null = null;

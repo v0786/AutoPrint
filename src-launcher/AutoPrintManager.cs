@@ -1105,40 +1105,10 @@ namespace AutoPrint.Launcher
         private void StartServices()
         {
             isStopping = false;
-            string nodeExe = FindNodeExecutable();
+            StartBackendService();
+            StartCustomerService();
+            StartMerchantService();
 
-            if (string.IsNullOrEmpty(nodeExe))
-            {
-                trayIcon.Text = "AutoPrint Express — Runtime Missing";
-                return;
-            }
-
-            // 1. Backend REST API
-            if (!IsPortInUse(backendPort))
-            {
-                string backendScript = Path.Combine(projectRoot, "app", "backend", "dist", "server.js");
-                if (!File.Exists(backendScript))
-                {
-                    backendScript = Path.Combine(projectRoot, "app", "backend", "src", "server.ts");
-                }
-                backendProcess = StartTrackedChildProcess("Backend", nodeExe, string.Format("\"{0}\"", backendScript), "backend.log");
-            }
-
-            // 2. Customer Web Kiosk
-            if (!IsPortInUse(customerPort))
-            {
-                string customerServer = Path.Combine(projectRoot, "app", "customer-web", "server.js");
-                customerProcess = StartTrackedChildProcess("Customer", nodeExe, string.Format("\"{0}\"", customerServer), "customer.log");
-            }
-
-            // 3. Merchant Desktop Desk
-            if (!IsPortInUse(merchantPort))
-            {
-                string merchantServer = Path.Combine(projectRoot, "app", "merchant-desktop", "server.js");
-                merchantProcess = StartTrackedChildProcess("Merchant", nodeExe, string.Format("\"{0}\"", merchantServer), "merchant.log");
-            }
-
-            // 4. PageKite Background Supervisor (If Configured)
             if (isPagekiteEnabled && (pagekiteProcess == null || pagekiteProcess.HasExited))
             {
                 StartPagekiteSupervisor();
@@ -1147,10 +1117,78 @@ namespace AutoPrint.Launcher
             new Thread(VerifyHealthEndpoints).Start();
         }
 
+        private void StartBackendService()
+        {
+            if (isStopping) return;
+            if (backendProcess != null && !backendProcess.HasExited) return;
+            if (IsPortInUse(backendPort)) return;
+
+            string nodeExe = FindNodeExecutable();
+            if (string.IsNullOrEmpty(nodeExe))
+            {
+                trayIcon.Text = "AutoPrint Express — Runtime Missing";
+                return;
+            }
+
+            string backendScript = Path.Combine(projectRoot, "app", "backend", "dist", "server.js");
+            if (!File.Exists(backendScript))
+            {
+                backendScript = Path.Combine(projectRoot, "app", "backend", "src", "server.ts");
+            }
+
+            string workDir = Path.Combine(projectRoot, "app", "backend");
+            if (!Directory.Exists(workDir)) workDir = projectRoot;
+
+            backendProcess = StartTrackedChildProcess("Backend", nodeExe, string.Format("\"{0}\"", backendScript), "backend.log", workDir, backendPort);
+        }
+
+        private void StartCustomerService()
+        {
+            if (isStopping) return;
+            if (customerProcess != null && !customerProcess.HasExited) return;
+            if (IsPortInUse(customerPort)) return;
+
+            string nodeExe = FindNodeExecutable();
+            if (string.IsNullOrEmpty(nodeExe))
+            {
+                trayIcon.Text = "AutoPrint Express — Runtime Missing";
+                return;
+            }
+
+            string customerServer = Path.Combine(projectRoot, "app", "customer-web", "server.js");
+            string workDir = Path.Combine(projectRoot, "app", "customer-web");
+            if (!Directory.Exists(workDir)) workDir = projectRoot;
+
+            customerProcess = StartTrackedChildProcess("Customer", nodeExe, string.Format("\"{0}\"", customerServer), "customer.log", workDir, customerPort);
+        }
+
+        private void StartMerchantService()
+        {
+            if (isStopping) return;
+            if (merchantProcess != null && !merchantProcess.HasExited) return;
+            if (IsPortInUse(merchantPort)) return;
+
+            string nodeExe = FindNodeExecutable();
+            if (string.IsNullOrEmpty(nodeExe))
+            {
+                trayIcon.Text = "AutoPrint Express — Runtime Missing";
+                return;
+            }
+
+            string merchantServer = Path.Combine(projectRoot, "app", "merchant-desktop", "server.js");
+            string workDir = Path.Combine(projectRoot, "app", "merchant-desktop");
+            if (!Directory.Exists(workDir)) workDir = projectRoot;
+
+            merchantProcess = StartTrackedChildProcess("Merchant", nodeExe, string.Format("\"{0}\"", merchantServer), "merchant.log", workDir, merchantPort);
+        }
+
         private void StartPagekiteSupervisor()
         {
             try
             {
+                if (isStopping) return;
+                if (pagekiteProcess != null && !pagekiteProcess.HasExited) return;
+
                 string pythonExe = FindPythonExecutable();
                 string pkScript = Path.Combine(projectRoot, "tools", "pagekite", "pagekite.py");
                 if (!File.Exists(pkScript))
@@ -1164,7 +1202,7 @@ namespace AutoPrint.Launcher
                 string serviceArg = string.Format("--service_on=http:{0}:localhost:{1}:{2}", pagekiteName, customerPort, pagekiteSecret);
                 string args = string.Format("\"{0}\" --clean {1}", pkScript, serviceArg);
 
-                pagekiteProcess = StartTrackedChildProcess("PageKite", pythonExe, args, "pagekite.log");
+                pagekiteProcess = StartTrackedChildProcess("PageKite", pythonExe, args, "pagekite.log", projectRoot, customerPort);
             }
             catch (Exception ex)
             {
@@ -1186,6 +1224,7 @@ namespace AutoPrint.Launcher
 
                 if (bOk && cOk && mOk)
                 {
+                    lock (restartAttempts) { restartAttempts.Clear(); }
                     trayIcon.Text = "AutoPrint Express — Online";
                     return;
                 }
@@ -1207,17 +1246,21 @@ namespace AutoPrint.Launcher
             catch { return false; }
         }
 
-        private Process StartTrackedChildProcess(string serviceKey, string fileName, string arguments, string logFileName)
+        private Process StartTrackedChildProcess(string serviceKey, string fileName, string arguments, string logFileName, string workingDir = null, int servicePort = 0)
         {
             try
             {
+                try { Directory.CreateDirectory(runtimeLogsDir); } catch { }
                 string logFilePath = Path.Combine(runtimeLogsDir, logFileName);
+
+                string actualWorkingDir = !string.IsNullOrEmpty(workingDir) && Directory.Exists(workingDir) ? workingDir : projectRoot;
+                int actualPort = servicePort > 0 ? servicePort : backendPort;
 
                 var psi = new ProcessStartInfo
                 {
                     FileName = fileName,
                     Arguments = arguments,
-                    WorkingDirectory = projectRoot,
+                    WorkingDirectory = actualWorkingDir,
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     WindowStyle = ProcessWindowStyle.Hidden,
@@ -1225,11 +1268,12 @@ namespace AutoPrint.Launcher
                     RedirectStandardError = true
                 };
 
-                psi.EnvironmentVariables["PORT"] = backendPort.ToString();
+                psi.EnvironmentVariables["PORT"] = actualPort.ToString();
                 psi.EnvironmentVariables["BACKEND_PORT"] = backendPort.ToString();
                 psi.EnvironmentVariables["MERCHANT_PORT"] = merchantPort.ToString();
                 psi.EnvironmentVariables["CUSTOMER_PORT"] = customerPort.ToString();
                 psi.EnvironmentVariables["AUTOPRINT_DATA_DIR"] = dataDir;
+                psi.EnvironmentVariables["AUTOPRINT_CONFIG_FILE"] = InstallationManager.GetAppSettingsFilePath();
                 psi.EnvironmentVariables["NODE_ENV"] = "production";
 
                 var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
@@ -1267,6 +1311,12 @@ namespace AutoPrint.Launcher
                     }
                 }
 
+                try
+                {
+                    File.AppendAllText(Path.Combine(runtimeLogsDir, "launcher.log"), string.Format("[{0}] [START] Started {1} (PID {2}) in {3}\n", DateTime.Now, serviceKey, proc.Id, actualWorkingDir));
+                }
+                catch { }
+
                 return proc;
             }
             catch (Exception ex)
@@ -1282,6 +1332,8 @@ namespace AutoPrint.Launcher
 
         private void HandleUnexpectedChildExit(string serviceKey, Process proc)
         {
+            if (isStopping) return;
+
             int attempts = 0;
             lock (restartAttempts)
             {
@@ -1290,7 +1342,11 @@ namespace AutoPrint.Launcher
                 attempts = restartAttempts[serviceKey];
             }
 
-            string msg = string.Format("AutoPrint child service '{0}' (PID {1}) exited unexpectedly. Attempting restart ({2}/{3})...", serviceKey, proc != null ? proc.Id.ToString() : "N/A", attempts, MAX_RESTART_ATTEMPTS);
+            int exitCode = -1;
+            try { if (proc != null) exitCode = proc.ExitCode; } catch { }
+
+            string msg = string.Format("AutoPrint child service '{0}' (PID {1}, ExitCode {2}) exited unexpectedly. Attempting restart ({3}/{4})...",
+                serviceKey, proc != null ? proc.Id.ToString() : "N/A", exitCode, attempts, MAX_RESTART_ATTEMPTS);
             try
             {
                 File.AppendAllText(Path.Combine(runtimeLogsDir, "launcher.log"), string.Format("[{0}] [RESTART] {1}\n", DateTime.Now, msg));
@@ -1299,13 +1355,15 @@ namespace AutoPrint.Launcher
 
             if (attempts <= MAX_RESTART_ATTEMPTS)
             {
-                Thread.Sleep(1000);
+                Thread.Sleep(1200);
                 if (serviceKey == "PageKite") StartPagekiteSupervisor();
-                else StartServices();
+                else if (serviceKey == "Backend") StartBackendService();
+                else if (serviceKey == "Customer") StartCustomerService();
+                else if (serviceKey == "Merchant") StartMerchantService();
             }
             else
             {
-                trayIcon.ShowBalloonTip(5000, "AutoPrint Service Error", string.Format("Service '{0}' stopped unexpectedly and reached max restart attempts. Please check logs.", serviceKey), ToolTipIcon.Error);
+                trayIcon.ShowBalloonTip(6000, "AutoPrint Service Error", string.Format("Service '{0}' stopped unexpectedly (ExitCode {1}). Please check logs in C:\\ProgramData\\AutoPrint\\logs.", serviceKey, exitCode), ToolTipIcon.Error);
             }
         }
 

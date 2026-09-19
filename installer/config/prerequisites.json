@@ -1,0 +1,86 @@
+{
+  "version": "2.0.0",
+  "generatedAt": "2026-09-07T14:15:00Z",
+  "prerequisites": [
+    {
+      "id": "dotnet4",
+      "displayName": "Microsoft .NET Framework 4.5.2 (CLR v4.0.30319)",
+      "targetComponent": "AutoPrint.exe",
+      "requiredVersion": "4.0.30319",
+      "requiredRelease": 378389,
+      "detection": {
+        "method": "registry_and_filesystem",
+        "registryRoot": "HKLM",
+        "registryKeyFull": "SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full",
+        "registryKeyClient": "SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Client",
+        "valueNameInstall": "Install",
+        "expectedInstall": 1,
+        "valueNameRelease": "Release",
+        "minRelease": 378389,
+        "clrDllRelativePaths": [
+          "Microsoft.NET\\Framework64\\v4.0.30319\\clr.dll",
+          "Microsoft.NET\\Framework\\v4.0.30319\\clr.dll"
+        ]
+      },
+      "installer": {
+        "fileName": "NDP452-KB2901907-x86-x64-AllOS-ENU.exe",
+        "officialUrl": "https://download.microsoft.com/download/E/2/1/E21644B5-2DF2-47C2-91BD-63C560427900/NDP452-KB2901907-x86-x64-AllOS-ENU.exe",
+        "sha256": "6C2C589132E830A185C5F40F82042BEE3022E721A216680BD9B3995BA86F3781",
+        "silentArgs": "/q /norestart",
+        "acceptedExitCodes": [0],
+        "rebootExitCodes": [3010],
+        "estimatedInstallSeconds": 45
+      },
+      "compatibility": {
+        "minWindowsVersion": "6.1.7601",
+        "windows7Supported": true,
+        "windows8Supported": true,
+        "windows10Supported": true,
+        "windows11Supported": true,
+        "notes": "Pre-installed out-of-the-box on Windows 10/11. Required on fresh Windows 7 SP1 and vanilla Windows 8."
+      },
+      "verification": {
+        "method": "registry_and_clr_file",
+        "failureMessage": "Microsoft .NET Framework 4.5.2 (CLR v4.0.30319) is required to run AutoPrint.exe but could not be verified after installation."
+      }
+    },
+    {
+      "id": "nodejs",
+      "displayName": "Node.js JavaScript Runtime (v20 LTS)",
+      "targetComponent": "AutoPrint Microservices (Backend, Customer Web, Merchant Desktop)",
+      "requiredVersion": "20.18.0",
+      "minVersion": "18.0.0",
+      "detection": {
+        "method": "executable_execution",
+        "systemPaths": [
+          "{pf}\\nodejs\\node.exe",
+          "{pf32}\\nodejs\\node.exe"
+        ],
+        "bundledFallbackPath": "{app}\\runtime\\node\\node.exe",
+        "testArgs": "-v"
+      },
+      "installer": {
+        "fileName": "node-v20.18.0-x64.msi",
+        "officialUrl": "https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi",
+        "sha256": "93D1D30341D7D38B7A8F3AB0FA3BE1F9E6436B90338B2BD8B8AF4E80D00BD036",
+        "silentArgs": "/i \"{installerPath}\" /qn /norestart",
+        "acceptedExitCodes": [0],
+        "rebootExitCodes": [3010],
+        "estimatedInstallSeconds": 20
+      },
+      "compatibility": {
+        "minWindowsVersion": "6.2",
+        "windows7Supported": false,
+        "windows8Supported": false,
+        "windows81Supported": true,
+        "windows10Supported": true,
+        "windows11Supported": true,
+        "notes": "Node.js 18+ dropped official support for Windows 7 due to kernel32 APIs (GetSystemTimePreciseAsFileTime). Requires Windows 8.1/10/11."
+      },
+      "verification": {
+        "method": "executable_execution",
+        "failureMessage": "Node.js v20.18.0 x64 runtime could not be verified after installation."
+      }
+    }
+  ]
+}

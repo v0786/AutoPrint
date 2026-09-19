@@ -22,7 +22,7 @@ set "TOTAL_FAIL=0"
 :: -----------------------------------------------------------------------------
 :: CHECK 1: Operating System and Architecture
 :: -----------------------------------------------------------------------------
-echo  [1/6] Checking Operating System and Architecture...
+echo  [1/7] Checking Operating System and Architecture...
 if "%PROCESSOR_ARCHITECTURE%"=="AMD64" (
     echo        [PASS] 64-bit Windows Architecture [x64] detected.
     set /a TOTAL_PASS+=1
@@ -35,10 +35,34 @@ if "%PROCESSOR_ARCHITECTURE%"=="AMD64" (
 )
 
 :: -----------------------------------------------------------------------------
-:: CHECK 2: Node.js Runtime and npm
+:: CHECK 2: Microsoft .NET Framework Runtime [CLR v4.0.30319]
 :: -----------------------------------------------------------------------------
 echo.
-echo  [2/6] Checking Node.js Runtime and Package Manager...
+echo  [2/7] Checking Microsoft .NET Framework Runtime [CLR v4.0.30319]...
+reg query "HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" /v Install >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    for /f "tokens=3" %%a in ('reg query "HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" /v Version 2^>nul') do set "DOTNET_VER=%%a"
+    echo        [PASS] Microsoft .NET Framework is installed: v!DOTNET_VER!
+    set /a TOTAL_PASS+=1
+) else if exist "%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\clr.dll" (
+    echo        [PASS] Microsoft .NET CLR v4.0.30319 runtime engine verified.
+    set /a TOTAL_PASS+=1
+) else (
+    reg query "HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Client" /v Install >nul 2>&1
+    if !ERRORLEVEL% equ 0 (
+        echo        [PASS] Microsoft .NET Framework Client Profile detected.
+        set /a TOTAL_PASS+=1
+    ) else (
+        echo        [FAIL] Microsoft .NET Framework v4.0.30319 is missing. Required for AutoPrint.exe.
+        set /a TOTAL_FAIL+=1
+    )
+)
+
+:: -----------------------------------------------------------------------------
+:: CHECK 3: Node.js Runtime and npm
+:: -----------------------------------------------------------------------------
+echo.
+echo  [3/7] Checking Node.js Runtime and Package Manager...
 where node >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     for /f "tokens=*" %%i in ('node -v') do set "NODE_VER=%%i"
@@ -73,10 +97,10 @@ if %ERRORLEVEL% equ 0 (
 )
 
 :: -----------------------------------------------------------------------------
-:: CHECK 3: Windows Print Spooler Service
+:: CHECK 4: Windows Print Spooler Service
 :: -----------------------------------------------------------------------------
 echo.
-echo  [3/6] Checking Windows Print Spooler Service...
+echo  [4/7] Checking Windows Print Spooler Service...
 sc query Spooler | findstr /i "STATE" | findstr /i "RUNNING" >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     echo        [PASS] Windows Print Spooler Service is RUNNING.
@@ -94,10 +118,10 @@ if %ERRORLEVEL% equ 0 (
 )
 
 :: -----------------------------------------------------------------------------
-:: CHECK 4: Installed Windows Hardware and Virtual Printers
+:: CHECK 5: Installed Windows Hardware and Virtual Printers
 :: -----------------------------------------------------------------------------
 echo.
-echo  [4/6] Inspecting Connected Printers...
+echo  [5/7] Inspecting Connected Printers...
 powershell -NoProfile -Command "Get-Printer | Select-Object -ExpandProperty Name" > "%TEMP%\autoprint_printers.tmp" 2>nul
 if %ERRORLEVEL% equ 0 (
     set /a P_COUNT=0
@@ -119,10 +143,10 @@ if %ERRORLEVEL% equ 0 (
 )
 
 :: -----------------------------------------------------------------------------
-:: CHECK 5: Network Port Availability [5000, 7000, 8000]
+:: CHECK 6: Network Port Availability [5000, 7000, 8000]
 :: -----------------------------------------------------------------------------
 echo.
-echo  [5/6] Checking Network Port Availability...
+echo  [6/7] Checking Network Port Availability...
 
 set "PORT_5000_BUSY=0"
 set "PORT_7000_BUSY=0"
@@ -157,10 +181,10 @@ if %PORT_8000_BUSY% equ 0 (
 set /a TOTAL_PASS+=1
 
 :: -----------------------------------------------------------------------------
-:: CHECK 6: Persistent Datastore and Disk Write Access
+:: CHECK 7: Persistent Datastore and Disk Write Access
 :: -----------------------------------------------------------------------------
 echo.
-echo  [6/6] Checking Datastore and Storage Permissions...
+echo  [7/7] Checking Datastore and Storage Permissions...
 set "DATASTORE_DIR=%~dp0datastore"
 if not exist "%DATASTORE_DIR%" mkdir "%DATASTORE_DIR%" >nul 2>&1
 
