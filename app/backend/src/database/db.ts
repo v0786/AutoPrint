@@ -49,7 +49,7 @@ export function closeDatabase(): void {
 
 // ─── Schema Migration ─────────────────────────────────────────────────────────
 
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 function runMigrations(db: Database.Database): void {
   // Create migration tracking table
@@ -125,6 +125,38 @@ function runMigrations(db: Database.Database): void {
     });
     migrate7();
     console.log('[DB] Applied migration 7 (Post-Payment Print Workflow, State Machine & Pickup Tracking)');
+  }
+
+  if (currentVersion < 8) {
+    const migrate8 = db.transaction(() => {
+      runMigration8(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(8);
+    });
+    migrate8();
+    console.log('[DB] Applied migration 8 (Payment Configuration Compatibility)');
+  }
+
+  // Keep this check idempotent so databases whose migration marker advanced
+  // before a partial schema update can still self-heal on startup.
+  runMigration8(db);
+}
+
+function runMigration8(db: Database.Database): void {
+  const columns = new Set(
+    (db.prepare('PRAGMA table_info(payment_config)').all() as Array<{ name: string }>).map((column) => column.name)
+  );
+  const requiredColumns: Array<[string, string]> = [
+    ['provider', "TEXT NOT NULL DEFAULT 'UPI_DIRECT'"],
+    ['upi_id', 'TEXT'],
+    ['upi_payee_name', 'TEXT'],
+    ['upi_qr_data_url', 'TEXT'],
+    ['razorpay_key_id', 'TEXT'],
+    ['razorpay_key_secret', 'TEXT'],
+    ['is_active', 'INTEGER NOT NULL DEFAULT 1'],
+    ['updated_at', "TEXT NOT NULL DEFAULT (datetime('now'))"],
+  ];
+  for (const [name, definition] of requiredColumns) {
+    if (!columns.has(name)) db.exec(`ALTER TABLE payment_config ADD COLUMN ${name} ${definition}`);
   }
 }
 

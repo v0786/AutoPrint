@@ -30,6 +30,7 @@ namespace AutoPrint.Launcher
         public int BackendPort { get; set; }
         public int CustomerPort { get; set; }
         public int MerchantPort { get; set; }
+        public string MerchantInterface { get; set; }
 
         public InstallationState()
         {
@@ -43,6 +44,7 @@ namespace AutoPrint.Launcher
             BackendPort = 5000;
             CustomerPort = 7000;
             MerchantPort = 8000;
+            MerchantInterface = "web";
         }
     }
 
@@ -125,6 +127,8 @@ namespace AutoPrint.Launcher
 
                     var mMerch = Regex.Match(json, "\"merchantPort\"\\s*:\\s*([0-9]+)");
                     if (mMerch.Success) state.MerchantPort = int.Parse(mMerch.Groups[1].Value);
+                    var mInterface = Regex.Match(json, "\"merchantInterface\"\\s*:\\s*\"(web|gui)\"", RegexOptions.IgnoreCase);
+                    if (mInterface.Success) state.MerchantInterface = mInterface.Groups[1].Value.ToLowerInvariant();
                 }
                 catch { }
             }
@@ -148,7 +152,8 @@ namespace AutoPrint.Launcher
             sb.AppendLine(string.Format("  \"pagekitePublicUrl\": \"{0}\",", state.PagekitePublicUrl ?? ""));
             sb.AppendLine(string.Format("  \"backendPort\": {0},", state.BackendPort));
             sb.AppendLine(string.Format("  \"customerPort\": {0},", state.CustomerPort));
-            sb.AppendLine(string.Format("  \"merchantPort\": {0}", state.MerchantPort));
+            sb.AppendLine(string.Format("  \"merchantPort\": {0},", state.MerchantPort));
+            sb.AppendLine(string.Format("  \"merchantInterface\": \"{0}\"", state.MerchantInterface == "gui" ? "gui" : "web"));
             sb.AppendLine("}");
 
             try
@@ -174,6 +179,7 @@ namespace AutoPrint.Launcher
             sb.AppendLine(string.Format("  \"backendPort\": {0},", state.BackendPort));
             sb.AppendLine(string.Format("  \"customerWebPort\": {0},", state.CustomerPort));
             sb.AppendLine(string.Format("  \"merchantDesktopPort\": {0},", state.MerchantPort));
+            sb.AppendLine(string.Format("  \"merchantInterface\": \"{0}\",", state.MerchantInterface == "gui" ? "gui" : "web"));
             sb.AppendLine(string.Format("  \"apiBaseUrl\": \"http://127.0.0.1:{0}\",", state.BackendPort));
             sb.AppendLine("  \"ports\": {");
             sb.AppendLine(string.Format("    \"backend\": {0},", state.BackendPort));
@@ -910,6 +916,7 @@ namespace AutoPrint.Launcher
 
         private readonly bool isSilentStartup;
         private bool isStopping = false;
+        private string merchantInterface = "web";
 
         public AutoPrintTrayContext(bool silent)
         {
@@ -939,6 +946,10 @@ namespace AutoPrint.Launcher
             var itemStatus = new ToolStripMenuItem("Service Status...", null, (s, e) => ShowServiceStatusDialog());
             var itemPrinters = new ToolStripMenuItem("Printer Configuration", null, (s, e) => OpenPrinterConfig());
             var itemPayment = new ToolStripMenuItem("Payment Settings", null, (s, e) => OpenPaymentSettings());
+            var itemWeb = new ToolStripMenuItem("Open Merchant Web", null, (s, e) => OpenMerchantWeb());
+            var itemInterface = new ToolStripMenuItem("Interface");
+            itemInterface.DropDownItems.Add(new ToolStripMenuItem("Web Mode", null, (s, e) => SetMerchantInterface("web")));
+            itemInterface.DropDownItems.Add(new ToolStripMenuItem("GUI Mode", null, (s, e) => SetMerchantInterface("gui")));
             var itemLogs = new ToolStripMenuItem("View Logs Directory", null, (s, e) => OpenLogsDirectory());
             var itemAutoStart = new ToolStripMenuItem("Start AutoPrint with Windows", null, (s, e) => ToggleAutoStart());
             itemAutoStart.Checked = IsAutoStartEnabled();
@@ -948,12 +959,14 @@ namespace AutoPrint.Launcher
             var itemExit = new ToolStripMenuItem("Exit AutoPrint", null, (s, e) => ExitApplication());
 
             contextMenu.Items.Add(itemOpen);
+            contextMenu.Items.Add(itemWeb);
             contextMenu.Items.Add(itemCustomer);
             contextMenu.Items.Add(itemPagekite);
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add(itemStatus);
             contextMenu.Items.Add(itemPrinters);
             contextMenu.Items.Add(itemPayment);
+            contextMenu.Items.Add(itemInterface);
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add(itemLogs);
             contextMenu.Items.Add(itemAutoStart);
@@ -1024,6 +1037,7 @@ namespace AutoPrint.Launcher
             backendPort = state.BackendPort > 0 ? state.BackendPort : 5000;
             customerPort = state.CustomerPort > 0 ? state.CustomerPort : 7000;
             merchantPort = state.MerchantPort > 0 ? state.MerchantPort : 8000;
+            merchantInterface = state.MerchantInterface == "gui" ? "gui" : "web";
 
             isPagekiteEnabled = state.PagekiteConfigured && !string.IsNullOrEmpty(state.PagekiteName) && !string.IsNullOrEmpty(state.PagekiteSecret);
             pagekiteName = state.PagekiteName;
@@ -1567,7 +1581,23 @@ namespace AutoPrint.Launcher
 
         private void OpenMerchantDashboard()
         {
+            // GUI mode currently uses the existing Merchant UI as its native entry point;
+            // this keeps one backend, one queue, and one printer state source.
+            OpenMerchantWeb();
+        }
+
+        private void OpenMerchantWeb()
+        {
             try { Process.Start(string.Format("http://localhost:{0}", merchantPort)); } catch { }
+        }
+
+        private void SetMerchantInterface(string mode)
+        {
+            merchantInterface = mode == "gui" ? "gui" : "web";
+            var state = InstallationManager.LoadState();
+            state.MerchantInterface = merchantInterface;
+            InstallationManager.SaveState(state);
+            trayIcon.ShowBalloonTip(2500, "AutoPrint Interface", "Interface set to " + (merchantInterface == "gui" ? "GUI Mode" : "Web Mode") + ".", ToolTipIcon.Info);
         }
 
         private void OpenCustomerKiosk()

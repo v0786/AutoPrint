@@ -75,6 +75,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [spiralRate, setSpiralRate] = useState(40.0);
   const [hardcoverRate, setHardcoverRate] = useState(150.0);
   const [laminationRate, setLaminationRate] = useState(20.0);
+  const [skipVerificationPage, setSkipVerificationPage] = useState(false);
 
   // Payment State
   const [provider, setProvider] = useState<'UPI_DIRECT' | 'RAZORPAY'>('UPI_DIRECT');
@@ -143,6 +144,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               setHardcoverRate(d.rates.finishing.hardcover ?? 150.0);
               setLaminationRate(d.rates.finishing.laminationPerSheet ?? 20.0);
             }
+            setSkipVerificationPage(Boolean(d.rates.skipVerificationPage));
           }
 
           if (d.paymentConfig) {
@@ -219,6 +221,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             hardcover: Number(hardcoverRate),
             laminationPerSheet: Number(laminationRate),
           },
+          skipVerificationPage,
         },
       };
 
@@ -254,17 +257,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider,
-          upiId: upiId.trim(),
-          upiPayeeName: upiPayeeName.trim(),
-          upiQrDataUrl,
-          razorpayKeyId: razorpayKeyId.trim(),
-          razorpayKeySecret: razorpayKeySecret.trim() || undefined,
+          ...(upiId.trim() ? { upiId: upiId.trim() } : {}),
+          ...(upiPayeeName.trim() ? { upiPayeeName: upiPayeeName.trim() } : {}),
+          ...(upiQrDataUrl ? { upiQrDataUrl } : {}),
+          ...(razorpayKeyId.trim() ? { razorpayKeyId: razorpayKeyId.trim() } : {}),
+          ...(razorpayKeySecret.trim() ? { razorpayKeySecret: razorpayKeySecret.trim() } : {}),
         }),
       });
 
       const json = await res.json();
       if (!res.ok || !json.ok) {
-        throw new Error(json.error || 'Failed to save payment configuration.');
+        throw new Error(`${json.error || 'Failed to save payment configuration.'}${json.traceId ? ` (Trace: ${json.traceId})` : ''}`);
       }
 
       setSaveSuccess(true);
@@ -637,6 +640,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </p>
             </div>
           </div>
+
+          <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-black/30 p-4 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={skipVerificationPage}
+              onChange={(e) => setSkipVerificationPage(e.target.checked)}
+              className="mt-1 h-4 w-4 accent-blue-500"
+            />
+            <span>
+              <span className="block text-xs font-bold text-white">Do not print verification page</span>
+              <span className="block mt-1 text-[11px] text-zinc-400">When unchecked, a black-and-white landscape verification page is added after the document.</span>
+            </span>
+          </label>
 
           {/* Finishing & Binding Add-ons */}
           <div className="pt-2">

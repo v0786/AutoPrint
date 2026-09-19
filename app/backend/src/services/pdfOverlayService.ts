@@ -25,6 +25,7 @@ export interface EmbedStampOptions {
   mimeType?: string;
   orientation?: 'portrait' | 'landscape';
   paperFormat?: string;
+  addVerificationPage?: boolean;
 }
 
 export class PdfOverlayService {
@@ -164,12 +165,19 @@ export class PdfOverlayService {
       pdfDoc.addPage([595.28, 841.89]); // Standard A4
     }
 
+    if (options?.addVerificationPage === false) {
+      const bytes = await pdfDoc.save();
+      const saved = StorageService.saveProcessedFile(jobId, Buffer.from(bytes), 'pdf');
+      return { processedFilePath: saved.absolutePath, processedFileName: saved.fileName, pageCount: pdfDoc.getPages().length,
+        metadata: { verificationCode, formattedCode, checksum, timestamp } };
+    }
+
     const pages = pdfDoc.getPages();
     if (pages.length === 0) {
       pdfDoc.addPage([595.28, 841.89]);
     }
 
-    const lastPage = pages[pages.length - 1];
+    const lastPage = pdfDoc.addPage([841.89, 595.28]);
     const { width } = lastPage.getSize();
 
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -177,8 +185,8 @@ export class PdfOverlayService {
     const fontMono = await pdfDoc.embedFont(StandardFonts.CourierBold);
 
     // Footer stamp dimensions at bottom of final page
-    const footerHeight = 65;
-    const margin = 20;
+    const footerHeight = 400;
+    const margin = 55;
     const footerY = margin;
     const footerWidth = width - margin * 2;
 
@@ -205,7 +213,7 @@ export class PdfOverlayService {
     lastPage.drawText('AUTOPRINT VERIFICATION STAMP', {
       x: margin + 10,
       y: footerY + footerHeight - 16,
-      size: 9,
+      size: 18,
       font: fontBold,
       color: rgb(0.1, 0.15, 0.3),
     });
@@ -213,7 +221,7 @@ export class PdfOverlayService {
     lastPage.drawText(`VERIFICATION CODE: ${formattedCode}`, {
       x: margin + 10,
       y: footerY + footerHeight - 34,
-      size: 13,
+      size: 34,
       font: fontMono,
       color: rgb(0.05, 0.2, 0.65),
     });
@@ -221,7 +229,7 @@ export class PdfOverlayService {
     lastPage.drawText('DO NOT DETACH • HAND TO STAFF AT COUNTER', {
       x: margin + 10,
       y: footerY + 10,
-      size: 7.5,
+      size: 15,
       font: fontRegular,
       color: rgb(0.4, 0.45, 0.55),
     });
@@ -232,7 +240,7 @@ export class PdfOverlayService {
     lastPage.drawText(`CHECKSUM: ${checksum}`, {
       x: rightColX,
       y: footerY + footerHeight - 20,
-      size: 9,
+      size: 18,
       font: fontMono,
       color: rgb(0.05, 0.4, 0.5),
     });
@@ -240,7 +248,7 @@ export class PdfOverlayService {
     lastPage.drawText(`TIMESTAMP: ${timestamp}`, {
       x: rightColX,
       y: footerY + footerHeight - 34,
-      size: 7.5,
+      size: 15,
       font: fontRegular,
       color: rgb(0.35, 0.4, 0.5),
     });
@@ -248,7 +256,7 @@ export class PdfOverlayService {
     lastPage.drawText('VALIDATED VIA AUTOPRINT FAIL-SAFE ENGINE', {
       x: rightColX,
       y: footerY + 10,
-      size: 6.5,
+      size: 13,
       font: fontRegular,
       color: rgb(0.45, 0.5, 0.6),
     });

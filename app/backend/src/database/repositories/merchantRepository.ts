@@ -21,6 +21,7 @@ export interface StructuredShopRates {
     hardcover: number;
     laminationPerSheet: number;
   };
+  skipVerificationPage?: boolean;
 }
 
 export interface MerchantRecord {
@@ -416,6 +417,7 @@ export class MerchantRepository {
         hardcover: custom.finishing?.hardcover ?? 150.0,
         laminationPerSheet: custom.finishing?.laminationPerSheet ?? 20.0,
       },
+      skipVerificationPage: custom.skipVerificationPage ?? false,
     };
   }
 
@@ -437,6 +439,7 @@ export class MerchantRepository {
       ratesJson?: string;
       rates?: Partial<Omit<StructuredShopRates, 'finishing'>> & {
         finishing?: Partial<StructuredShopRates['finishing']>;
+        skipVerificationPage?: boolean;
       };
       isOnline?: boolean;
     }

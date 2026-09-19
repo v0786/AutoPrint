@@ -7,6 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { MerchantRepository } from '../database/repositories/merchantRepository';
 import { PaymentConfigRepository } from '../database/repositories/paymentConfigRepository';
+import { generateTraceId } from '../utils/traceLogger';
 
 // Validation Schemas
 const OnboardSchema = z.object({
@@ -80,17 +81,24 @@ const UpdateProfileSchema = z.object({
       hardcover: z.number().optional(),
       laminationPerSheet: z.number().optional(),
     }).optional(),
+    skipVerificationPage: z.boolean().optional(),
   }).optional(),
   isOnline: z.boolean().optional(),
 });
 
+const optionalTrimmed = z.preprocess((value) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().optional());
+
 const PaymentReceiverSchema = z.object({
   provider: z.enum(['UPI_DIRECT', 'RAZORPAY', 'JUSPAY']).optional(),
-  upiId: z.string().optional(),
-  upiPayeeName: z.string().optional(),
-  upiQrDataUrl: z.string().optional(),
-  razorpayKeyId: z.string().optional(),
-  razorpayKeySecret: z.string().optional(),
+  upiId: optionalTrimmed,
+  upiPayeeName: optionalTrimmed,
+  upiQrDataUrl: optionalTrimmed,
+  razorpayKeyId: optionalTrimmed,
+  razorpayKeySecret: optionalTrimmed,
 });
 
 export class MerchantController {
@@ -595,8 +603,19 @@ export class MerchantController {
           hasRazorpaySecret: Boolean(updatedConfig.razorpay_key_secret),
         },
       });
-    } catch (err) {
-      next(err);
+    } catch (err: any) {
+      const traceId = generateTraceId();
+      if (err instanceof z.ZodError) {
+        res.status(400).json({ ok: false, error: err.issues[0]?.message || 'Invalid payment configuration.', traceId });
+        return;
+      }
+      console.error(`[${traceId}] Payment receiver save failed:`, {
+        message: err?.message || String(err),
+        code: err?.code,
+        provider: req.body?.provider,
+        fields: Object.keys(req.body || {}),
+      });
+      res.status(500).json({ ok: false, error: 'Payment configuration could not be saved.', traceId });
     }
   }
 

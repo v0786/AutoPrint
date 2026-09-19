@@ -11,6 +11,7 @@ import { PrinterService } from './printerService';
 import { auditLogger } from '../utils/auditLogger';
 import { logTrace, generateTraceId } from '../utils/traceLogger';
 import { generateSecureVerificationCode } from '../utils/crypto';
+import { MerchantRepository } from '../database/repositories/merchantRepository';
 
 export class AutoPrintService {
   /**
@@ -222,6 +223,7 @@ export class AutoPrintService {
           mimeType: request.mimeType,
           orientation: canonicalSettings.orientation,
           paperFormat: canonicalSettings.paperFormat,
+          addVerificationPage: !MerchantRepository.parseStructuredRates(MerchantRepository.getPrimaryMerchant()!).skipVerificationPage,
         }
       );
       processedFilePath = watermarkResult.processedFilePath;
