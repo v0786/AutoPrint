@@ -1,5 +1,6 @@
 {
-  "buildCommand": "npm run build --prefix app/customer-web",
+  "installCommand": "npm --prefix app/customer-web install",
+  "buildCommand": "npm --prefix app/customer-web run build",
   "outputDirectory": "app/customer-web/dist",
   "framework": "vite",
   "rewrites": [
