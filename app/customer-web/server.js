@@ -26,7 +26,7 @@ function loadAppSettings() {
     if (fs.existsSync(configPath)) {
       try {
         const raw = fs.readFileSync(configPath, 'utf8');
-        return JSON.parse(raw);
+        return JSON.parse(raw.replace(/^\uFEFF/, ''));
       } catch (err) {
         console.warn(`[CONFIG] Failed to parse ${configPath}:`, err);
       }

@@ -5,6 +5,7 @@
 
 import crypto, { randomUUID as uuidv4 } from 'crypto';
 import { getDb } from '../db';
+import { InstallationIdentityRepository } from './installationIdentityRepository';
 
 export interface StructuredShopRates {
   bwSingle: number;
@@ -26,6 +27,9 @@ export interface StructuredShopRates {
 
 export interface MerchantRecord {
   id: string;
+  merchant_id?: string | null;
+  device_id?: string | null;
+  installation_id?: string | null;
   username?: string | null;
   shop_name: string;
   owner_name: string;
@@ -89,6 +93,27 @@ export class MerchantRepository {
       row = db.prepare('SELECT * FROM merchants ORDER BY created_at ASC LIMIT 1').get() as MerchantRecord | undefined;
     }
     return row || null;
+  }
+
+  /**
+   * Resolve a public store route without silently falling back to another
+   * merchant. The local desktop build has one installation identity, so an
+   * older database whose merchant row predates the identity columns can still
+   * resolve its own stable identity.
+   */
+  public static getByStableMerchantId(merchantId: string): MerchantRecord | null {
+    const normalized = merchantId.trim();
+    if (!normalized) return null;
+
+    const db = getDb();
+    const row = db.prepare('SELECT * FROM merchants WHERE merchant_id = ? LIMIT 1').get(normalized) as MerchantRecord | undefined;
+    if (row) return row;
+
+    const identity = InstallationIdentityRepository.get();
+    if (identity?.merchant_id === normalized) {
+      return this.getPrimaryMerchant();
+    }
+    return null;
   }
 
   public static hasAdmin(): boolean {
@@ -226,6 +251,7 @@ export class MerchantRepository {
     username?: string;
     password: string;
     shopName?: string;
+    phone?: string;
   }): MerchantRecord {
     const db = getDb();
     const createTx = db.transaction(() => {
@@ -245,25 +271,34 @@ export class MerchantRepository {
       }
       const shopName = (data.shopName || '').trim() || 'AutoPrint Express Store';
       const ownerName = data.fullName.trim();
+      const identity = InstallationIdentityRepository.create({
+        shopName,
+        ownerName,
+        mobileNumber: data.phone,
+      });
 
       db.prepare(`
         INSERT INTO merchants (
-          id, username, shop_name, owner_name, email,
+          id, merchant_id, device_id, installation_id, username, shop_name, owner_name, email, phone,
           password_hash, password_salt, role, is_active,
           address, branch, kiosk_number, selected_printer,
           color_price_per_page, bw_price_per_page, is_onboarded, is_online
         ) VALUES (
-          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, 'admin', 1,
           'Main Counter', 'Counter #01', 'Counter #01', 'AutoPrint Virtual Spooler',
           1000, 200, 1, 1
         )
       `).run(
         id,
+        identity.merchant_id,
+        identity.device_id,
+        identity.installation_id,
         cleanUsername,
         shopName,
         ownerName,
         cleanEmail,
+        data.phone?.trim() || null,
         hash,
         salt
       );
@@ -390,7 +425,21 @@ export class MerchantRepository {
     db.prepare('DELETE FROM merchant_sessions WHERE token = ?').run(token);
   }
 
-  public static parseStructuredRates(merchant: MerchantRecord): StructuredShopRates {
+  public static parseStructuredRates(merchant: MerchantRecord | null): StructuredShopRates {
+    if (!merchant) {
+      return {
+        bwSingle: 2,
+        bwDoublePerSide: 1.5,
+        colorSingle: 10,
+        colorDoublePerSide: 8,
+        photoGlossy: 25,
+        a3Multiplier: 2,
+        legalMultiplier: 1.25,
+        letterMultiplier: 1,
+        finishing: { staple: 5, spiral: 40, hardcover: 150, laminationPerSheet: 20 },
+        skipVerificationPage: false,
+      };
+    }
     let custom: Partial<StructuredShopRates> = {};
     if (merchant.rates_json) {
       try {
@@ -492,16 +541,23 @@ export class MerchantRepository {
     return this.getById(id);
   }
 
-  public static getPublicShopProfile(): PublicShopProfile | null {
-    const merchant = this.getPrimaryMerchant();
+  public static getPublicShopProfile(merchantId?: string): PublicShopProfile | null {
+    const merchant = merchantId ? this.getByStableMerchantId(merchantId) : this.getPrimaryMerchant();
     if (!merchant) {
       return null;
     }
 
     const rates = this.parseStructuredRates(merchant);
 
+    const identity = InstallationIdentityRepository.ensure({
+      shopName: merchant.shop_name,
+      ownerName: merchant.owner_name,
+      mobileNumber: merchant.phone,
+      merchantId: merchant.merchant_id || undefined,
+    });
+
     return {
-      id: merchant.id,
+      id: merchant.merchant_id || identity.merchant_id,
       name: merchant.shop_name,
       owner: merchant.owner_name,
       branch: merchant.branch,
@@ -517,5 +573,15 @@ export class MerchantRepository {
       },
       selectedPrinter: merchant.selected_printer,
     };
+  }
+
+  public static getInstallationIdentity() {
+    const merchant = this.getPrimaryMerchant();
+    return InstallationIdentityRepository.ensure(merchant ? {
+      shopName: merchant.shop_name,
+      ownerName: merchant.owner_name,
+      mobileNumber: merchant.phone,
+      merchantId: merchant.merchant_id || undefined,
+    } : undefined);
   }
 }

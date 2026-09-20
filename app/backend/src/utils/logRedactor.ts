@@ -10,11 +10,11 @@ export class LogRedactor {
     { regex: /(authorization:\s*['"]?)[^\r\n,'"]+/gi, replacement: '$1[REDACTED_AUTH]' },
 
     // 2. Passwords, secret keys, API keys in JSON or key-value strings
-    { regex: /("(?:password|secret|keySecret|secretKey|apiKey|token|pagekiteSecret|sessionToken)":\s*")[^"]+(")/gi, replacement: '$1[REDACTED_SECRET]$2' },
-    { regex: /((?:password|secret|key_secret|secret_key|api_key|token|pagekite_secret)\s*[:=]\s*)[^\s,;&]+/gi, replacement: '$1[REDACTED_SECRET]' },
+    { regex: /("(?:password|secret|keySecret|secretKey|apiKey|token|sessionToken)":\s*")[^"]+(")/gi, replacement: '$1[REDACTED_SECRET]$2' },
+    { regex: /((?:password|secret|key_secret|secret_key|api_key|token)\s*[:=]\s*)[^\s,;&]+/gi, replacement: '$1[REDACTED_SECRET]' },
 
-    // 3. PageKite CLI service argument: --service_on=...:<SECRET>
-    { regex: /(--service_on=[^:]+:[^:]+:[^:]+:)[^\s"']+/gi, replacement: '$1[REDACTED_PAGEKITE_SECRET]' },
+    // 3. Service endpoint credentials passed as a command-line argument.
+    { regex: /(--endpoint-token=)[^\s"']+/gi, replacement: '$1[REDACTED_SERVICE_SECRET]' },
 
     // 4. Razorpay Secret (rzp_test_... / rzp_live_... / secret keys)
     { regex: /(rzp_(?:test|live)_[a-zA-Z0-9]{14,})/gi, replacement: '[REDACTED_RAZORPAY_KEY]' },

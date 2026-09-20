@@ -1,7 +1,7 @@
 /**
  * Dynamic QR Code Generation Service
  * Generates high-resolution QR codes dynamically pointing to the active Customer Web URL
- * (PageKite public tunnel or LAN address) and saves rendered assets in the datastore.
+ * (Vercel public URL or local LAN address) and saves rendered assets in the datastore.
  */
 
 import QRCode from 'qrcode';

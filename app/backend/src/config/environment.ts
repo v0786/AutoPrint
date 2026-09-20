@@ -25,12 +25,6 @@ export interface AppSettings {
   database?: {
     path?: string;
   };
-  pagekite?: {
-    enabled?: boolean;
-    subdomain?: string;
-    domain?: string;
-    secret?: string;
-  };
 }
 
 export function loadAppSettings(): AppSettings {
@@ -196,10 +190,4 @@ export const CONFIG = {
   MAX_FILE_SIZE_MB:     Number(process.env.MAX_FILE_SIZE_MB || 50),
   APP_VERSION:          '2.0.0',
   PATHS,
-  PAGEKITE: {
-    enabled:   process.env.PAGEKITE_ENABLED ? process.env.PAGEKITE_ENABLED.toLowerCase() === 'true' : appSettings.pagekite?.enabled || false,
-    subdomain: process.env.PAGEKITE_NAME || appSettings.pagekite?.subdomain || 'autoprint',
-    domain:    process.env.PAGEKITE_DOMAIN || appSettings.pagekite?.domain || 'pagekite.me',
-    secret:    process.env.PAGEKITE_SECRET || appSettings.pagekite?.secret || '',
-  },
 } as const;

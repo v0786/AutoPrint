@@ -49,7 +49,7 @@ AutoPrint utilizes a multi-tier testing strategy ensuring failure-proof operatio
 * **Test 8 — Refund Lifecycle**: Verifies refund request validation and mandatory operator explanations.
 
 ### 2.3 Suite 3: Security Remediation Verification (`security_audit_verification.test.ts`)
-* **Test 1 — PageKite Sanitization**: Verifies shell character rejection in subdomain inputs.
+* **Test 1 — Public URL Safety**: Verifies hosted-store and LAN URLs are generated without secret material.
 * **Test 2 — Timing-Safe Comparison**: Verifies constant-time token comparison preventing side-channel attacks.
 * **Test 3 — Query String Token Rejection**: Verifies rejection of tokens supplied via `?token=` parameter.
 * **Test 4 — Route Authorization**: Verifies sensitive merchant endpoints reject unauthenticated requests.
@@ -75,7 +75,7 @@ AutoPrint utilizes a multi-tier testing strategy ensuring failure-proof operatio
 | **Spoofing** | Attacker self-reports payment success | Backend ignores client-reported payment flags; only server-verified gateway signatures or physical cash confirmation authorizes printing. |
 | **Tampering** | Parameter tampering of per-page rates | Pricing calculation is strictly executed on the backend using rates stored in SQLite; client calculations are for display only. |
 | **Repudiation** | Operator denies refund or print action | Durable audit logs in `audit_logs` table record actor, IP, timestamp, and details for every financial and administrative action. |
-| **Information Disclosure** | Diagnostic log export leaking merchant password or PageKite secret | Redaction engine strips all keys matching `password`, `secret`, `token`, `key`, or `bearer` before writing diagnostics to disk. |
+| **Information Disclosure** | Diagnostic log export leaking merchant password or access token | Redaction engine strips all keys matching `password`, `secret`, `token`, `key`, or `bearer` before writing diagnostics to disk. |
 | **Denial of Service** | Automated bot brute-forcing 8-digit verification codes | In-memory sliding-window rate limiter blocks IP addresses exceeding 10 lookup attempts per minute. |
 | **Elevation of Privilege** | Attacker supplying token via URL query string (`?token=admin`) | Middleware strictly rejects tokens in query strings; Bearer tokens in HTTP Authorization headers are mandatory. |
 

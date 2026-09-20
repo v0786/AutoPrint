@@ -7,7 +7,9 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { MerchantRepository } from '../database/repositories/merchantRepository';
 import { PaymentConfigRepository } from '../database/repositories/paymentConfigRepository';
+import { CloudSyncService } from '../services/supabase/cloudSyncService';
 import { generateTraceId } from '../utils/traceLogger';
+
 
 // Validation Schemas
 const OnboardSchema = z.object({
@@ -525,6 +527,7 @@ export class MerchantController {
       }
 
       const freshProfile = MerchantRepository.getPublicShopProfile();
+      void CloudSyncService.syncMerchantProfile().catch(() => {});
 
       res.json({
         ok: true,
@@ -541,8 +544,11 @@ export class MerchantController {
   /**
    * Public Shop Profile for Customer Web (Returns null/offline if merchant not configured)
    */
-  public static async getPublicProfile(_req: Request, res: Response): Promise<void> {
-    const publicProfile = MerchantRepository.getPublicShopProfile();
+  public static async getPublicProfile(req: Request, res: Response): Promise<void> {
+    const requestedMerchantId = typeof req.query.merchantId === 'string'
+      ? req.query.merchantId.trim()
+      : undefined;
+    const publicProfile = MerchantRepository.getPublicShopProfile(requestedMerchantId);
     const payConfig = PaymentConfigRepository.getPublicPaymentConfig();
 
     if (!publicProfile || !publicProfile.isOnboarded || !publicProfile.isOnline) {
@@ -590,6 +596,8 @@ export class MerchantController {
           upiQrDataUrl: parsed.upiQrDataUrl,
         });
       }
+
+      void CloudSyncService.syncMerchantProfile().catch(() => {});
 
       res.json({
         ok: true,
@@ -653,6 +661,7 @@ export class MerchantController {
     }
 
     const updated = MerchantRepository.updateProfile(primary.id, { isOnline: Boolean(isOnline) });
+    void CloudSyncService.syncMerchantProfile().catch(() => {});
     res.json({ ok: true, isOnline: Boolean(updated?.is_online) });
   }
 }

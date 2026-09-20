@@ -11,9 +11,11 @@ let _db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (!_db) {
-    throw new Error('Database not initialized. Call initDatabase() first.');
+    // Keep repository consumers safe when a lightweight worker/test imports a
+    // repository before the HTTP server bootstrap has run.
+    initDatabase();
   }
-  return _db;
+  return _db!;
 }
 
 export function initDatabase(): void {
@@ -49,7 +51,7 @@ export function closeDatabase(): void {
 
 // ─── Schema Migration ─────────────────────────────────────────────────────────
 
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 13;
 
 function runMigrations(db: Database.Database): void {
   // Create migration tracking table
@@ -136,9 +138,171 @@ function runMigrations(db: Database.Database): void {
     console.log('[DB] Applied migration 8 (Payment Configuration Compatibility)');
   }
 
-  // Keep this check idempotent so databases whose migration marker advanced
-  // before a partial schema update can still self-heal on startup.
+  if (currentVersion < 9) {
+    const migrate9 = db.transaction(() => {
+      runMigration9(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(9);
+    });
+    migrate9();
+    console.log('[DB] Applied migration 9 (Local Print Queue & Cloud Idempotency Locks)');
+  }
+
+  if (currentVersion < 10) {
+    const migrate10 = db.transaction(() => {
+      runMigration10(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(10);
+    });
+    migrate10();
+    console.log('[DB] Applied migration 10 (File Hash Integrity Verification)');
+  }
+
+  if (currentVersion < 11) {
+    const migrate11 = db.transaction(() => {
+      runMigration11(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(11);
+    });
+    migrate11();
+    console.log('[DB] Applied migration 11 (Universal Merchant, Device & Installation Identity)');
+  }
+
+  if (currentVersion < 12) {
+    const migrate12 = db.transaction(() => {
+      runMigration12(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(12);
+    });
+    migrate12();
+    console.log('[DB] Applied migration 12 (Customer Job Access Tokens)');
+  }
+
+  if (currentVersion < 13) {
+    const migrate13 = db.transaction(() => {
+      runMigration13(db);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(13);
+    });
+    migrate13();
+    console.log('[DB] Applied migration 13 (Optional Cloud Pairing Codes)');
+  }
+
+  // Keep these checks idempotent so databases self-heal on startup.
   runMigration8(db);
+  runMigration9(db);
+  runMigration10(db);
+  runMigration11(db);
+  runMigration12(db);
+  runMigration13(db);
+}
+
+function addColumnIfMissing(db: Database.Database, table: string, column: string, definition: string): void {
+  const columns = new Set(
+    (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name)
+  );
+  if (!columns.has(column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+function runMigration11(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS installation_identity (
+      id                INTEGER PRIMARY KEY CHECK (id = 1),
+      merchant_id       TEXT NOT NULL UNIQUE,
+      device_id         TEXT NOT NULL UNIQUE,
+      installation_id   TEXT NOT NULL UNIQUE,
+      shop_name         TEXT NOT NULL DEFAULT '',
+      owner_name        TEXT NOT NULL DEFAULT '',
+      mobile_number     TEXT,
+      cloud_mode        TEXT NOT NULL DEFAULT 'LOCAL',
+      cloud_status      TEXT NOT NULL DEFAULT 'OFFLINE',
+      created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_installation_identity_merchant ON installation_identity(merchant_id);
+
+    CREATE INDEX IF NOT EXISTS idx_local_print_jobs_merchant_status
+      ON local_print_jobs(merchant_id, status);
+  `);
+
+  addColumnIfMissing(db, 'merchants', 'merchant_id', 'TEXT');
+  addColumnIfMissing(db, 'merchants', 'device_id', 'TEXT');
+  addColumnIfMissing(db, 'merchants', 'installation_id', 'TEXT');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_merchants_merchant_id ON merchants(merchant_id) WHERE merchant_id IS NOT NULL');
+
+  addColumnIfMissing(db, 'print_jobs', 'merchant_id', 'TEXT');
+  addColumnIfMissing(db, 'print_jobs', 'device_id', 'TEXT');
+  addColumnIfMissing(db, 'print_jobs', 'storage_path', 'TEXT');
+  addColumnIfMissing(db, 'print_jobs', 'file_size', 'INTEGER');
+  addColumnIfMissing(db, 'print_jobs', 'mime_type', "TEXT NOT NULL DEFAULT 'application/pdf'");
+  db.exec('CREATE INDEX IF NOT EXISTS idx_jobs_merchant_status ON print_jobs(merchant_id, status)');
+
+  addColumnIfMissing(db, 'local_print_jobs', 'device_id', 'TEXT');
+  addColumnIfMissing(db, 'local_print_jobs', 'file_size', 'INTEGER');
+  // SQLite only permits constant defaults in ALTER TABLE ADD COLUMN.
+  addColumnIfMissing(db, 'local_print_jobs', 'updated_at', 'TEXT');
+  addColumnIfMissing(db, 'local_print_jobs', 'print_options_json', 'TEXT');
+  addColumnIfMissing(db, 'local_print_jobs', 'printed_at', 'TEXT');
+  db.exec("UPDATE local_print_jobs SET updated_at = COALESCE(updated_at, datetime('now')) WHERE updated_at IS NULL OR updated_at = ''");
+}
+
+function runMigration12(db: Database.Database): void {
+  addColumnIfMissing(db, 'print_jobs', 'customer_access_token_hash', 'TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_jobs_customer_access_token ON print_jobs(customer_access_token_hash)');
+}
+
+function runMigration13(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cloud_pairing_codes (
+      id              TEXT PRIMARY KEY,
+      code_hash       TEXT NOT NULL UNIQUE,
+      merchant_id     TEXT NOT NULL,
+      device_id       TEXT NOT NULL,
+      installation_id TEXT NOT NULL,
+      expires_at      TEXT NOT NULL,
+      consumed_at     TEXT,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_cloud_pairing_codes_active
+      ON cloud_pairing_codes(code_hash, expires_at, consumed_at);
+  `);
+}
+
+function runMigration10(db: Database.Database): void {
+  try {
+    const pjCols = new Set(
+      (db.prepare('PRAGMA table_info(print_jobs)').all() as Array<{ name: string }>).map((c) => c.name)
+    );
+    if (!pjCols.has('file_hash')) {
+      db.exec('ALTER TABLE print_jobs ADD COLUMN file_hash TEXT');
+    }
+  } catch {}
+
+  try {
+    const lpjCols = new Set(
+      (db.prepare('PRAGMA table_info(local_print_jobs)').all() as Array<{ name: string }>).map((c) => c.name)
+    );
+    if (!lpjCols.has('file_hash')) {
+      db.exec('ALTER TABLE local_print_jobs ADD COLUMN file_hash TEXT');
+    }
+  } catch {}
+}
+
+function runMigration9(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS local_print_jobs (
+      job_id           TEXT PRIMARY KEY,
+      merchant_id      TEXT NOT NULL,
+      status           TEXT NOT NULL,
+      local_file_path  TEXT,
+      storage_path     TEXT,
+      printer_id       TEXT,
+      attempt_count    INTEGER NOT NULL DEFAULT 0,
+      lock_acquired_at TEXT,
+      created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+      last_attempt_at  TEXT,
+      error_message    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_local_print_jobs_status ON local_print_jobs(status);
+    CREATE INDEX IF NOT EXISTS idx_local_print_jobs_merchant ON local_print_jobs(merchant_id);
+  `);
 }
 
 function runMigration8(db: Database.Database): void {

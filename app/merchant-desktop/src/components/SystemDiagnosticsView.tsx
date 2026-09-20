@@ -292,10 +292,12 @@ export const SystemDiagnosticsView: React.FC<SystemDiagnosticsViewProps> = ({
           </div>
 
           <div className="bg-black/30 border border-white/5 p-3.5 rounded-2xl">
-            <div className="text-[11px] font-semibold text-zinc-400">PageKite / Public Tunnel</div>
-            <div className="text-base font-bold text-cyan-300 mt-1 capitalize">{backendHealth?.pagekite || 'Offline'}</div>
+            <div className="text-[11px] font-semibold text-zinc-400">Supabase Cloud Sync</div>
+            <div className="text-base font-bold text-cyan-300 mt-1 capitalize">
+              {backendHealth?.supabase || 'Local Mode'}
+            </div>
             <div className="text-[10px] text-zinc-400 mt-0.5 truncate">
-              {latestJob ? `Latest Job: ${latestJob.jobNo || latestJob.id}` : 'Manual Merchant Control Guarded'}
+              {latestJob ? `Latest Job: ${latestJob.jobNo || latestJob.id}` : 'V1 Local — No Cloud Required'}
             </div>
           </div>
         </div>

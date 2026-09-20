@@ -12,7 +12,6 @@ import {
   Sliders,
   ShieldCheck,
   RotateCcw,
-  Power,
   Copy,
   Check,
   ExternalLink,
@@ -20,10 +19,10 @@ import {
   Sparkles,
   Globe,
   Wifi,
-  Eye,
-  EyeOff,
-  Key,
   Loader2,
+  Download,
+  Eye,
+  FileText,
 } from 'lucide-react';
 import { UserManagementView } from './UserManagementView';
 import { apiFetch } from '../utils/api';
@@ -44,11 +43,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onToggleOnline,
   onProfileUpdated,
 }) => {
-  const [activeTab, setActiveTab] = useState<'store' | 'pricing' | 'payments' | 'station' | 'factory' | 'users'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'pricing' | 'payments' | 'station' | 'diagnostics' | 'factory' | 'users'>('store');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [merchantId, setMerchantId] = useState<string>('');
 
   // Store Profile State
   const [shopName, setShopName] = useState('');
@@ -86,22 +87,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [razorpayKeyId, setRazorpayKeyId] = useState('');
   const [razorpayKeySecret, setRazorpayKeySecret] = useState('');
 
-  // Station & Kiosk State
-  const [kioskUrl, setKioskUrl] = useState('https://autoprint.pagekite.me');
+  const [kioskUrl, setKioskUrl] = useState('');
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [copiedKioskUrl, setCopiedKioskUrl] = useState(false);
+  const [cloudStatus, setCloudStatus] = useState<any>(null);
+  const [pairingCode, setPairingCode] = useState('');
+  const [activationCode, setActivationCode] = useState('');
 
-  // PageKite Remote Tunnel State
-  const [pagekiteSubdomain, setPagekiteSubdomain] = useState('autoprint');
-  const [pagekiteSecret, setPagekiteSecret] = useState('');
-  const [showSecret, setShowSecret] = useState(false);
-  const [pagekiteStatus, setPagekiteStatus] = useState<string>('DISABLED');
-  const [pagekiteError, setPagekiteError] = useState<string | null>(null);
-  const [verifyingPagekite, setVerifyingPagekite] = useState(false);
-  const [verifyResult, setVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [savingPagekite, setSavingPagekite] = useState(false);
+  // Razorpay check state
   const [checkingRazorpay, setCheckingRazorpay] = useState(false);
   const [razorpayCheck, setRazorpayCheck] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // Diagnostics State
+  const [diagnosticReport, setDiagnosticReport] = useState<string | null>(null);
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [copiedReport, setCopiedReport] = useState(false);
 
   // Available Windows Printers
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
@@ -115,6 +115,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         apiFetch('/api/config/public').catch(() => null),
         apiFetch('/api/printers?refresh=true').catch(() => null),
       ]);
+      const cloudRes = await apiFetch('/api/cloud/status').catch(() => null);
+      if (cloudRes?.ok) setCloudStatus(await cloudRes.json());
 
       if (profileRes.ok) {
         const json = await profileRes.json();
@@ -126,6 +128,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           setKioskNumber(d.kioskNumber || 'Counter #01');
           setAddress(d.address || '');
           setPhone(d.phone || '');
+          if (d.merchantId || d.id) setMerchantId(d.merchantId || d.id);
           if (d.selectedPrinter) setSelectedPrinter(d.selectedPrinter);
 
           if (d.rates) {
@@ -164,11 +167,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         if (cJson.data) {
           if (cJson.data.customerUrl) setKioskUrl(cJson.data.customerUrl);
           if (cJson.data.qrCodeDataUrl) setQrCodeDataUrl(cJson.data.qrCodeDataUrl);
-          if (cJson.data.pagekite) {
-            if (cJson.data.pagekite.subdomain) setPagekiteSubdomain(cJson.data.pagekite.subdomain);
-            setPagekiteStatus(cJson.data.pagekite.status || 'DISABLED');
-            if (cJson.data.pagekite.error) setPagekiteError(cJson.data.pagekite.error);
-          }
         }
       }
 
@@ -187,6 +185,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   useEffect(() => {
     loadAllSettings();
+    if (typeof window !== 'undefined' && window.location.hash === '#diagnostics') {
+      setActiveTab('diagnostics');
+    }
   }, []);
 
   const handleSaveStoreAndPricing = async () => {
@@ -301,6 +302,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setCopiedKioskUrl(false), 2000);
   };
 
+  const generateCloudPairingCode = async () => {
+    setErrorMessage(null);
+    const res = await apiFetch('/api/cloud/activation/code', { method: 'POST' });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || 'Unable to create cloud pairing code.');
+    setPairingCode(json.data.code);
+  };
+
+  const activateCloud = async () => {
+    setErrorMessage(null);
+    const res = await apiFetch('/api/cloud/activation/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: activationCode }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || 'Cloud activation failed.');
+    setCloudStatus((prev: any) => ({ ...prev, status: 'ONLINE', mode: 'CLOUD_CONNECTED' }));
+  };
+
   const handlePrintStandee = () => {
     if (!qrCodeDataUrl) {
       setErrorMessage('QR code is not available yet. Please refresh the Station settings and try again.');
@@ -320,85 +341,83 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     printWindow.document.close();
   };
 
-  const handleVerifyPageKite = async () => {
-    if (!pagekiteSubdomain.trim() || !pagekiteSecret.trim()) {
-      setVerifyResult({
-        success: false,
-        message: 'Please provide both Kite Name and Secret Key before verifying.',
-      });
-      return;
-    }
+  const handleDownloadQr = () => {
+    if (!qrCodeDataUrl) return;
+    const a = document.createElement('a');
+    a.href = qrCodeDataUrl;
+    a.download = `autoprint-store-qr-${merchantId || 'store'}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setSuccessMessage('Store QR code image downloaded successfully.');
+  };
 
-    setVerifyingPagekite(true);
-    setVerifyResult(null);
-    setErrorMessage(null);
+  const handleGenerateQr = async () => {
     try {
-      const res = await apiFetch('/api/config/pagekite/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subdomain: pagekiteSubdomain.trim(),
-          secret: pagekiteSecret.trim(),
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.ok) {
-        setVerifyResult({
-          success: true,
-          message: data.message || 'PageKite credentials verified! Tunnel is ready to fly.',
-        });
-        if (data.publicUrl) setKioskUrl(data.publicUrl);
-      } else {
-        setVerifyResult({
-          success: false,
-          message: data.error || 'Verification failed. Please check your Secret Key.',
-        });
+      const res = await apiFetch('/api/config/public');
+      const json = await res.json();
+      if (json.ok && json.data?.qrCodeDataUrl) {
+        setQrCodeDataUrl(json.data.qrCodeDataUrl);
+        setSuccessMessage('Store QR code generated & updated.');
       }
-    } catch (err: any) {
-      setVerifyResult({
-        success: false,
-        message: err.message || 'Failed to connect to verification engine.',
-      });
-    } finally {
-      setVerifyingPagekite(false);
+    } catch {
+      setErrorMessage('Could not refresh store QR code.');
     }
   };
 
-  const handleTogglePageKite = async (enable: boolean) => {
-    if (enable && (!pagekiteSubdomain.trim() || !pagekiteSecret.trim())) {
-      setErrorMessage('Please enter Kite Name and Secret Key before starting the tunnel.');
-      return;
+  const handleViewQr = () => {
+    if (!qrCodeDataUrl) return;
+    const w = window.open('', '_blank');
+    if (w) {
+      const safeName = (shopName || 'AutoPrint Store').replace(/[<>&\"]/g, '');
+      w.document.write(`<!doctype html><html><head><title>${safeName} - QR</title><style>body{margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#0d0e12;color:#fff;font-family:Arial,sans-serif}h1{font-size:20px;margin-bottom:16px}img{max-width:80vmin;max-height:80vmin;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,0.5)}</style></head><body><h1>${safeName}</h1><img src="${qrCodeDataUrl}"/></body></html>`);
+      w.document.close();
     }
+  };
 
-    setSavingPagekite(true);
+
+
+  const handleGenerateReport = async () => {
+    setLoadingReport(true);
     setErrorMessage(null);
     try {
-      const res = await apiFetch('/api/config/pagekite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subdomain: pagekiteSubdomain.trim(),
-          secret: pagekiteSecret.trim(),
-          enabled: enable,
-        }),
-      });
-
+      const res = await apiFetch('/api/support/diagnostics/report');
+      if (!res.ok) throw new Error('Failed to generate diagnostic report.');
       const data = await res.json();
-      if (res.ok && data.ok) {
-        setPagekiteStatus(enable ? 'CONNECTING' : 'DISABLED');
-        if (data.data?.publicUrl) setKioskUrl(data.data.publicUrl);
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
-        setTimeout(() => loadAllSettings(), 2000);
-      } else {
-        throw new Error(data.error || 'Failed to update PageKite tunnel.');
-      }
+      setDiagnosticReport(data.report || '');
+      setSuccessMessage('Diagnostic report freshly generated.');
+      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to toggle PageKite tunnel.');
+      setErrorMessage(err.message || 'Could not retrieve diagnostics.');
     } finally {
-      setSavingPagekite(false);
+      setLoadingReport(false);
     }
+  };
+
+  const handleCopyReport = async () => {
+    if (!diagnosticReport) return;
+    try {
+      await navigator.clipboard.writeText(diagnosticReport);
+      setCopiedReport(true);
+      setTimeout(() => setCopiedReport(false), 2500);
+    } catch {
+      setErrorMessage('Could not copy report to clipboard.');
+    }
+  };
+
+  const handleSaveReport = () => {
+    if (!diagnosticReport) return;
+    const blob = new Blob([diagnosticReport], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `autoprint-diagnostics-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setSuccessMessage('Report saved to your computer.');
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   const tabs = [
@@ -406,6 +425,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     { id: 'pricing', label: 'Print Pricing', icon: DollarSign },
     { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'station', label: 'Station & Kiosk', icon: QrCode },
+    { id: 'diagnostics', label: 'Diagnostics', icon: ShieldCheck },
     { id: 'factory', label: 'Factory Reset', icon: RotateCcw },
     ...(userRole === 'admin'
       ? [{ id: 'users', label: 'Staff & Users', icon: Users, badge: 'Admin' }]
@@ -429,7 +449,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Global Save Button (for store, pricing, payments) */}
-        {activeTab !== 'users' && activeTab !== 'station' && activeTab !== 'factory' && (
+        {activeTab !== 'users' && activeTab !== 'station' && activeTab !== 'factory' && activeTab !== 'diagnostics' && (
           <button
             onClick={activeTab === 'payments' ? handleSavePayments : handleSaveStoreAndPricing}
             disabled={saving}
@@ -840,6 +860,42 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
             <div className="space-y-4">
+              <div className="p-4 bg-black/40 rounded-2xl border border-cyan-500/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-white">Connect AutoPrint Online</div>
+                    <div className="text-[11px] text-zinc-400">Optional cloud sync; local printing stays operational offline.</div>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${cloudStatus?.status === 'ONLINE' ? 'text-emerald-300 bg-emerald-500/10' : 'text-amber-300 bg-amber-500/10'}`}>
+                    {cloudStatus?.status || 'OFFLINE'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void generateCloudPairingCode().catch((err) => setErrorMessage(err.message))}
+                  className="w-full py-2 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/30 text-xs font-bold text-cyan-200"
+                >
+                  Generate Secure Pairing Code
+                </button>
+                {pairingCode && <div className="font-mono text-center text-lg tracking-widest text-cyan-200 select-all">{pairingCode}</div>}
+                <div className="flex gap-2">
+                  <input
+                    value={activationCode}
+                    onChange={(e) => setActivationCode(e.target.value.toUpperCase())}
+                    placeholder="AUTO-XXXX-XXXX"
+                    className="min-w-0 flex-1 px-3 py-2 rounded-xl bg-black/50 border border-white/10 text-xs text-white font-mono"
+                  />
+                  <button
+                    type="button"
+                    disabled={!activationCode}
+                    onClick={() => void activateCloud().catch((err) => setErrorMessage(err.message))}
+                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-xs font-bold text-white"
+                  >
+                    Connect
+                  </button>
+                </div>
+              </div>
+
               <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2">
                 <div className="text-xs text-zinc-400 font-semibold">Live Customer Portal URL:</div>
                 <div className="font-mono text-xs text-blue-300 bg-black/50 p-2.5 rounded-xl border border-white/5 select-all">
@@ -905,167 +961,141 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">
                 {kioskNumber} • SCAN TO PRINT
               </div>
+              <div className="mt-4 space-y-2">
+                <button
+                  type="button"
+                  onClick={handlePrintStandee}
+                  disabled={!qrCodeDataUrl}
+                  className="w-full rounded-xl bg-[#381E72] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#4b2a91] disabled:cursor-not-allowed disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print QR Standee</span>
+                </button>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleViewQr}
+                    disabled={!qrCodeDataUrl}
+                    className="rounded-xl bg-gray-100 px-3 py-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition-colors flex items-center justify-center gap-1"
+                  >
+                    <Eye className="w-3 h-3" />
+                    <span>View QR</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadQr}
+                    disabled={!qrCodeDataUrl}
+                    className="rounded-xl bg-gray-100 px-3 py-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition-colors flex items-center justify-center gap-1"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Download</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGenerateQr}
+                  className="w-full rounded-xl border border-gray-300 px-3 py-1.5 text-[11px] font-medium text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Generate / Refresh QR</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+
+        </div>
+      )}
+
+      {/* TAB: DIAGNOSTICS */}
+      {activeTab === 'diagnostics' && (
+        <div className="bg-[#141419] border border-white/10 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl">
+          <div className="border-b border-white/5 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-white">System Diagnostics & Telemetry</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Generate sanitized operational diagnostics to troubleshoot hardware, spooler, or network status.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={handlePrintStandee}
-                disabled={!qrCodeDataUrl}
-                className="mt-4 w-full rounded-xl bg-[#381E72] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#4b2a91] disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                onClick={handleGenerateReport}
+                disabled={loadingReport}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
               >
-                Print QR Standee
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingReport ? 'animate-spin' : ''}`} />
+                <span>{diagnosticReport ? 'Refresh Report' : 'Generate Report'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyReport}
+                disabled={!diagnosticReport}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-zinc-200 hover:text-white disabled:opacity-40 transition-all cursor-pointer"
+              >
+                {copiedReport ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedReport ? 'Copied' : 'Copy Report'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveReport}
+                disabled={!diagnosticReport}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-zinc-200 hover:text-white disabled:opacity-40 transition-all cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Save Report</span>
               </button>
             </div>
           </div>
 
-          {/* PageKite Remote Access Configuration Card */}
-          <div className="pt-6 border-t border-white/5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-emerald-400" />
-                  <h3 className="text-sm font-bold text-white">Remote Customer Access (PageKite Tunnel)</h3>
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                      pagekiteStatus === 'CONNECTED'
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : pagekiteStatus === 'CONNECTING'
-                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                        : pagekiteStatus === 'ERROR'
-                        ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                        : 'bg-zinc-800 text-zinc-400 border-white/5'
-                    }`}
-                  >
-                    {pagekiteStatus}
-                  </span>
-                </div>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Expose your kiosk server to the web so remote customers can upload print files from anywhere.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  id="btn-verify-pagekite"
-                  onClick={handleVerifyPageKite}
-                  disabled={verifyingPagekite || !pagekiteSubdomain.trim() || !pagekiteSecret.trim()}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:pointer-events-none text-xs font-bold text-white flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${verifyingPagekite ? 'animate-spin' : ''}`} />
-                  <span>{verifyingPagekite ? 'Testing Connection...' : 'Verify Tunnel'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  id="btn-toggle-pagekite"
-                  onClick={() => handleTogglePageKite(pagekiteStatus !== 'CONNECTED' && pagekiteStatus !== 'CONNECTING')}
-                  disabled={savingPagekite || verifyingPagekite || !pagekiteSubdomain.trim() || !pagekiteSecret.trim()}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-                    pagekiteStatus === 'CONNECTED' || pagekiteStatus === 'CONNECTING'
-                      ? 'bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30'
-                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20'
-                  }`}
-                >
-                  <Power className="w-3.5 h-3.5" />
-                  <span>
-                    {pagekiteStatus === 'CONNECTED' || pagekiteStatus === 'CONNECTING'
-                      ? 'Stop Tunnel'
-                      : 'Start Tunnel'}
-                  </span>
-                </button>
-              </div>
+          <div className="rounded-2xl border border-blue-500/20 bg-blue-950/20 p-4 text-xs text-blue-300 flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-white mb-0.5">Sanitized & Safe for Support</p>
+              <p className="text-zinc-400">
+                This diagnostic report contains strictly hardware, queue metrics, and system status. Passwords, payment secrets, private keys, and customer document contents are never included.
+              </p>
             </div>
-
-            {/* Inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-black/40 p-5 rounded-2xl border border-white/5">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <Globe className="w-3.5 h-3.5 text-zinc-400" />
-                  Kite Subdomain (Kite Name) *
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-500 select-none">
-                    https://
-                  </span>
-                  <input
-                    type="text"
-                    id="input-pagekite-subdomain"
-                    value={pagekiteSubdomain}
-                    onChange={(e) => setPagekiteSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ''))}
-                    placeholder="yourshop"
-                    className="w-full pl-20 pr-28 py-2.5 rounded-xl bg-black/50 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-mono"
-                  />
-                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-500 select-none">
-                    .pagekite.me
-                  </span>
-                </div>
-                <p className="text-[10px] text-zinc-500">
-                  Must match the Kite registered on your pagekite.net dashboard.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-zinc-400" />
-                  PageKite Secret Key *
-                </label>
-                <div className="relative">
-                  <input
-                    type={showSecret ? 'text' : 'password'}
-                    id="input-pagekite-secret"
-                    value={pagekiteSecret}
-                    onChange={(e) => setPagekiteSecret(e.target.value)}
-                    placeholder="Enter kite secret key"
-                    className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-black/50 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSecret(!showSecret)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white cursor-pointer"
-                  >
-                    {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <p className="text-[10px] text-zinc-500">
-                  Find your secret key in your account email or at pagekite.net/xml/
-                </p>
-              </div>
-            </div>
-
-            {/* Verification & Tunnel Feedback */}
-            {verifyResult && (
-              <div
-                className={`p-4 rounded-2xl border flex items-start gap-3 transition-all ${
-                  verifyResult.success
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                    : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
-                }`}
-              >
-                {verifyResult.success ? (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-                )}
-                <div className="text-xs space-y-1">
-                  <div className="font-bold">
-                    {verifyResult.success ? 'PageKite Verified Successfully' : 'PageKite Verification Failed'}
-                  </div>
-                  <div className="text-zinc-300 font-mono text-[11px] leading-relaxed">
-                    {verifyResult.message}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {pagekiteError && !verifyResult && (
-              <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-200 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-                <div className="text-xs">
-                  <div className="font-bold">PageKite Tunnel Error</div>
-                  <div className="text-zinc-300 text-[11px] mt-0.5 font-mono">{pagekiteError}</div>
-                </div>
-              </div>
-            )}
           </div>
+
+          {diagnosticReport ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <span>Sanitized Diagnostic Output</span>
+                <span className="font-mono text-[11px] text-zinc-500">Plaintext Format</span>
+              </div>
+              <pre className="p-5 rounded-2xl bg-black/60 border border-white/10 font-mono text-xs text-zinc-300 leading-relaxed overflow-x-auto whitespace-pre select-all shadow-inner">
+                {diagnosticReport}
+              </pre>
+            </div>
+          ) : (
+            <div className="p-12 text-center rounded-2xl border border-dashed border-white/10 bg-black/20">
+              <FileText className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+              <div className="text-sm font-bold text-zinc-300">No Report Generated Yet</div>
+              <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
+                Click &quot;Generate Report&quot; above to inspect AutoPrint version, spooler health, SQLite metrics, and queue status.
+              </p>
+              <button
+                type="button"
+                onClick={handleGenerateReport}
+                disabled={loadingReport}
+                className="mt-4 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white transition-colors cursor-pointer"
+              >
+                {loadingReport ? 'Collecting telemetry...' : 'Generate Report Now'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

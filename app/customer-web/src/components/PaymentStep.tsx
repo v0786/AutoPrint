@@ -427,7 +427,7 @@ export const PaymentStep: React.FC = () => {
         <RazorpayModal
           isOpen={isRazorpayOpen}
           onClose={() => setIsRazorpayOpen(false)}
-          onSuccess={(paymentId) => handleGatewaySuccess('razorpay', paymentId)}
+          onSuccess={handleGatewaySuccess}
         />
       )}
 

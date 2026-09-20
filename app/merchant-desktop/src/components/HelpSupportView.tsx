@@ -310,7 +310,7 @@ export const HelpSupportView: React.FC = () => {
                   <option value="PAYMENT_COMPLETED_JOB_MISSING">Payment Completed But Job Missing</option>
                   <option value="DOCUMENT_FAILED_PRINT">Document Spooling / Print Failure</option>
                   <option value="DASHBOARD_NOT_UPDATING">Merchant Dashboard Not Syncing</option>
-                  <option value="PAGEKITE_TUNNEL_ISSUE">PageKite / Online Tunnel Problem</option>
+                  <option value="CLOUD_SYNC_ISSUE">Cloud Sync / Online Connectivity Problem</option>
                   <option value="NODE_BACKEND_CRASH">Backend Service Error / Crash</option>
                   <option value="OTHER">Other System Problem</option>
                 </select>

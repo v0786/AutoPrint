@@ -131,6 +131,8 @@ export interface PrintOrder {
   pricing: PriceBreakdown;
   payment: PaymentDetails;
   jobStatus: JobStatus;
+  rawStatus?: string;
+  storagePath?: string;
   traceId?: string;
   queueVisible?: boolean;
   createdAt: string;

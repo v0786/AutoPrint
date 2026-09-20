@@ -125,4 +125,19 @@ export class SupportController {
       next(err);
     }
   }
+
+  public static async getSanitizedReport(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { DiagnosticCollector } = await import('../utils/diagnosticCollector.js');
+      const report = await DiagnosticCollector.generateSanitizedReport();
+      if (_req.headers.accept?.includes('text/plain')) {
+        res.type('text/plain').send(report);
+      } else {
+        res.json({ ok: true, report });
+      }
+    } catch (err) {
+      next(err);
+    }
+  }
 }
+

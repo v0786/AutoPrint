@@ -9,6 +9,7 @@ export const QrCodeModal: React.FC = () => {
   const { t } = useLanguage();
   const [copied, setCopied] = useState(false);
   const [portalQrUrl, setPortalQrUrl] = useState<string | null>(null);
+  const [customerPortalUrl, setCustomerPortalUrl] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (isQrModalOpen) {
@@ -18,6 +19,9 @@ export const QrCodeModal: React.FC = () => {
           if (json?.data?.qrCodeDataUrl) {
             setPortalQrUrl(json.data.qrCodeDataUrl);
           }
+          if (json?.data?.customerUrl) {
+            setCustomerPortalUrl(json.data.customerUrl);
+          }
         })
         .catch(() => {});
     }
@@ -25,13 +29,13 @@ export const QrCodeModal: React.FC = () => {
 
   if (!isQrModalOpen) return null;
 
-  const currentUrl = typeof window !== 'undefined'
+  const currentUrl = customerPortalUrl || (typeof window !== 'undefined'
     ? `${window.location.origin}${window.location.pathname}`
-    : 'https://autoprint.pagekite.me';
+    : 'https://autoprint.com');
 
   const shopName = currentShop?.name || 'AutoPrint Express Store';
   const shopNumber = currentShop ? currentShop.kioskNumber.replace(/Kiosk/gi, 'Shop') : 'Shop #01';
-  const qrUrl = portalQrUrl || currentShop?.upiDetails?.qrDataUrl || '/api/config/qr-code';
+  const qrUrl = portalQrUrl || '/api/config/qr-code';
 
   const handleCopy = () => {
     navigator.clipboard.writeText(currentUrl);

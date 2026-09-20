@@ -23,6 +23,8 @@ import { calculatePricing } from '../utils/pricing';
 import { parseCustomPageRange } from '../utils/helpers';
 import { CustomerApiClient } from '../services/apiClient';
 import { DEFAULT_OFFLINE_SHOP } from '../data/shops';
+import { getSupabaseClient, isSupabaseConfigured } from '../services/supabaseClient';
+
 
 interface PrintJobContextType {
   currentStep: AppStep;
@@ -118,8 +120,15 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Fetch real merchant online profile & dynamic printer-capacity workload from backend
   const refreshShopStatus = async () => {
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const routeMerchantId = window.location.pathname.match(/^\/store\/([^/]+)/)?.[1]
+        || urlParams.get('merchantId')
+        || urlParams.get('store');
+      const profileQuery = routeMerchantId
+        ? `?merchantId=${encodeURIComponent(decodeURIComponent(routeMerchantId))}`
+        : '';
       const [res, workloadRes] = await Promise.all([
-        fetch('/api/merchant/public-profile').catch(() => null),
+        fetch(`/api/merchant/public-profile${profileQuery}`).catch(() => null),
         fetch('/api/system/workload').catch(() => null),
       ]);
 
@@ -134,8 +143,13 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       if (res && res.ok) {
-        const json = await res.json();
-        if (json.ok && json.isAvailable && json.data) {
+        let json: any = null;
+        try {
+          json = await res.json();
+        } catch {
+          json = null;
+        }
+        if (json && json.ok && json.isAvailable && json.data) {
           const profile = json.data;
           const activeJobsCount = workloadData?.activeJobs ?? workloadData?.pendingJobs ?? 0;
           const waitMins = workloadData?.estimatedWaitMinutes ?? 2;
@@ -180,22 +194,78 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               juspayEnabled: false,
             },
           });
-        } else {
-          setIsShopOnline(false);
-          setShopStatusMessage('No shop is selected');
-          setCurrentShop(null);
+          return;
         }
-      } else {
-        setIsShopOnline(false);
-        setShopStatusMessage('No shop is selected');
-        setCurrentShop(null);
       }
+
+      // Cloud Fallback for Central Customer Website on Vercel
+      if (isSupabaseConfigured() && routeMerchantId) {
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          const cleanId = decodeURIComponent(routeMerchantId);
+          const { data: mData } = await supabase
+            .from('merchants')
+            .select('*')
+            .eq('merchant_id', cleanId)
+            .eq('status', 'ACTIVE')
+            .maybeSingle();
+
+          if (mData) {
+            setIsShopOnline(true);
+            setShopStatusMessage('Online');
+            setCurrentShop({
+              id: mData.merchant_id,
+              name: mData.store_name || mData.name || 'AutoPrint Store',
+              branch: mData.branch || 'Main Counter',
+              address: mData.address || 'Verified Shop Counter',
+              kioskNumber: mData.kiosk_number || 'Counter #01',
+              status: 'online',
+              isMerchantConfigured: true,
+              activePrinters: mData.selected_printer ? [mData.selected_printer] : ['AutoPrint Spooler'],
+              queueLength: 0,
+              averageWaitMins: 2,
+              rates: {
+                bwSingle: mData.rates?.bwSingle ?? 2.0,
+                bwDoublePerSide: mData.rates?.bwDoublePerSide ?? 1.5,
+                colorSingle: mData.rates?.colorSingle ?? 10.0,
+                colorDoublePerSide: mData.rates?.colorDoublePerSide ?? 8.0,
+                photoGlossy: mData.rates?.photoGlossy ?? 25.0,
+                a3Multiplier: mData.rates?.a3Multiplier ?? 2.0,
+                legalMultiplier: mData.rates?.legalMultiplier ?? 1.25,
+                letterMultiplier: mData.rates?.letterMultiplier ?? 1.0,
+                finishing: {
+                  staple: mData.rates?.finishing?.staple ?? 5.0,
+                  spiral: mData.rates?.finishing?.spiral ?? 40.0,
+                  hardcover: mData.rates?.finishing?.hardcover ?? 150.0,
+                  laminationPerSheet: mData.rates?.finishing?.laminationPerSheet ?? 20.0,
+                },
+              },
+              upiDetails: {
+                vpa: mData.payment_config?.upiId || '',
+                payeeName: mData.payment_config?.upiPayeeName || mData.store_name || mData.name,
+                qrDataUrl: mData.payment_config?.upiQrDataUrl || null,
+              },
+              paymentGateways: {
+                razorpayEnabled: Boolean(mData.payment_config?.razorpayKeyId),
+                razorpayKeyId: mData.payment_config?.razorpayKeyId,
+                juspayEnabled: false,
+              },
+            });
+            return;
+          }
+        }
+      }
+
+      setIsShopOnline(false);
+      setShopStatusMessage('No shop is selected');
+      setCurrentShop(null);
     } catch {
       setIsShopOnline(false);
       setShopStatusMessage('No shop is selected');
       setCurrentShop(null);
     }
   };
+
 
   useEffect(() => {
     refreshShopStatus();
@@ -354,6 +424,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         amountMinorUnits,
         currency: 'INR',
         printerName: currentShop?.activePrinters[0] || 'AutoPrint Spooler',
+        merchantId: currentShop?.id,
         traceId,
       });
 
@@ -365,7 +436,8 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const waitMins = currentShop?.averageWaitMins || 2;
       const estimatedTime = new Date(now.getTime() + waitMins * 60000);
 
-      // 2. Verify Razorpay server-side, or record the legacy UPI attempt.
+      // 2. Verify the payment server-side. Static/client-reported UPI success
+      // is intentionally unsupported because it cannot authorize printing.
       let upiTxnId = finalPayment.gatewayPaymentId || finalPayment.transactionId;
       if (finalPayment.method === 'razorpay') {
         if (!finalPayment.razorpayOrderId || !finalPayment.razorpaySignature || !finalPayment.gatewayPaymentId) {
@@ -378,19 +450,13 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           razorpaySignature: finalPayment.razorpaySignature,
         });
       } else if (backendPaymentMethod === 'UPI') {
-        upiTxnId = upiTxnId || `UPI/2026/${Date.now().toString().slice(-8)}`;
-        await CustomerApiClient.recordDigitalAttempt({
-          verificationCode: backendJob.verification.verificationCode,
-          status: 'SUCCESS',
-          gatewayRef: upiTxnId,
-          vpa: currentShop?.upiDetails.vpa,
-        }).catch((e) => console.warn('Digital attempt registration:', e));
+        throw new Error('UPI payment must be completed through the configured secure payment gateway. The job remains unpaid.');
       }
 
       const isInitiallyPaid = Boolean(finalPayment.gatewayPaymentId || finalPayment.paymentVerified);
 
       const initialJobStatus: JobStatus =
-        backendJob.status === 'PRINTED' || backendJob.status === 'READY_FOR_PICKUP' || backendJob.status === 'READY_FOR_HANDOVER'
+          backendJob.status === 'PRINTED' || backendJob.status === 'READY_FOR_PICKUP' || backendJob.status === 'READY_FOR_HANDOVER' || backendJob.status === 'READY_FOR_COLLECTION'
           ? 'ready'
           : backendJob.status === 'PRINTING'
           ? 'printing'
@@ -401,7 +467,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const newOrder: PrintOrder = {
         orderId: backendJob.id,
         collectionCode: backendJob.verification.formattedCode,
-        shopId: currentShop?.id || 'AP-01',
+        shopId: currentShop?.id || '',
         shopName: currentShop?.name || 'AutoPrint Station',
         kioskNumber: currentShop?.kioskNumber || 'Counter #01',
         file: uploadedFile,
@@ -414,6 +480,8 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           transactionId: upiTxnId,
         },
         jobStatus: initialJobStatus,
+        rawStatus: backendJob.status || 'PAID',
+        storagePath: backendJob.storagePath || backendJob.storage_path,
         traceId: backendJob.traceId || traceId,
         queueVisible: isQueueVisible,
         createdAt: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }),
@@ -427,10 +495,10 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // 3. Poll real job status from backend
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = setInterval(async () => {
-        const fresh: any = await CustomerApiClient.getJobById(backendJob.id);
+        const fresh: any = await CustomerApiClient.getJobById(backendJob.id, backendJob.customerAccessToken);
         if (fresh) {
           const isPaid = fresh.paymentStatus === 'PAID' || fresh.status === 'PAID';
-          if (fresh.status === 'READY_FOR_PICKUP' || fresh.status === 'PRINTED' || fresh.status === 'READY_FOR_HANDOVER') {
+          if (fresh.status === 'READY_FOR_PICKUP' || fresh.status === 'PRINTED' || fresh.status === 'READY_FOR_HANDOVER' || fresh.status === 'READY_FOR_COLLECTION') {
             setJobStatus('ready');
           } else if (fresh.status === 'PRINTING') {
             setJobStatus('printing');
@@ -442,6 +510,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             if (!prev) return null;
             return {
               ...prev,
+              rawStatus: fresh.status || fresh.printStatus || prev.rawStatus,
               payment: {
                 ...prev.payment,
                 paymentVerified: isPaid || prev.payment.paymentVerified,
@@ -449,7 +518,7 @@ export const PrintJobProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             };
           });
 
-          if (fresh.status === 'READY_FOR_PICKUP' || fresh.status === 'COLLECTED' || fresh.status === 'READY_FOR_HANDOVER') {
+          if (fresh.status === 'READY_FOR_PICKUP' || fresh.status === 'COLLECTED' || fresh.status === 'READY_FOR_HANDOVER' || fresh.status === 'READY_FOR_COLLECTION') {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           }
         }

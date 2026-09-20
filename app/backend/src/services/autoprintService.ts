@@ -1,9 +1,10 @@
 import fs from 'fs';
-import { randomUUID } from 'crypto';
+import crypto, { randomUUID } from 'crypto';
 import { CONFIG } from '../config/environment';
 import { PrintJobRequest, PrintJobResponse, PrintJobRow, CanonicalPrintSettings, AppError, PrintJobStatus } from '../types';
 import { jobRepository } from '../database/repositories/jobRepository';
 import { verificationRepository } from '../database/repositories/verificationRepository';
+import { LocalPrintJobRepository } from '../database/repositories/localPrintJobRepository';
 import { VerificationService } from './verificationService';
 import { StorageService } from './storageService';
 import { PdfOverlayService } from './pdfOverlayService';
@@ -12,6 +13,21 @@ import { auditLogger } from '../utils/auditLogger';
 import { logTrace, generateTraceId } from '../utils/traceLogger';
 import { generateSecureVerificationCode } from '../utils/crypto';
 import { MerchantRepository } from '../database/repositories/merchantRepository';
+import { TransportManager } from './transport/transportManager';
+import { SupabaseAdminClient } from './supabase/supabaseAdminClient';
+import { InstallationIdentityRepository } from '../database/repositories/installationIdentityRepository';
+
+async function updateScopedCloudJobStatus(jobId: string, status: string, fields: Record<string, unknown> = {}): Promise<void> {
+  const client = SupabaseAdminClient.getClient();
+  const identity = InstallationIdentityRepository.get();
+  if (!client || !identity) return;
+
+  const { error } = await client.from('print_jobs').update({ status, ...fields })
+    .eq('job_id', jobId)
+    .eq('merchant_id', identity.merchant_id)
+    .or(`device_id.is.null,device_id.eq.${identity.device_id}`);
+  if (error) throw error;
+}
 
 export class AutoPrintService {
   /**
@@ -97,6 +113,8 @@ export class AutoPrintService {
     }
 
     const id = `AP-${randomUUID().slice(0, 8).toUpperCase()}`;
+    const customerAccessToken = crypto.randomBytes(32).toString('hex');
+    const customerAccessTokenHash = crypto.createHash('sha256').update(customerAccessToken).digest('hex');
     const jobNo = jobRepository.getNextJobNumber();
     const canonicalSettings = this.resolveCanonicalPrintSettings(request);
     const copies = canonicalSettings.copies;
@@ -117,7 +135,7 @@ export class AutoPrintService {
       retries++;
     }
 
-    // 2. Save uploaded file if buffer is provided
+    // 2. Save uploaded file if buffer is provided or storagePath is given
     let uploadedFilePath = '';
     if (fileBuffer && fileBuffer.length > 0) {
       const saved = StorageService.saveUploadedFile(id, fileBuffer, request.fileName);
@@ -135,6 +153,19 @@ export class AutoPrintService {
           storageName: saved.fileName,
         },
       });
+    } else if (request.storagePath) {
+      uploadedFilePath = request.storagePath;
+      auditLogger.logEvent({
+        verificationCode: codeData.raw,
+        jobId: id,
+        jobNo,
+        action: 'FILE_UPLOADED',
+        actor: 'CUSTOMER_TERMINAL',
+        details: {
+          fileName: request.fileName,
+          storagePath: request.storagePath,
+        },
+      });
     }
 
     // 3. Create Job in Database FIRST (so verification foreign key is satisfied)
@@ -144,6 +175,8 @@ export class AutoPrintService {
       title,
       file_name: request.fileName,
       file_path: uploadedFilePath,
+      file_hash: request.fileHash || null,
+      customer_access_token_hash: customerAccessTokenHash,
       processed_file_path: null,
       customer_name: request.customerName || 'Walk-In Customer',
       customer_phone: request.customerPhone || null,
@@ -248,7 +281,7 @@ export class AutoPrintService {
     // NOTE: Print is NOT dispatched here.
     // Printing is strictly decoupled from job creation and will only be triggered after payment confirmation.
 
-    return this.mapRowToResponse(jobRow, verification);
+    return { ...this.mapRowToResponse(jobRow, verification), customerAccessToken };
   }
 
   /**
@@ -567,18 +600,74 @@ export class AutoPrintService {
     const code = verification?.verificationCode || job.pickup_code || 'PENDING';
     const printSettings = this.normalizePrintSettings(job);
 
+    let localSourcePath = job.file_path;
+    if (job.file_path && (!fs.existsSync(job.file_path) || job.file_path.startsWith('print-documents/') || job.file_path.startsWith('printJobs/'))) {
+      try {
+        this.recordStatusTransition(jobId, job.status, 'DOWNLOADING', 'SYSTEM_AUTOPRINT', 'Downloading document from cloud storage');
+        jobRepository.updateStatus(jobId, 'DOWNLOADING' as any);
+        LocalPrintJobRepository.updateStatus(jobId, 'DOWNLOADING');
+
+        if (SupabaseAdminClient.isConfigured()) {
+          try {
+            await updateScopedCloudJobStatus(jobId, 'DOWNLOADING');
+          } catch {}
+        }
+
+        const transport = TransportManager.getTransport();
+        const downloadedBuffer = await transport.downloadDocument(job.file_path);
+
+        // SHA-256 File Hash Integrity Verification
+        if (job.file_hash) {
+          const actualHash = crypto.createHash('sha256').update(downloadedBuffer).digest('hex').toLowerCase();
+          const expectedHash = job.file_hash.trim().toLowerCase();
+          if (actualHash !== expectedHash) {
+            console.error(`[EXECUTE_PRINT] SHA-256 hash mismatch for job ${jobId}! Expected: ${expectedHash}, Actual: ${actualHash}`);
+            this.recordStatusTransition(jobId, 'DOWNLOADING', 'FILE_VERIFICATION_FAILED', 'SYSTEM_AUTOPRINT', `SHA-256 integrity mismatch. Expected ${expectedHash}, got ${actualHash}`);
+            jobRepository.updateStatus(jobId, 'FILE_VERIFICATION_FAILED' as any);
+            LocalPrintJobRepository.updateStatus(jobId, 'FILE_VERIFICATION_FAILED', `SHA-256 mismatch (expected ${expectedHash}, got ${actualHash})`);
+            if (SupabaseAdminClient.isConfigured()) {
+              try {
+                await updateScopedCloudJobStatus(jobId, 'FILE_VERIFICATION_FAILED', { error_message: 'File integrity verification failed (SHA-256 mismatch).' });
+              } catch {}
+            }
+            return this.getJobById(jobId);
+          }
+          console.log(`[EXECUTE_PRINT] SHA-256 hash verified for job ${jobId}: ${actualHash} (MATCH)`);
+        }
+
+        this.recordStatusTransition(jobId, 'DOWNLOADING', 'FILE_READY', 'SYSTEM_AUTOPRINT', 'Document downloaded and verified');
+        jobRepository.updateStatus(jobId, 'FILE_READY' as any);
+        LocalPrintJobRepository.updateStatus(jobId, 'FILE_READY');
+
+        const tempLocal = StorageService.saveUploadedFile(job.id, downloadedBuffer, job.file_name);
+        localSourcePath = tempLocal.absolutePath;
+        jobRepository.updateProcessedFilePath(job.id, localSourcePath);
+      } catch (dlErr: any) {
+        console.error(`[EXECUTE_PRINT] Failed downloading remote file for job ${jobId}:`, dlErr);
+        this.recordStatusTransition(jobId, 'DOWNLOADING', 'DOWNLOAD_FAILED', 'SYSTEM_AUTOPRINT', dlErr.message);
+        jobRepository.updateStatus(jobId, 'DOWNLOAD_FAILED' as any);
+        LocalPrintJobRepository.updateStatus(jobId, 'DOWNLOAD_FAILED', dlErr.message);
+        if (SupabaseAdminClient.isConfigured()) {
+          try {
+            await updateScopedCloudJobStatus(jobId, 'DOWNLOAD_FAILED', { error_message: dlErr.message });
+          } catch {}
+        }
+        return this.getJobById(jobId);
+      }
+    }
+
     let filePath = job.processed_file_path;
     const isProcessedMissingOrEmpty =
       !filePath ||
       !fs.existsSync(filePath) ||
       (fs.statSync(filePath).size < 1500 &&
-        job.file_path &&
-        fs.existsSync(job.file_path) &&
-        fs.statSync(job.file_path).size > 10000);
+        localSourcePath &&
+        fs.existsSync(localSourcePath) &&
+        fs.statSync(localSourcePath).size > 10000);
 
-    if (isProcessedMissingOrEmpty && job.file_path && fs.existsSync(job.file_path)) {
+    if (isProcessedMissingOrEmpty && localSourcePath && fs.existsSync(localSourcePath)) {
       try {
-        const rawBuffer = fs.readFileSync(job.file_path);
+        const rawBuffer = fs.readFileSync(localSourcePath);
         const watermarkResult = await PdfOverlayService.embedVerificationStamp(
           job.id,
           rawBuffer,
@@ -595,10 +684,10 @@ export class AutoPrintService {
         jobRepository.updateProcessedFilePath(job.id, filePath);
       } catch (err) {
         console.warn(`[EXECUTE_PRINT] Re-processing file for job ${jobId} failed:`, err);
-        filePath = job.file_path;
+        filePath = localSourcePath;
       }
     } else if (!filePath) {
-      filePath = job.file_path;
+      filePath = localSourcePath;
     }
 
     try {

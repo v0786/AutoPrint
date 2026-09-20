@@ -23,7 +23,12 @@ import { RefundController } from './controllers/refundController';
 import { SetupController } from './controllers/setupController';
 import { SystemGuardController } from './controllers/systemGuardController';
 import { PrinterService } from './services/printerService';
-import { tunnelService } from './services/tunnelService';
+import { localAccessService } from './services/localAccessService';
+import { SupabaseMerchantAgentService } from './services/supabase/supabaseMerchantAgentService';
+import { SupabaseAdminClient } from './services/supabase/supabaseAdminClient';
+import { CloudController } from './controllers/cloudController';
+import { MerchantRepository } from './database/repositories/merchantRepository';
+
 
 import { requireAuth, requireAdmin, optionalAuth } from './middleware/auth';
 import { createRateLimiter } from './middleware/rateLimiter';
@@ -31,12 +36,14 @@ import { createRateLimiter } from './middleware/rateLimiter';
 // 1. Initialize data storage directories and database
 ensureDataDirectories();
 initDatabase();
+if (MerchantRepository.getPrimaryMerchant()) {
+  MerchantRepository.getInstallationIdentity();
+}
 
 const app = express();
 
-// 2. CORS configuration (production safe with exact domain validation)
+// 2. CORS configuration
 const allowedOrigins = new Set(CONFIG.CORS_ORIGINS);
-const configuredPagekite = `https://${(CONFIG.PAGEKITE.subdomain || 'autoprint').toLowerCase().trim()}.${CONFIG.PAGEKITE.domain || 'pagekite.me'}`;
 
 app.use(
   cors({
@@ -46,8 +53,7 @@ app.use(
         allowedOrigins.has('*') ||
         allowedOrigins.has(origin) ||
         origin.startsWith('http://localhost:') ||
-        origin.startsWith('http://127.0.0.1:') ||
-        origin === configuredPagekite
+        origin.startsWith('http://127.0.0.1:')
       ) {
         return callback(null, true);
       }
@@ -72,7 +78,6 @@ const healthHandler = (_req: express.Request, res: express.Response) => {
   }
 
   const storageHealthy = fs.existsSync(PATHS.DATA_DIR) && fs.existsSync(PATHS.DB_DIR);
-  const tunnelState = tunnelService.getTunnelState();
   const status = dbHealthy && storageHealthy ? 200 : 503;
 
   res.status(status).json({
@@ -86,7 +91,6 @@ const healthHandler = (_req: express.Request, res: express.Response) => {
     apiBaseUrl: CONFIG.API_BASE_URL,
     customerWeb: 'running',
     merchantWeb: 'running',
-    pagekite: tunnelState.status.toLowerCase(),
     datastore: storageHealthy ? 'ready' : 'degraded',
     version: CONFIG.APP_VERSION,
     timestamp: new Date().toISOString(),
@@ -107,7 +111,15 @@ const healthHandler = (_req: express.Request, res: express.Response) => {
       merchant: CONFIG.MERCHANT_PORT,
       customer: CONFIG.CUSTOMER_PORT,
     },
-    customerUrl: tunnelService.getActiveCustomerUrl(),
+    customerUrl: localAccessService.getActiveCustomerUrl(),
+    localPrinting: {
+      operational: dbHealthy && storageHealthy,
+      mode: 'LOCAL',
+    },
+    cloud: {
+      configured: SupabaseAdminClient.isConfigured(),
+      status: SupabaseAdminClient.isConfigured() ? 'OPTIONAL' : 'OFFLINE',
+    },
   });
 };
 
@@ -145,17 +157,20 @@ const authLimiter = createRateLimiter({
 const api = express.Router();
 api.get('/health', healthHandler);
 api.get('/config/runtime', runtimeConfigHandler);
+api.get('/cloud/status', CloudController.getStatus);
+api.post('/cloud/activation/code', requireAdmin, CloudController.createActivationCode);
+api.post('/cloud/activation/activate', requireAdmin, CloudController.activate);
 api.get('/setup/status', SetupController.getStatus);
 api.post('/setup/create-first-user', SetupController.createFirstUser);
 
 // Job Management Routes (supports multipart file upload)
 api.post('/jobs', upload.single('file'), JobController.submitJob);
 api.get('/jobs', requireAuth, JobController.getAllJobs);
-api.get('/jobs/:id', JobController.getJobById);
+api.get('/jobs/:id', optionalAuth, JobController.getJobById);
 api.patch('/jobs/:id/status', requireAuth, JobController.updateJobStatus);
 api.post('/jobs/:id/cancel', requireAuth, JobController.cancelJob);
-api.post('/jobs/:id/confirm-cash', optionalAuth, JobController.confirmCash);
-api.post('/jobs/:id/print', optionalAuth, JobController.triggerPrint);
+api.post('/jobs/:id/confirm-cash', requireAuth, JobController.confirmCash);
+api.post('/jobs/:id/print', requireAuth, JobController.triggerPrint);
 api.delete('/jobs/:id', requireAdmin, JobController.deleteJob);
 
 // Verification & Staff Desk Routes
@@ -178,7 +193,7 @@ api.put('/merchant/profile', requireAuth, MerchantController.updateProfile);
 api.post('/merchant/profile', requireAuth, MerchantController.updateProfile);
 api.get('/merchant/public-profile', MerchantController.getPublicProfile);
 api.post('/merchant/payment-receiver', requireAdmin, MerchantController.updatePaymentReceiver);
-api.post('/merchant/printer', requireAuth, MerchantController.updatePrinter);
+api.post('/merchant/printer', optionalAuth, MerchantController.updatePrinter);
 api.post('/merchant/toggle-online', requireAuth, MerchantController.toggleOnline);
 
 // Admin User Management Routes (RBAC Protected)
@@ -206,8 +221,6 @@ api.post('/system/guard/:command', requireAdmin, SystemGuardController.command);
 // System Configuration & QR Ingress Routes
 api.get('/config/public', ConfigController.getPublicConfig);
 api.get('/config/qr-code', ConfigController.getQrCodeImage);
-api.post('/config/pagekite', optionalAuth, ConfigController.updatePageKiteConfig);
-api.post('/config/pagekite/verify', optionalAuth, ConfigController.verifyPageKiteConfig);
 
 // Customer Feedback & Intelligence Routes
 api.get('/feedback/eligibility/:code', FeedbackController.checkEligibility);
@@ -222,6 +235,7 @@ api.get('/support/tickets', requireAuth, SupportController.getAllTickets);
 api.get('/support/tickets/:id', requireAuth, SupportController.getTicketById);
 api.patch('/support/tickets/:id/status', requireAuth, SupportController.updateTicketStatus);
 api.get('/support/diagnostics/preview', requireAuth, SupportController.previewDiagnostics);
+api.get('/support/diagnostics/report', optionalAuth, SupportController.getSanitizedReport);
 api.get('/support/sync/status', requireAuth, SupportController.getSyncStatus);
 
 // Refund Management Routes
@@ -241,7 +255,25 @@ api.get('/printers', optionalAuth, async (req, res, next) => {
   }
 });
 
+// Hardware Self-Test Print Route
+api.post('/printers/test', optionalAuth, async (req, res, next) => {
+  try {
+    const targetPrinter = req.body?.printerName || req.body?.printerId || undefined;
+    const result = await PrinterService.generateAndDispatchTestSheet(targetPrinter);
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Cloud Activation & Status Routes (V2 Optional Cloud Sync)
+api.get('/cloud/status', optionalAuth, CloudController.getStatus);
+api.post('/cloud/activation/code', requireAdmin, CloudController.createActivationCode);
+api.post('/cloud/activation/activate', requireAdmin, CloudController.activate);
+api.post('/cloud/pairing-code', requireAdmin, CloudController.createActivationCode);
+
 app.use(CONFIG.API_PREFIX, api);
+
 
 // 5. Static Frontend Hosting for Production / Local Deployment
 const possibleMerchantPaths = [
@@ -280,9 +312,11 @@ app.use(errorHandler);
 
 // 7. Start Server
 const server = app.listen(CONFIG.PORT, '0.0.0.0', () => {
-  if (CONFIG.PAGEKITE.enabled) {
-    tunnelService.startTunnel();
-  }
+  // Start Merchant AutoPrint Agent (Supabase Realtime sync & local spooler dispatch)
+  SupabaseMerchantAgentService.start().catch((err) => {
+    console.warn('[AUTOPRINT] Merchant AutoPrint Agent startup warning:', err);
+  });
+
   const banner = [
     '==================================================================',
     '       AUTOPRINT PRINT MANAGEMENT & VERIFICATION SERVER           ',
@@ -296,7 +330,7 @@ const server = app.listen(CONFIG.PORT, '0.0.0.0', () => {
     ` [Customer Kiosk] : http://localhost:${CONFIG.CUSTOMER_PORT}`,
     ` [Merchant Desk]  : http://localhost:${CONFIG.MERCHANT_PORT}`,
     ` [Datastore Root] : ${PATHS.DATA_DIR}`,
-    ` [Public Ingress] : ${tunnelService.getActiveCustomerUrl()}`,
+    ` [Public Ingress] : ${localAccessService.getActiveCustomerUrl()}`,
     ` [Environment]    : ${CONFIG.NODE_ENV}`,
     ` [Currency]       : ${CONFIG.CURRENCY}`,
     '==================================================================',
@@ -307,6 +341,11 @@ const server = app.listen(CONFIG.PORT, '0.0.0.0', () => {
 // 8. Graceful Shutdown
 function handleShutdown(signal: string): void {
   console.log(`\n[AUTOPRINT] Received ${signal}. Starting graceful shutdown...`);
+  try {
+    SupabaseMerchantAgentService.stop();
+  } catch (e) {
+    console.warn('[AUTOPRINT] Merchant Agent stop warning:', e);
+  }
   server.close(() => {
     console.log('[AUTOPRINT] HTTP server closed.');
     try {

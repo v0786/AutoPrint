@@ -3,7 +3,7 @@
     AutoPrint / QRPrint Production Windows Installation Wizard
 .DESCRIPTION
     Interactive installation wizard for AutoPrint. Handles port configuration (5000/8000/7000),
-    PageKite public customer ingress setup, datastore hierarchy setup, dependency installation,
+    LAN/cloud customer access setup, datastore hierarchy setup, dependency installation,
     TypeScript compilation, printer detection, shortcut creation, and automated verification.
 #>
 
@@ -43,6 +43,7 @@ Write-Host "  STEP 1: System Requirements & Runtime Validation" -ForegroundColor
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host ""
 
+$defaultInstall = if (Test-Path "E:\QRPrint\AutoPrint") { "E:\QRPrint\AutoPrint" } else { (Split-Path $PSScriptRoot -Parent) }
 $prereqsOk = Test-SystemPrerequisites -TargetAppDir $defaultInstall
 if (-not $prereqsOk) {
     Write-Host ""
@@ -62,7 +63,6 @@ Write-Host "  STEP 2: Installation & Datastore Paths" -ForegroundColor Cyan
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host ""
 
-$defaultInstall = if (Test-Path "E:\QRPrint\AutoPrint") { "E:\QRPrint\AutoPrint" } else { (Split-Path $PSScriptRoot -Parent) }
 $installDir = Read-Host "  Installation Directory [Default: $defaultInstall]"
 if ([string]::IsNullOrWhiteSpace($installDir)) { $installDir = $defaultInstall }
 
@@ -160,47 +160,7 @@ $merchantPort = Verify-PortNoConflict "Merchant Desktop" $merchantPort
 $customerPort = Verify-PortNoConflict "Customer Kiosk" $customerPort
 
 # =============================================================================
-# 5. PAGEKITE INTERNET ACCESS CONFIGURATION
-# =============================================================================
-Write-Host ""
-Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
-Write-Host "  STEP 4: Customer Internet Access & PageKite Ingress" -ForegroundColor Cyan
-Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
-Write-Host ""
-Write-Host "  PageKite allows customers to scan your QR code and upload print files" -ForegroundColor White
-Write-Host "  from mobile data (4G/5G) or external Wi-Fi without router port-forwarding." -ForegroundColor Gray
-Write-Host ""
-Write-Host "  Do you want Internet access for customers through PageKite?" -ForegroundColor White
-Write-Host "    [1] Yes - Configure PageKite Tunnel (Recommended)" -ForegroundColor Green
-Write-Host "    [2] No  - Local Network / LAN Only" -ForegroundColor Gray
-Write-Host ""
-
-$pkChoice = Read-Host "  Selection [Default: 1]"
-if ([string]::IsNullOrWhiteSpace($pkChoice)) { $pkChoice = "1" }
-
-$pagekiteEnabled = $false
-$pagekiteName = ""
-$pagekiteSecret = ""
-
-if ($pkChoice -eq "1" -or $pkChoice -match "^[Yy]") {
-    $pagekiteEnabled = $true
-    $pagekiteName = Read-Host "  Enter PageKite Subdomain Name (e.g. quickprint-delhi)"
-    if ([string]::IsNullOrWhiteSpace($pagekiteName)) {
-        $pagekiteName = "autoprint-kiosk-" + (Get-Random -Minimum 1000 -Maximum 9999)
-        Write-Host "  Assigned automatic subdomain: $pagekiteName.pagekite.me" -ForegroundColor Cyan
-    }
-    
-    # Prompt for secret securely
-    $secPass = Read-Host -Prompt "  Enter PageKite Auth Secret (Press Enter to skip if using public test)" -AsSecureString
-    $pagekiteSecret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secPass))
-    
-    Write-InstallerLog "PageKite configured: https://$pagekiteName.pagekite.me" -Level "SUCCESS"
-} else {
-    Write-InstallerLog "PageKite disabled. Customer access will use Local LAN IP." -Level "INFO"
-}
-
-# =============================================================================
-# 6. PRINTER CONFIGURATION
+# 5. PRINTER CONFIGURATION
 # =============================================================================
 Write-Host ""
 Write-Host "-------------------------------------------------------------------------------" -ForegroundColor DarkCyan
@@ -325,8 +285,6 @@ foreach ($dir in $requiredDirs) {
 Write-InstallerLog "Datastore directory hierarchy initialized." -Level "SUCCESS"
 
 # Generate .env configuration
-$publicCustUrl = if ($pagekiteEnabled -and $pagekiteName) { "https://$pagekiteName.pagekite.me" } else { "http://localhost:$customerPort" }
-
 $envContent = @"
 # AutoPrint / QRPrint Centralized Runtime Configuration
 PORT=$backendPort
@@ -336,18 +294,14 @@ NODE_ENV=development
 API_PREFIX=/api
 MAX_DIGITAL_ATTEMPTS=3
 HMAC_SECRET=AP_VERIFY_HMAC_SECURE_2026_CHANGE_THIS_IN_PRODUCTION
-CORS_ORIGIN=http://localhost:$customerPort,http://localhost:$merchantPort,http://localhost:$backendPort,https://$pagekiteName.pagekite.me
+CORS_ORIGIN=http://localhost:$customerPort,http://localhost:$merchantPort,http://localhost:$backendPort
 CURRENCY=INR
 MAX_FILE_SIZE_MB=50
 AUTOPRINT_DATA_DIR=$dataDir
 DEFAULT_PRINTER=$selectedPrinter
 
-# PageKite Dynamic Customer Ingress
-PAGEKITE_ENABLED=$($pagekiteEnabled.ToString().ToLower())
-PAGEKITE_NAME=$pagekiteName
-PAGEKITE_DOMAIN=pagekite.me
-PAGEKITE_SECRET=$pagekiteSecret
-CUSTOMER_PUBLIC_URL=$publicCustUrl
+# Optional hosted deployment URL. Leave empty for LAN-only operation.
+AUTOPRINT_CLOUD_URL=
 "@
 
 Set-Content -Path "$installDir\.env" -Value $envContent -Force

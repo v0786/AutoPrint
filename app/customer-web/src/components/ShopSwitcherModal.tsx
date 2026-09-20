@@ -3,9 +3,41 @@ import { usePrintJob } from '../context/PrintJobContext';
 import { Store, MapPin, CheckCircle2, X, QrCode, Printer, Clock, CreditCard, ShieldCheck, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DEFAULT_SHOP_ID } from '../data/shops';
+import { getSupabaseClient, isSupabaseConfigured } from '../services/supabaseClient';
 
 export const ShopSwitcherModal: React.FC = () => {
   const { isShopModalOpen, setShopModalOpen, setQrModalOpen, currentShop, isShopOnline, connectShop } = usePrintJob();
+  const [activeStores, setActiveStores] = React.useState<Array<{ id: string; name: string; branch: string }>>([]);
+
+  React.useEffect(() => {
+    if (!isShopModalOpen) return;
+    if (isSupabaseConfigured()) {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        (async () => {
+          try {
+            const { data } = await supabase
+              .from('merchants')
+              .select('merchant_id, store_name, name, branch')
+              .eq('status', 'ACTIVE');
+            if (data && Array.isArray(data)) {
+              setActiveStores(
+                data.map((m: any) => ({
+                  id: m.merchant_id,
+                  name: m.store_name || m.name || 'AutoPrint Store',
+                  branch: m.branch || 'Main Counter',
+                }))
+              );
+            }
+          } catch {
+            // Ignore fetch error
+          }
+        })();
+      }
+    }
+  }, [isShopModalOpen]);
+
+
 
   if (!isShopModalOpen) return null;
 
@@ -77,7 +109,39 @@ export const ShopSwitcherModal: React.FC = () => {
                   Connect Active Shop
                 </button>
               </div>
+
+              {activeStores.length > 0 && (
+                <div className="space-y-2 pt-3 text-left border-t border-white/10">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    Or Select An Available Print Shop:
+                  </div>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {activeStores.map((store) => (
+                      <button
+                        key={store.id}
+                        onClick={() => {
+                          window.history.pushState({}, '', `/store/${encodeURIComponent(store.id)}`);
+                          connectShop(store.id);
+                          setShopModalOpen(false);
+                        }}
+                        className="w-full p-3 rounded-xl bg-black/40 hover:bg-white/10 border border-white/5 hover:border-[#D0BCFF]/40 text-left transition-all flex items-center justify-between group cursor-pointer"
+                      >
+                        <div>
+                          <div className="text-xs font-bold text-white group-hover:text-[#D0BCFF] transition-colors">
+                            {store.name}
+                          </div>
+                          <div className="text-[10px] text-zinc-400">{store.branch}</div>
+                        </div>
+                        <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                          Select
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
+
           ) : (
             /* Single Scanned Shop Details Card */
             <div className="p-5 rounded-3xl bg-[#381E72]/40 border border-[#D0BCFF]/40 shadow-xl shadow-[#D0BCFF]/10 space-y-4">

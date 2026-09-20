@@ -31,7 +31,7 @@ AutoPrint/
 │   ├── backend/                  # Express REST API, SQLite DB, Printer Spooler (:5000)
 │   │   ├── src/
 │   │   │   ├── config/           # Environment defaults and path resolutions
-│   │   │   ├── connectors/       # Optional PageKite reverse proxy connector
+│   │   │   ├── connectors/       # External integration adapters
 │   │   │   ├── controllers/      # Route handlers for jobs, printers, auth, setup
 │   │   │   ├── database/         # SQLite schema initialization and repositories
 │   │   │   ├── middleware/       # Bearer auth, rate limiting, error handlers
@@ -58,7 +58,7 @@ AutoPrint/
 │   ├── Program.cs                # System tray host, process supervisor, menu
 │   └── app.manifest              # DPI awareness and execution level
 ├── installer/                    # Inno Setup 6 packaging scripts (AutoPrint.iss)
-├── tools/                        # Bundled binaries (SumatraPDF, PageKite)
+├── tools/                        # Bundled binaries and system utilities
 ├── docs/                         # Canonical SDLC documentation
 └── package.json                  # Root orchestration scripts
 ```
@@ -76,7 +76,7 @@ All endpoints return JSON responses conforming to `{ ok: boolean, data?: any, er
 * `GET /api/jobs/:id`
   * **Response**: Real-time status (`QUEUED`, `PRINTED`, `FAILED`, `COLLECTED`).
 * `GET /api/config/public`
-  * **Response**: Shop name, currency, paper rates, and LAN/PageKite customer URL.
+  * **Response**: Shop name, currency, paper rates, and hosted-store or LAN customer URL.
 * `GET /api/config/qr-code`
   * **Response**: PNG data URL or SVG vector of the counter standee QR code.
 

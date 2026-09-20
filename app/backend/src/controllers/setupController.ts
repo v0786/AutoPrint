@@ -14,7 +14,9 @@ const CreateFirstUserSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string().min(1, 'Please confirm your password'),
   rememberMe: z.boolean().optional(),
-  shopName: z.string().trim().optional(),
+  shopName: z.string().trim().min(2).optional(),
+  phone: z.string().trim().max(30).optional(),
+  mobileNumber: z.string().trim().max(30).optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Passwords do not match.',
   path: ['confirmPassword'],
@@ -62,6 +64,7 @@ export class SetupController {
           username: parsed.username || undefined,
           password: parsed.password,
           shopName: parsed.shopName,
+          phone: parsed.phone || parsed.mobileNumber,
         });
       } catch (repoErr: any) {
         if (repoErr.code === 'SETUP_ALREADY_COMPLETED' || repoErr.message === 'SETUP_ALREADY_COMPLETED') {
@@ -97,6 +100,9 @@ export class SetupController {
             kioskNumber: merchant.kiosk_number,
             selectedPrinter: merchant.selected_printer,
             isOnline: Boolean(merchant.is_online),
+            merchantId: merchant.merchant_id,
+            deviceId: merchant.device_id,
+            installationId: merchant.installation_id,
           },
         },
       });

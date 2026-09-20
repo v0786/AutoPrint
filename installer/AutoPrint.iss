@@ -7,7 +7,7 @@
 #define MyAppName "AutoPrint Express"
 #define MyAppVersion "2.0.0"
 #define MyAppPublisher "AutoPrint Engineering"
-#define MyAppURL "https://autoprint.pagekite.me"
+#define MyAppURL "https://autoprint.com"
 #define MyAppExeName "AutoPrint.exe"
 
 [Setup]
@@ -73,10 +73,8 @@ Source: "..\dist-installer\payload\*"; DestDir: "{app}"; Flags: ignoreversion re
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon\autoprint.ico"
-Name: "{group}\AutoPrint Customer Tunnel (Manual)"; Filename: "{app}\Start-Customer-Tunnel.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon\autoprint.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\assets\icon\autoprint.ico"
-Name: "{autodesktop}\AutoPrint Customer Tunnel (Manual)"; Filename: "{app}\Start-Customer-Tunnel.cmd"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\assets\icon\autoprint.ico"
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AutoPrint"; ValueData: """{app}\{#MyAppExeName}"" --startup"; Flags: uninsdeletevalue; Tasks: startwithwindows
@@ -92,11 +90,6 @@ var
   RbCustomPorts: TRadioButton;
   LblBackendPort, LblMerchantPort, LblCustomerPort: TLabel;
   EdtBackendPort, EdtMerchantPort, EdtCustomerPort: TEdit;
-
-  PageKitePage: TWizardPage;
-  ChkEnablePageKite: TCheckBox;
-  LblSubdomain, LblSecret: TLabel;
-  EdtSubdomain, EdtSecret: TEdit;
 
   PrerequisitesVerified: Boolean;
   IsReinstallDetected: Boolean;
@@ -403,12 +396,6 @@ begin
   end;
 end;
 
-procedure ChkPageKiteClick(Sender: TObject);
-begin
-  EdtSubdomain.Enabled := ChkEnablePageKite.Checked;
-  EdtSecret.Enabled := ChkEnablePageKite.Checked;
-end;
-
 procedure InitializeWizard;
 begin
   // 1. Application Data Directory Page (C:\ProgramData\AutoPrint)
@@ -491,50 +478,6 @@ begin
   EdtCustomerPort.Text := '7000';
   EdtCustomerPort.Enabled := False;
 
-  // 3. PageKite Configuration Page
-  PageKitePage := CreateCustomPage(
-    PortConfigPage.ID,
-    'Customer Remote Access (Optional PageKite Setup)',
-    'Configure PageKite to optionally expose the customer kiosk over the internet.'
-  );
-
-  ChkEnablePageKite := TCheckBox.Create(PageKitePage);
-  ChkEnablePageKite.Parent := PageKitePage.Surface;
-  ChkEnablePageKite.Top := ScaleY(10);
-  ChkEnablePageKite.Left := ScaleX(10);
-  ChkEnablePageKite.Width := PageKitePage.SurfaceWidth - ScaleX(20);
-  ChkEnablePageKite.Caption := 'Configure PageKite for Customer Online Access now (Optional)';
-  ChkEnablePageKite.Checked := False;
-  ChkEnablePageKite.OnClick := @ChkPageKiteClick;
-
-  LblSubdomain := TLabel.Create(PageKitePage);
-  LblSubdomain.Parent := PageKitePage.Surface;
-  LblSubdomain.Top := ScaleY(45);
-  LblSubdomain.Left := ScaleX(30);
-  LblSubdomain.Caption := 'PageKite Kite Name:';
-
-  EdtSubdomain := TEdit.Create(PageKitePage);
-  EdtSubdomain.Parent := PageKitePage.Surface;
-  EdtSubdomain.Top := ScaleY(42);
-  EdtSubdomain.Left := ScaleX(230);
-  EdtSubdomain.Width := ScaleX(180);
-  EdtSubdomain.Text := '';
-  EdtSubdomain.Enabled := False;
-
-  LblSecret := TLabel.Create(PageKitePage);
-  LblSecret.Parent := PageKitePage.Surface;
-  LblSecret.Top := ScaleY(75);
-  LblSecret.Left := ScaleX(30);
-  LblSecret.Caption := 'PageKite Secret Key:';
-
-  EdtSecret := TEdit.Create(PageKitePage);
-  EdtSecret.Parent := PageKitePage.Surface;
-  EdtSecret.Top := ScaleY(72);
-  EdtSecret.Left := ScaleX(230);
-  EdtSecret.Width := ScaleX(180);
-  EdtSecret.Text := '';
-  EdtSecret.PasswordChar := '*';
-  EdtSecret.Enabled := False;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -564,32 +507,6 @@ begin
     end;
   end;
 
-  if CurPageID = PageKitePage.ID then
-  begin
-    if ChkEnablePageKite.Checked then
-    begin
-      if (Trim(EdtSubdomain.Text) = '') then
-      begin
-        MsgBox('Please enter your PageKite Kite Name (e.g. myprintshop.pagekite.me).', mbError, MB_OK);
-        Result := False;
-        Exit;
-      end;
-
-      if (Pos(' ', EdtSubdomain.Text) > 0) or (Pos('&', EdtSubdomain.Text) > 0) or (Pos(';', EdtSubdomain.Text) > 0) or (Pos('|', EdtSubdomain.Text) > 0) or (Pos('>', EdtSubdomain.Text) > 0) or (Pos('<', EdtSubdomain.Text) > 0) then
-      begin
-        MsgBox('PageKite Kite Name contains invalid characters or spaces.', mbError, MB_OK);
-        Result := False;
-        Exit;
-      end;
-
-      if (Trim(EdtSecret.Text) = '') then
-      begin
-        MsgBox('Please enter your PageKite Secret Key.', mbError, MB_OK);
-        Result := False;
-        Exit;
-      end;
-    end;
-  end;
 end;
 
 function EscapeJsonPath(const S: String): String;
@@ -696,8 +613,7 @@ end;
 // ===============================================================================
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  ConfigDir, ConfigFile, InstConfigFile, JsonContent, InstJsonContent, EnvContent, TargetDataDir, TestArg: String;
-  PKResultCode: Integer;
+  ConfigDir, ConfigFile, InstConfigFile, JsonContent, InstJsonContent, EnvContent, TargetDataDir: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -741,12 +657,6 @@ begin
         '  "database": {' + #13#10 +
         '    "path": "' + EscapeJsonPath(TargetDataDir + '\datastore\backend\database\autoprint.db') + '"' + #13#10 +
         '  },' + #13#10 +
-        '  "pagekite": {' + #13#10 +
-        '    "enabled": ' + BoolToJsStr(ChkEnablePageKite.Checked) + ',' + #13#10 +
-        '    "subdomain": "' + EdtSubdomain.Text + '",' + #13#10 +
-        '    "domain": "pagekite.me",' + #13#10 +
-        '    "secret": "' + EdtSecret.Text + '"' + #13#10 +
-        '  },' + #13#10 +
         '  "updatedAt": "' + GetDateTimeString('yyyy-mm-dd"T"hh:nn:ss"Z"', #0, #0) + '"' + #13#10 +
         '}';
 
@@ -759,10 +669,6 @@ begin
       '  "installed": true,' + #13#10 +
       '  "version": "' + ExpandConstant('{#MyAppVersion}') + '",' + #13#10 +
       '  "installedAt": "' + GetDateTimeString('yyyy-mm-dd"T"hh:nn:ss"Z"', #0, #0) + '",' + #13#10 +
-      '  "pagekiteConfigured": ' + BoolToJsStr(ChkEnablePageKite.Checked) + ',' + #13#10 +
-      '  "pagekiteName": "' + EdtSubdomain.Text + '",' + #13#10 +
-      '  "pagekiteSecret": "' + EdtSecret.Text + '",' + #13#10 +
-      '  "pagekitePublicUrl": "https://' + EdtSubdomain.Text + '.pagekite.me",' + #13#10 +
       '  "backendPort": ' + EdtBackendPort.Text + ',' + #13#10 +
       '  "customerPort": ' + EdtCustomerPort.Text + ',' + #13#10 +
       '  "merchantPort": ' + EdtMerchantPort.Text + #13#10 +
@@ -775,9 +681,6 @@ begin
       'BACKEND_PORT=' + EdtBackendPort.Text + #13#10 +
       'MERCHANT_PORT=' + EdtMerchantPort.Text + #13#10 +
       'CUSTOMER_PORT=' + EdtCustomerPort.Text + #13#10 +
-      'PAGEKITE_ENABLED=' + BoolToJsStr(ChkEnablePageKite.Checked) + #13#10 +
-      'PAGEKITE_NAME=' + EdtSubdomain.Text + #13#10 +
-      'PAGEKITE_SECRET=' + EdtSecret.Text + #13#10 +
       'AUTOPRINT_DATA_DIR=' + TargetDataDir + '\datastore' + #13#10 +
       'NODE_ENV=production' + #13#10;
 
@@ -809,37 +712,6 @@ begin
         'URL=http://localhost:' + EdtCustomerPort.Text + #13#10 +
         'IconFile=' + ExpandConstant('{app}\assets\icon\autoprint.ico') + #13#10 +
         'IconIndex=0' + #13#10, False);
-    end;
-
-    // Optional PageKite configuration
-    if ChkEnablePageKite.Checked then
-    begin
-      TestArg := '-SkipTest';
-      if MsgBox('PageKite configuration was saved.'#13#10#13#10 +
-                'Do you want to test the PageKite connection now?', mbConfirmation, MB_YESNO) = IDYES then
-      begin
-        TestArg := '-TestConnection';
-      end;
-
-      WizardForm.StatusLabel.Caption := 'Configuring PageKite CLI and secure tunnel settings...';
-      Exec('powershell.exe',
-        '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\installer\scripts\configure-pagekite.ps1') + '" ' +
-        '-AppDir "' + ExpandConstant('{app}') + '" ' +
-        '-KiteName "' + EdtSubdomain.Text + '" ' +
-        '-SecretKey "' + EdtSecret.Text + '" ' +
-        '-CustomerPort ' + EdtCustomerPort.Text + ' ' +
-        TestArg + ' -NonInteractive',
-        ExpandConstant('{app}'),
-        SW_HIDE,
-        ewWaitUntilTerminated,
-        PKResultCode
-      );
-
-      if PKResultCode <> 0 then
-      begin
-        MsgBox('Notice: PageKite configuration completed with notice code ' + IntToStr(PKResultCode) + '.'#13#10 +
-               'You can run or test your PageKite tunnel anytime via Start-Customer-Tunnel.cmd.', mbInformation, MB_OK);
-      end;
     end;
 
     // Final Readiness Verification

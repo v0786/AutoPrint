@@ -163,13 +163,13 @@ describe('=== AUTOPRINT RELIABILITY, SUPPORT, FEEDBACK & REFUND SUITE ===', () =
   });
 
   test('7. Secret & Credential Redaction Engine', () => {
-    const rawLog = 'User login with token: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9 and secret: super_secret_123456 and --service_on=http:myshop.pagekite.me:localhost:7000:pk_secret_abcdef999';
+    const rawLog = 'User login with token: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9 and secret: super_secret_123456 and --endpoint-token=service_secret_abcdef999';
     const redacted = LogRedactor.redactText(rawLog);
 
     assert.ok(!redacted.includes('super_secret_123456'));
     assert.ok(!redacted.includes('pk_secret_abcdef999'));
     assert.ok(redacted.includes('[REDACTED_TOKEN]'));
-    assert.ok(redacted.includes('[REDACTED_PAGEKITE_SECRET]'));
+    assert.ok(redacted.includes('[REDACTED_SERVICE_SECRET]'));
 
     const obj = {
       password: 'merchant_pass_123',

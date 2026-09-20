@@ -3,6 +3,7 @@ import { verificationRepository } from '../database/repositories/verificationRep
 import { DiagnosticCollector, SafeDiagnosticSummary } from '../utils/diagnosticCollector';
 import { LogRedactor } from '../utils/logRedactor';
 import { AppError } from '../types';
+import { MerchantRepository } from '../database/repositories/merchantRepository';
 
 export class SupportService {
   /**
@@ -71,7 +72,11 @@ export class SupportService {
 
     return supportRepository.createTicket({
       source: 'MERCHANT',
-      merchantId: params.merchantId || 'MERCHANT-01',
+      merchantId: params.merchantId || (
+        MerchantRepository.getPrimaryMerchant()
+          ? MerchantRepository.getInstallationIdentity()?.merchant_id
+          : undefined
+      ),
       category: params.category,
       priority: params.priority || 'HIGH',
       description: LogRedactor.redactText(params.description),

@@ -3,10 +3,13 @@ import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import * as ptp from 'pdf-to-printer';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { PrintJobStatus } from '../types';
 import { auditLogger } from '../utils/auditLogger';
 import { jobRepository } from '../database/repositories/jobRepository';
 import { verificationRepository } from '../database/repositories/verificationRepository';
+import { PATHS } from '../config/environment';
+import { MerchantRepository } from '../database/repositories/merchantRepository';
 
 const execAsync = promisify(exec);
 
@@ -36,6 +39,10 @@ export class PrinterService {
    */
   public static async resolvePhysicalPrinter(requestedPrinter?: string): Promise<string | null> {
     if (process.platform !== 'win32') {
+      return null;
+    }
+
+    if (process.env.NODE_ENV === 'test' || process.env.npm_lifecycle_event === 'test' || process.env.AUTOPRINT_TEST === '1') {
       return null;
     }
 
@@ -207,6 +214,131 @@ export class PrinterService {
       status: 'READY_FOR_PICKUP',
       message: 'Print job successfully queued in AutoPrint spooler.',
     };
+  }
+
+  /**
+   * Generates a 1-page hardware diagnostic test sheet and dispatches it to the printer.
+   */
+  public static async generateAndDispatchTestSheet(printerName?: string): Promise<PrintDispatchResult> {
+    const primary = MerchantRepository.getPrimaryMerchant();
+    const identity = MerchantRepository.getInstallationIdentity();
+    const storeName = primary?.shop_name || 'AutoPrint Print Station';
+    const merchantId = identity?.merchant_id || 'AP-LOCAL';
+    const deviceId = identity?.device_id || 'DEV-LOCAL';
+
+    // Create diagnostic PDF document
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595.28, 841.89]); // Standard A4 in points
+    const { width, height } = page.getSize();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    // Exterior alignment border
+    page.drawRectangle({
+      x: 36,
+      y: 36,
+      width: width - 72,
+      height: height - 72,
+      borderWidth: 2,
+      borderColor: rgb(0.1, 0.4, 0.8),
+    });
+
+    // Header title
+    page.drawText('AUTOPRINT HARDWARE SELF-TEST SHEET', {
+      x: 54,
+      y: height - 80,
+      size: 18,
+      font: fontBold,
+      color: rgb(0.1, 0.4, 0.8),
+    });
+
+    page.drawText('V1/V2 Print Engine Architecture Diagnostic Verification Page', {
+      x: 54,
+      y: height - 102,
+      size: 10,
+      font,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+
+    page.drawLine({
+      start: { x: 54, y: height - 114 },
+      end: { x: width - 54, y: height - 114 },
+      thickness: 1,
+      color: rgb(0.8, 0.8, 0.8),
+    });
+
+    // Diagnostic Details Table
+    const detailsY = height - 145;
+    const lineGap = 22;
+    const testLines = [
+      `Date & Time:       ${new Date().toISOString()}`,
+      `Store Name:        ${storeName}`,
+      `Merchant ID:       ${merchantId}`,
+      `Device ID:         ${deviceId}`,
+      `Target Printer:    ${printerName || primary?.selected_printer || 'AutoPrint System Spooler'}`,
+      `Engine Mode:       V1 Local-First Autonomous`,
+      `Verification Desk: Active (8-Digit Pickup Key Security)`,
+      `Status:            PASS - Hardware Communication Verified`,
+    ];
+
+    testLines.forEach((line, idx) => {
+      page.drawText(line, {
+        x: 60,
+        y: detailsY - (idx * lineGap),
+        size: 11,
+        font: line.startsWith('Status:') ? fontBold : font,
+        color: line.startsWith('Status:') ? rgb(0.1, 0.6, 0.2) : rgb(0.1, 0.1, 0.1),
+      });
+    });
+
+    // Test pattern box (alignment & density verification)
+    const boxY = detailsY - (testLines.length * lineGap) - 80;
+    page.drawRectangle({
+      x: 60,
+      y: boxY,
+      width: width - 120,
+      height: 70,
+      color: rgb(0.96, 0.97, 0.99),
+      borderColor: rgb(0.75, 0.8, 0.9),
+      borderWidth: 1,
+    });
+
+    page.drawText('[ TEST PATTERN: NOZZLE / LASER DENSITY PASS ]', {
+      x: 110,
+      y: boxY + 40,
+      size: 12,
+      font: fontBold,
+      color: rgb(0.1, 0.5, 0.2),
+    });
+
+    page.drawText('If this page printed cleanly, your printer is fully configured and ready for AutoPrint.', {
+      x: 75,
+      y: boxY + 18,
+      size: 9,
+      font,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+
+    const pdfBytes = await pdfDoc.save();
+    const testDir = PATHS.PROCESSED_DIR;
+    if (!fs.existsSync(testDir)) {
+      fs.mkdirSync(testDir, { recursive: true });
+    }
+    const testFilePath = path.join(testDir, `diag-test-${Date.now()}.pdf`);
+    fs.writeFileSync(testFilePath, pdfBytes);
+
+    const testJobId = `job-test-${Date.now()}`;
+    const testJobNo = `TEST-${Math.floor(1000 + Math.random() * 9000)}`;
+    const testVerificationCode = '00000000';
+
+    return await this.dispatchPrintJob(
+      testJobId,
+      testJobNo,
+      testVerificationCode,
+      testFilePath,
+      printerName,
+      { copies: 1, paperFormat: 'A4' }
+    );
   }
 
   private static printerCache: { data: PrinterDevice[]; timestamp: number } | null = null;

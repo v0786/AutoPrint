@@ -44,7 +44,7 @@ graph TB
             JobEngine["AutoPrint Job Lifecycle Service"]
             PricingEngine["Local Multi-Tier Pricing Service"]
             QRManager["Dynamic LAN & Public QR Code Service"]
-            TunnelMgr["PageKite Subprocess Tunnel Manager"]
+            CloudAccess["Hosted Store / LAN Access URL Service"]
             PrinterEngine["Hardware Spooler & Printer Manager"]
         end
 
@@ -58,7 +58,7 @@ graph TB
         end
     end
 
-    MobileUser -->|HTTP :7000 via Wi-Fi or PageKite| CustWeb
+    MobileUser -->|Hosted store or HTTP :7000 via Wi-Fi| CustWeb
     KioskUser -->|HTTP http://localhost:7000| CustWeb
     CustWeb -->|Internal Proxy /api| APIGateway
     MerchWeb -->|Authenticated REST API :5000| APIGateway
@@ -71,7 +71,7 @@ graph TB
     APIGateway --> JobEngine
     APIGateway --> PricingEngine
     APIGateway --> QRManager
-    APIGateway --> TunnelMgr
+    APIGateway --> CloudAccess
     APIGateway --> PrinterEngine
 
     JobEngine --> SQLiteDB

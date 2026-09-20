@@ -23,10 +23,6 @@ namespace AutoPrint.Launcher
         public bool Installed { get; set; }
         public string Version { get; set; }
         public string InstalledAt { get; set; }
-        public bool PagekiteConfigured { get; set; }
-        public string PagekiteName { get; set; }
-        public string PagekiteSecret { get; set; }
-        public string PagekitePublicUrl { get; set; }
         public int BackendPort { get; set; }
         public int CustomerPort { get; set; }
         public int MerchantPort { get; set; }
@@ -37,10 +33,6 @@ namespace AutoPrint.Launcher
             Installed = false;
             Version = "2.0.0";
             InstalledAt = "";
-            PagekiteConfigured = false;
-            PagekiteName = "";
-            PagekiteSecret = "";
-            PagekitePublicUrl = "";
             BackendPort = 5000;
             CustomerPort = 7000;
             MerchantPort = 8000;
@@ -107,18 +99,6 @@ namespace AutoPrint.Launcher
                     var mDate = Regex.Match(json, "\"installedAt\"\\s*:\\s*\"([^\"]+)\"");
                     if (mDate.Success) state.InstalledAt = mDate.Groups[1].Value;
 
-                    state.PagekiteConfigured = json.IndexOf("\"pagekiteConfigured\": true", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                               json.IndexOf("\"pagekiteConfigured\":true", StringComparison.OrdinalIgnoreCase) >= 0;
-
-                    var mName = Regex.Match(json, "\"pagekiteName\"\\s*:\\s*\"([^\"]+)\"");
-                    if (mName.Success) state.PagekiteName = mName.Groups[1].Value;
-
-                    var mSec = Regex.Match(json, "\"pagekiteSecret\"\\s*:\\s*\"([^\"]+)\"");
-                    if (mSec.Success) state.PagekiteSecret = mSec.Groups[1].Value;
-
-                    var mUrl = Regex.Match(json, "\"pagekitePublicUrl\"\\s*:\\s*\"([^\"]+)\"");
-                    if (mUrl.Success) state.PagekitePublicUrl = mUrl.Groups[1].Value;
-
                     var mBack = Regex.Match(json, "\"backendPort\"\\s*:\\s*([0-9]+)");
                     if (mBack.Success) state.BackendPort = int.Parse(mBack.Groups[1].Value);
 
@@ -146,10 +126,6 @@ namespace AutoPrint.Launcher
             sb.AppendLine(string.Format("  \"installed\": {0},", state.Installed ? "true" : "false"));
             sb.AppendLine(string.Format("  \"version\": \"{0}\",", state.Version));
             sb.AppendLine(string.Format("  \"installedAt\": \"{0}\",", string.IsNullOrEmpty(state.InstalledAt) ? DateTime.UtcNow.ToString("o") : state.InstalledAt));
-            sb.AppendLine(string.Format("  \"pagekiteConfigured\": {0},", state.PagekiteConfigured ? "true" : "false"));
-            sb.AppendLine(string.Format("  \"pagekiteName\": \"{0}\",", state.PagekiteName ?? ""));
-            sb.AppendLine(string.Format("  \"pagekiteSecret\": \"{0}\",", state.PagekiteSecret ?? ""));
-            sb.AppendLine(string.Format("  \"pagekitePublicUrl\": \"{0}\",", state.PagekitePublicUrl ?? ""));
             sb.AppendLine(string.Format("  \"backendPort\": {0},", state.BackendPort));
             sb.AppendLine(string.Format("  \"customerPort\": {0},", state.CustomerPort));
             sb.AppendLine(string.Format("  \"merchantPort\": {0},", state.MerchantPort));
@@ -193,12 +169,6 @@ namespace AutoPrint.Launcher
             sb.AppendLine("  \"database\": {");
             sb.AppendLine(string.Format("    \"path\": \"{0}\"", Path.Combine(dataDir, "backend", "database", "autoprint.db").Replace("\\", "\\\\")));
             sb.AppendLine("  },");
-            sb.AppendLine("  \"pagekite\": {");
-            sb.AppendLine(string.Format("    \"enabled\": {0},", state.PagekiteConfigured ? "true" : "false"));
-            sb.AppendLine(string.Format("    \"subdomain\": \"{0}\",", state.PagekiteName ?? ""));
-            sb.AppendLine("    \"domain\": \"pagekite.me\",");
-            sb.AppendLine(string.Format("    \"secret\": \"{0}\"", state.PagekiteSecret ?? ""));
-            sb.AppendLine("  },");
             sb.AppendLine(string.Format("  \"updatedAt\": \"{0:o}\"", DateTime.UtcNow));
             sb.AppendLine("}");
 
@@ -233,7 +203,7 @@ namespace AutoPrint.Launcher
     }
 
     // =========================================================================
-    // 2. FIRST-RUN SETUP & PAGEKITE WIZARD FORM (WINFORMS)
+    // 2. FIRST-RUN SETUP WIZARD FORM (WINFORMS)
     // =========================================================================
     public class FirstRunSetupWizardForm : Form
     {
@@ -242,7 +212,6 @@ namespace AutoPrint.Launcher
 
         private Panel panelWelcome;
         private Panel panelProgress;
-        private Panel panelPagekite;
         private Panel panelSuccess;
 
         // Progress elements
@@ -254,10 +223,6 @@ namespace AutoPrint.Launcher
         private Label lblStepCustomer;
         private Label lblStepMerchant;
 
-        // Pagekite elements
-        private TextBox txtKiteName;
-        private TextBox txtKiteSecret;
-        private Label lblPagekiteStatus;
 
         // Success elements
         private Label lblSuccessLocalKiosk;
@@ -317,7 +282,7 @@ namespace AutoPrint.Launcher
                        "• Zero manual Node.js or software setup\n" +
                        "• Zero command prompt or batch files\n" +
                        "• Integrated high-speed SQLite Datastore\n" +
-                       "• Optional remote access via PageKite\n\n" +
+                       "• Optional hosted cloud store access\n\n" +
                        "Click below to begin automatic setup.",
                 Location = new Point(40, 120),
                 Size = new Size(480, 160),
@@ -382,66 +347,7 @@ namespace AutoPrint.Launcher
             panelProgress.Controls.Add(lblStepCustomer);
             panelProgress.Controls.Add(lblStepMerchant);
 
-            // 3. PageKite Setup Panel
-            panelPagekite = new Panel { Dock = DockStyle.Fill, Visible = false };
-            var lblPkHeader = new Label
-            {
-                Text = "Remote Customer Access (PageKite)",
-                Font = new Font("Segoe UI", 13F, FontStyle.Bold),
-                Location = new Point(40, 30),
-                AutoSize = true
-            };
-            var lblPkDesc = new Label
-            {
-                Text = "AutoPrint is running locally! Would you like to configure secure remote access so customers can upload documents over the internet directly from their phones?\n\n" +
-                       "(Note: Remote access exposes only the Customer Portal at localhost:7000. Your Merchant Desk and Backend remain completely private.)",
-                Location = new Point(40, 65),
-                Size = new Size(480, 75),
-                ForeColor = Color.FromArgb(71, 85, 105)
-            };
-            var lblKiteName = new Label { Text = "PageKite Domain / Kite Name:", Location = new Point(40, 155), AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Bold) };
-            txtKiteName = new TextBox { Location = new Point(40, 180), Size = new Size(300, 24), Text = state.PagekiteName ?? "autoprint" };
-
-            var lblKiteSec = new Label { Text = "PageKite Secret Key:", Location = new Point(40, 215), AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Bold) };
-            txtKiteSecret = new TextBox { Location = new Point(40, 240), Size = new Size(300, 24), Text = state.PagekiteSecret ?? "", PasswordChar = '*' };
-
-            lblPagekiteStatus = new Label { Text = "", Location = new Point(40, 275), Size = new Size(480, 20), ForeColor = Color.FromArgb(2, 132, 199) };
-
-            var btnSkipPagekite = new Button
-            {
-                Text = "Skip for Now",
-                Size = new Size(130, 36),
-                Location = new Point(40, 320),
-                BackColor = Color.FromArgb(226, 232, 240),
-                FlatStyle = FlatStyle.Flat
-            };
-            btnSkipPagekite.FlatAppearance.BorderSize = 0;
-            btnSkipPagekite.Click += (s, e) => FinishWithoutPagekite();
-
-            var btnSetupPagekite = new Button
-            {
-                Text = "Connect Remote Access",
-                Size = new Size(180, 36),
-                Location = new Point(180, 320),
-                BackColor = Color.FromArgb(16, 185, 129),
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                FlatStyle = FlatStyle.Flat
-            };
-            btnSetupPagekite.FlatAppearance.BorderSize = 0;
-            btnSetupPagekite.Click += (s, e) => SetupPagekiteClicked();
-
-            panelPagekite.Controls.Add(lblPkHeader);
-            panelPagekite.Controls.Add(lblPkDesc);
-            panelPagekite.Controls.Add(lblKiteName);
-            panelPagekite.Controls.Add(txtKiteName);
-            panelPagekite.Controls.Add(lblKiteSec);
-            panelPagekite.Controls.Add(txtKiteSecret);
-            panelPagekite.Controls.Add(lblPagekiteStatus);
-            panelPagekite.Controls.Add(btnSkipPagekite);
-            panelPagekite.Controls.Add(btnSetupPagekite);
-
-            // 4. Success Panel
+            // 3. Success Panel
             panelSuccess = new Panel { Dock = DockStyle.Fill, Visible = false };
             var lblSuccHeader = new Label
             {
@@ -532,7 +438,6 @@ namespace AutoPrint.Launcher
 
             Controls.Add(panelWelcome);
             Controls.Add(panelProgress);
-            Controls.Add(panelPagekite);
             Controls.Add(panelSuccess);
         }
 
@@ -617,7 +522,7 @@ namespace AutoPrint.Launcher
                 Invoke(new Action(() =>
                 {
                     panelProgress.Visible = false;
-                    panelPagekite.Visible = true;
+                    ShowSuccessScreen();
                 }));
             }
             catch (Exception ex)
@@ -718,57 +623,11 @@ namespace AutoPrint.Launcher
             catch { return false; }
         }
 
-        private void SetupPagekiteClicked()
-        {
-            string kite = txtKiteName.Text.Trim();
-            string sec = txtKiteSecret.Text.Trim();
-
-            if (string.IsNullOrEmpty(kite) || string.IsNullOrEmpty(sec))
-            {
-                MessageBox.Show("Please enter both your PageKite Kite Name and Secret Key.", "PageKite Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            lblPagekiteStatus.Text = "Configuring PageKite tunnel...";
-
-            // Normalize kite name
-            if (!kite.Contains(".")) kite = kite + ".pagekite.me";
-
-            state.PagekiteConfigured = true;
-            state.PagekiteName = kite;
-            state.PagekiteSecret = sec;
-            state.PagekitePublicUrl = string.Format("https://{0}", kite);
-
-            InstallationManager.SaveState(state);
-
-            lblPagekiteStatus.Text = "PageKite configured successfully!";
-
-            ShowSuccessScreen();
-        }
-
-        private void FinishWithoutPagekite()
-        {
-            state.PagekiteConfigured = false;
-            InstallationManager.SaveState(state);
-
-            ShowSuccessScreen();
-        }
-
         private void ShowSuccessScreen()
         {
-            panelPagekite.Visible = false;
-
             lblSuccessLocalKiosk.Text = string.Format("Customer Kiosk (Local):\thttp://localhost:{0}", state.CustomerPort);
-            if (state.PagekiteConfigured && !string.IsNullOrEmpty(state.PagekitePublicUrl))
-            {
-                lblSuccessPublicKiosk.Text = string.Format("Customer Kiosk (Remote):\t{0}", state.PagekitePublicUrl);
-                lblSuccessPublicKiosk.ForeColor = Color.FromArgb(16, 185, 129);
-            }
-            else
-            {
-                lblSuccessPublicKiosk.Text = "Customer Kiosk (Remote):\tNot configured (Local access only)";
-                lblSuccessPublicKiosk.ForeColor = Color.FromArgb(100, 116, 139);
-            }
+            lblSuccessPublicKiosk.Text = "Customer Kiosk (Hosted):\tConfigure AutoPrint cloud pairing in Settings";
+            lblSuccessPublicKiosk.ForeColor = Color.FromArgb(14, 116, 144);
             lblSuccessMerchant.Text = string.Format("Merchant Dashboard:\thttp://localhost:{0}", state.MerchantPort);
 
             panelSuccess.Visible = true;
@@ -895,7 +754,6 @@ namespace AutoPrint.Launcher
         private Process backendProcess;
         private Process customerProcess;
         private Process merchantProcess;
-        private Process pagekiteProcess;
 
         private readonly List<int> trackedChildPids = new List<int>();
         private readonly Dictionary<string, int> restartAttempts = new Dictionary<string, int>();
@@ -909,10 +767,6 @@ namespace AutoPrint.Launcher
         private int backendPort = 5000;
         private int merchantPort = 8000;
         private int customerPort = 7000;
-        private bool isPagekiteEnabled = false;
-        private string pagekiteName = "";
-        private string pagekiteSecret = "";
-        private string pagekitePublicUrl = "";
 
         private readonly bool isSilentStartup;
         private bool isStopping = false;
@@ -937,42 +791,45 @@ namespace AutoPrint.Launcher
             contextMenu = new ContextMenuStrip();
             contextMenu.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
 
-            var itemOpen = new ToolStripMenuItem("Open AutoPrint (Merchant Desk)", null, (s, e) => OpenMerchantDashboard())
+            var itemOpen = new ToolStripMenuItem("Open AutoPrint", null, (s, e) => OpenMerchantDashboard())
             {
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold)
             };
-            var itemCustomer = new ToolStripMenuItem("Open Customer Kiosk", null, (s, e) => OpenCustomerKiosk());
-            var itemPagekite = new ToolStripMenuItem("Remote Customer Access (PageKite)...", null, (s, e) => OpenPagekiteDialog());
-            var itemStatus = new ToolStripMenuItem("Service Status...", null, (s, e) => ShowServiceStatusDialog());
-            var itemPrinters = new ToolStripMenuItem("Printer Configuration", null, (s, e) => OpenPrinterConfig());
-            var itemPayment = new ToolStripMenuItem("Payment Settings", null, (s, e) => OpenPaymentSettings());
-            var itemWeb = new ToolStripMenuItem("Open Merchant Web", null, (s, e) => OpenMerchantWeb());
-            var itemInterface = new ToolStripMenuItem("Interface");
-            itemInterface.DropDownItems.Add(new ToolStripMenuItem("Web Mode", null, (s, e) => SetMerchantInterface("web")));
-            itemInterface.DropDownItems.Add(new ToolStripMenuItem("GUI Mode", null, (s, e) => SetMerchantInterface("gui")));
-            var itemLogs = new ToolStripMenuItem("View Logs Directory", null, (s, e) => OpenLogsDirectory());
+            var itemPrinterStatus = new ToolStripMenuItem("Printer Status", null, (s, e) => ShowPrinterStatusDialog());
+            var itemPrintQueue = new ToolStripMenuItem("Print Queue", null, (s, e) => OpenPrintQueue());
+            var itemStoreQr = new ToolStripMenuItem("Store QR", null, (s, e) => OpenStoreQr());
+            var itemCloudStatus = new ToolStripMenuItem("Cloud Status", null, (s, e) => ShowCloudStatusDialog());
+            var itemTestPrint = new ToolStripMenuItem("Test Print", null, (s, e) => TriggerTestPrint());
+            var itemSettings = new ToolStripMenuItem("Settings", null, (s, e) => OpenSettings());
+            var itemDiagnostics = new ToolStripMenuItem("Diagnostics", null, (s, e) => ShowDiagnosticsDialog());
+            var itemAbout = new ToolStripMenuItem("About", null, (s, e) => ShowAboutDialog());
+
+            // Advanced & System Services
+            var itemAdvanced = new ToolStripMenuItem("Advanced Services");
+            itemAdvanced.DropDownItems.Add(new ToolStripMenuItem("Customer Kiosk Terminal", null, (s, e) => OpenCustomerKiosk()));
+            itemAdvanced.DropDownItems.Add(new ToolStripMenuItem("Service Status Details...", null, (s, e) => ShowServiceStatusDialog()));
+            itemAdvanced.DropDownItems.Add(new ToolStripMenuItem("View Logs Directory", null, (s, e) => OpenLogsDirectory()));
             var itemAutoStart = new ToolStripMenuItem("Start AutoPrint with Windows", null, (s, e) => ToggleAutoStart());
             itemAutoStart.Checked = IsAutoStartEnabled();
+            itemAdvanced.DropDownItems.Add(itemAutoStart);
+            itemAdvanced.DropDownItems.Add(new ToolStripSeparator());
+            itemAdvanced.DropDownItems.Add(new ToolStripMenuItem("Restart Services", null, (s, e) => RestartServices()));
+            itemAdvanced.DropDownItems.Add(new ToolStripMenuItem("Stop Services", null, (s, e) => StopServices()));
 
-            var itemRestart = new ToolStripMenuItem("Restart Services", null, (s, e) => RestartServices());
-            var itemStop = new ToolStripMenuItem("Stop Services", null, (s, e) => StopServices());
-            var itemExit = new ToolStripMenuItem("Exit AutoPrint", null, (s, e) => ExitApplication());
+            var itemExit = new ToolStripMenuItem("Exit", null, (s, e) => ExitApplication());
 
             contextMenu.Items.Add(itemOpen);
-            contextMenu.Items.Add(itemWeb);
-            contextMenu.Items.Add(itemCustomer);
-            contextMenu.Items.Add(itemPagekite);
+            contextMenu.Items.Add(itemPrinterStatus);
+            contextMenu.Items.Add(itemPrintQueue);
+            contextMenu.Items.Add(itemStoreQr);
+            contextMenu.Items.Add(itemCloudStatus);
+            contextMenu.Items.Add(itemTestPrint);
+            contextMenu.Items.Add(itemSettings);
+            contextMenu.Items.Add(itemDiagnostics);
+            contextMenu.Items.Add(itemAbout);
             contextMenu.Items.Add(new ToolStripSeparator());
-            contextMenu.Items.Add(itemStatus);
-            contextMenu.Items.Add(itemPrinters);
-            contextMenu.Items.Add(itemPayment);
-            contextMenu.Items.Add(itemInterface);
+            contextMenu.Items.Add(itemAdvanced);
             contextMenu.Items.Add(new ToolStripSeparator());
-            contextMenu.Items.Add(itemLogs);
-            contextMenu.Items.Add(itemAutoStart);
-            contextMenu.Items.Add(new ToolStripSeparator());
-            contextMenu.Items.Add(itemRestart);
-            contextMenu.Items.Add(itemStop);
             contextMenu.Items.Add(itemExit);
 
             // Setup System Tray NotifyIcon
@@ -1002,7 +859,7 @@ namespace AutoPrint.Launcher
 
             trayIcon.DoubleClick += (s, e) => OpenMerchantDashboard();
 
-            // Start Services & PageKite Supervisor
+            // Start local services
             StartServices();
 
             // Periodic Health Check Timer (Every 10 seconds)
@@ -1038,11 +895,6 @@ namespace AutoPrint.Launcher
             customerPort = state.CustomerPort > 0 ? state.CustomerPort : 7000;
             merchantPort = state.MerchantPort > 0 ? state.MerchantPort : 8000;
             merchantInterface = state.MerchantInterface == "gui" ? "gui" : "web";
-
-            isPagekiteEnabled = state.PagekiteConfigured && !string.IsNullOrEmpty(state.PagekiteName) && !string.IsNullOrEmpty(state.PagekiteSecret);
-            pagekiteName = state.PagekiteName;
-            pagekiteSecret = state.PagekiteSecret;
-            pagekitePublicUrl = state.PagekitePublicUrl;
 
             dataDir = Path.Combine(InstallationManager.GetProgramDataDir(), "datastore");
             runtimeLogsDir = Path.Combine(InstallationManager.GetProgramDataDir(), "logs");
@@ -1105,28 +957,12 @@ namespace AutoPrint.Launcher
             return null;
         }
 
-        private string FindPythonExecutable()
-        {
-            string bundledPython = Path.Combine(projectRoot, "runtime", "python", "python.exe");
-            if (File.Exists(bundledPython)) return bundledPython;
-
-            string venvPython = Path.Combine(projectRoot, ".venv", "Scripts", "python.exe");
-            if (File.Exists(venvPython)) return venvPython;
-
-            return "python";
-        }
-
         private void StartServices()
         {
             isStopping = false;
             StartBackendService();
             StartCustomerService();
             StartMerchantService();
-
-            if (isPagekiteEnabled && (pagekiteProcess == null || pagekiteProcess.HasExited))
-            {
-                StartPagekiteSupervisor();
-            }
 
             new Thread(VerifyHealthEndpoints).Start();
         }
@@ -1194,34 +1030,6 @@ namespace AutoPrint.Launcher
             if (!Directory.Exists(workDir)) workDir = projectRoot;
 
             merchantProcess = StartTrackedChildProcess("Merchant", nodeExe, string.Format("\"{0}\"", merchantServer), "merchant.log", workDir, merchantPort);
-        }
-
-        private void StartPagekiteSupervisor()
-        {
-            try
-            {
-                if (isStopping) return;
-                if (pagekiteProcess != null && !pagekiteProcess.HasExited) return;
-
-                string pythonExe = FindPythonExecutable();
-                string pkScript = Path.Combine(projectRoot, "tools", "pagekite", "pagekite.py");
-                if (!File.Exists(pkScript))
-                {
-                    pkScript = Path.Combine(projectRoot, "scripts", "pagekite.py");
-                }
-
-                if (!File.Exists(pkScript)) return;
-
-                // Security Rule: Expose ONLY Customer Port (localhost:7000), NEVER Backend or Merchant Desk
-                string serviceArg = string.Format("--service_on=http:{0}:localhost:{1}:{2}", pagekiteName, customerPort, pagekiteSecret);
-                string args = string.Format("\"{0}\" --clean {1}", pkScript, serviceArg);
-
-                pagekiteProcess = StartTrackedChildProcess("PageKite", pythonExe, args, "pagekite.log", projectRoot, customerPort);
-            }
-            catch (Exception ex)
-            {
-                Trace.WriteLine("Failed to launch PageKite: " + ex.Message);
-            }
         }
 
         private void VerifyHealthEndpoints()
@@ -1370,8 +1178,7 @@ namespace AutoPrint.Launcher
             if (attempts <= MAX_RESTART_ATTEMPTS)
             {
                 Thread.Sleep(1200);
-                if (serviceKey == "PageKite") StartPagekiteSupervisor();
-                else if (serviceKey == "Backend") StartBackendService();
+                if (serviceKey == "Backend") StartBackendService();
                 else if (serviceKey == "Customer") StartCustomerService();
                 else if (serviceKey == "Merchant") StartMerchantService();
             }
@@ -1388,7 +1195,6 @@ namespace AutoPrint.Launcher
             StopTrackedProcess(backendProcess);
             StopTrackedProcess(customerProcess);
             StopTrackedProcess(merchantProcess);
-            StopTrackedProcess(pagekiteProcess);
 
             // Terminate ONLY our explicitly tracked child PIDs (NEVER blanket taskkill)
             lock (trackedChildPids)
@@ -1412,7 +1218,6 @@ namespace AutoPrint.Launcher
             backendProcess = null;
             customerProcess = null;
             merchantProcess = null;
-            pagekiteProcess = null;
 
             trayIcon.Text = "AutoPrint Express — Services Stopped";
         }
@@ -1476,7 +1281,7 @@ namespace AutoPrint.Launcher
             sb.AppendLine(string.Format("Merchant Desk (Port {0}):\t{1}", merchantPort, merchantOk ? "RUNNING (Healthy)" : "STOPPED / UNHEALTHY"));
             sb.AppendLine(string.Format("Customer Kiosk (Port {0}):\t{1}", customerPort, customerOk ? "RUNNING (Healthy)" : "STOPPED / UNHEALTHY"));
             sb.AppendLine();
-            sb.AppendLine(string.Format("PageKite Status:\t\t{0}", isPagekiteEnabled ? "ACTIVE (" + pagekitePublicUrl + ")" : "DISABLED"));
+            sb.AppendLine("Hosted Customer Access:\tConfigure cloud pairing in Merchant Settings");
             sb.AppendLine();
             sb.AppendLine(string.Format("Persistent Datastore:\t{0}", dataDir));
             sb.AppendLine(string.Format("Logs Directory:\t\t{0}", runtimeLogsDir));
@@ -1487,96 +1292,6 @@ namespace AutoPrint.Launcher
             }
 
             MessageBox.Show(sb.ToString(), "AutoPrint System Status", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        private void OpenPagekiteDialog()
-        {
-            var state = InstallationManager.LoadState();
-            using (var form = new Form())
-            {
-                form.Text = "Remote Customer Access (PageKite)";
-                form.Size = new Size(480, 300);
-                form.StartPosition = FormStartPosition.CenterScreen;
-                form.FormBorderStyle = FormBorderStyle.FixedDialog;
-                form.MaximizeBox = false;
-                form.MinimizeBox = false;
-                form.BackColor = Color.FromArgb(248, 250, 252);
-                form.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
-
-                var lblDesc = new Label
-                {
-                    Text = "Configure secure public internet access for your Customer Portal (Port 7000).\nBackend and Merchant Dashboard remain strictly local and private.",
-                    Location = new Point(30, 20),
-                    Size = new Size(400, 40),
-                    ForeColor = Color.FromArgb(71, 85, 105)
-                };
-                var lblKite = new Label { Text = "PageKite Domain / Kite Name:", Location = new Point(30, 75), AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Bold) };
-                var txtKite = new TextBox { Location = new Point(30, 95), Size = new Size(340, 24), Text = state.PagekiteName ?? "" };
-
-                var lblSec = new Label { Text = "PageKite Secret Key:", Location = new Point(30, 130), AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Bold) };
-                var txtSec = new TextBox { Location = new Point(30, 150), Size = new Size(340, 24), Text = state.PagekiteSecret ?? "", PasswordChar = '*' };
-
-                var btnSave = new Button
-                {
-                    Text = "Save & Connect",
-                    Location = new Point(30, 195),
-                    Size = new Size(130, 34),
-                    BackColor = Color.FromArgb(16, 185, 129),
-                    ForeColor = Color.White,
-                    Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                    FlatStyle = FlatStyle.Flat
-                };
-                btnSave.FlatAppearance.BorderSize = 0;
-                btnSave.Click += (s, e) =>
-                {
-                    string k = txtKite.Text.Trim();
-                    string sec = txtSec.Text.Trim();
-                    if (!string.IsNullOrEmpty(k))
-                    {
-                        if (!k.Contains(".")) k += ".pagekite.me";
-                        state.PagekiteConfigured = true;
-                        state.PagekiteName = k;
-                        state.PagekiteSecret = sec;
-                        state.PagekitePublicUrl = "https://" + k;
-                    }
-                    else
-                    {
-                        state.PagekiteConfigured = false;
-                        state.PagekiteName = "";
-                        state.PagekiteSecret = "";
-                        state.PagekitePublicUrl = "";
-                    }
-                    InstallationManager.SaveState(state);
-                    LoadConfiguration();
-
-                    if (pagekiteProcess != null) StopTrackedProcess(pagekiteProcess);
-                    if (isPagekiteEnabled) StartPagekiteSupervisor();
-
-                    form.Close();
-                    trayIcon.ShowBalloonTip(3000, "PageKite Settings Saved", isPagekiteEnabled ? "Remote access active: " + state.PagekitePublicUrl : "Remote access disabled.", ToolTipIcon.Info);
-                };
-
-                var btnCancel = new Button
-                {
-                    Text = "Cancel",
-                    Location = new Point(170, 195),
-                    Size = new Size(100, 34),
-                    BackColor = Color.FromArgb(226, 232, 240),
-                    FlatStyle = FlatStyle.Flat
-                };
-                btnCancel.FlatAppearance.BorderSize = 0;
-                btnCancel.Click += (s, e) => form.Close();
-
-                form.Controls.Add(lblDesc);
-                form.Controls.Add(lblKite);
-                form.Controls.Add(txtKite);
-                form.Controls.Add(lblSec);
-                form.Controls.Add(txtSec);
-                form.Controls.Add(btnSave);
-                form.Controls.Add(btnCancel);
-
-                form.ShowDialog();
-            }
         }
 
         private void OpenMerchantDashboard()
@@ -1607,12 +1322,187 @@ namespace AutoPrint.Launcher
 
         private void OpenPrinterConfig()
         {
-            try { Process.Start(string.Format("http://localhost:{0}", merchantPort)); } catch { }
+            try { Process.Start(string.Format("http://localhost:{0}/#printers", merchantPort)); } catch { }
         }
 
         private void OpenPaymentSettings()
         {
-            try { Process.Start(string.Format("http://localhost:{0}", merchantPort)); } catch { }
+            try { Process.Start(string.Format("http://localhost:{0}/#settings", merchantPort)); } catch { }
+        }
+
+        private void OpenPrintQueue()
+        {
+            try { Process.Start(string.Format("http://localhost:{0}/#queue", merchantPort)); } catch { }
+        }
+
+        private void OpenStoreQr()
+        {
+            try { Process.Start(string.Format("http://localhost:{0}/#settings", merchantPort)); } catch { }
+        }
+
+        private void OpenSettings()
+        {
+            try { Process.Start(string.Format("http://localhost:{0}/#settings", merchantPort)); } catch { }
+        }
+
+        private void ShowPrinterStatusDialog()
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                string printerText = "Unable to query printer status. Backend service may be starting...";
+                try
+                {
+                    using (var client = new WebClient())
+                    {
+                        string json = client.DownloadString(string.Format("http://127.0.0.1:{0}/api/printers", backendPort));
+                        var sb = new StringBuilder();
+                        sb.AppendLine("=== AutoPrint Printer Fleet Status ===");
+                        sb.AppendLine();
+                        var matches = Regex.Matches(json, "\"name\":\"([^\"]+)\"[^}]*\"isDefault\":(true|false)");
+                        if (matches.Count > 0)
+                        {
+                            foreach (Match m in matches)
+                            {
+                                sb.AppendLine(string.Format("• {0} {1}", m.Groups[1].Value, m.Groups[2].Value.Equals("true", StringComparison.OrdinalIgnoreCase) ? "[DEFAULT]" : ""));
+                            }
+                        }
+                        else
+                        {
+                            sb.AppendLine("• AutoPrint System Spooler [DEFAULT]");
+                        }
+                        sb.AppendLine();
+                        sb.AppendLine("Hardware Spooler Status: Ready (V1 Local Printing Operational)");
+                        printerText = sb.ToString();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    printerText = "Printer Fleet Status Check: " + ex.Message;
+                }
+
+                MessageBox.Show(printerText, "AutoPrint Printer Status", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            });
+        }
+
+        private void ShowCloudStatusDialog()
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                string statusText = "Unable to query cloud status. Backend service may be starting...";
+                try
+                {
+                    using (var client = new WebClient())
+                    {
+                        string json = client.DownloadString(string.Format("http://127.0.0.1:{0}/api/cloud/status", backendPort));
+                        bool isOnline = json.IndexOf("\"status\":\"ONLINE\"", StringComparison.OrdinalIgnoreCase) >= 0;
+                        bool isConfigured = json.IndexOf("\"configured\":true", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                        var sb = new StringBuilder();
+                        sb.AppendLine("=== AutoPrint Cloud Status (V2) ===");
+                        sb.AppendLine();
+                        sb.AppendLine(string.Format("Cloud Sync:\t\t{0}", isOnline ? "Online (Connected)" : "Offline (Local V1 Mode)"));
+                        sb.AppendLine(string.Format("Configured:\t\t{0}", isConfigured ? "Yes" : "No (Autonomous Offline Operation)"));
+                        sb.AppendLine();
+                        sb.AppendLine("Guarantee: Cloud status is completely independent from local printing.");
+                        sb.AppendLine("If cloud is offline, V1 local printing continues to operate with 100% functionality.");
+                        statusText = sb.ToString();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    statusText = "Cloud Status Check: " + ex.Message;
+                }
+
+                MessageBox.Show(statusText, "AutoPrint Cloud Status", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            });
+        }
+
+        private void TriggerTestPrint()
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    var req = (HttpWebRequest)WebRequest.Create(string.Format("http://127.0.0.1:{0}/api/printers/test", backendPort));
+                    req.Method = "POST";
+                    req.ContentType = "application/json";
+                    req.Timeout = 6000;
+                    byte[] bytes = Encoding.UTF8.GetBytes("{}");
+                    using (var stream = req.GetRequestStream())
+                    {
+                        stream.Write(bytes, 0, bytes.Length);
+                    }
+                    using (var resp = (HttpWebResponse)req.GetResponse())
+                    {
+                        if (resp.StatusCode == HttpStatusCode.OK)
+                        {
+                            trayIcon.ShowBalloonTip(3000, "AutoPrint Spooler", "Diagnostic test page successfully dispatched to printer.", ToolTipIcon.Info);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    trayIcon.ShowBalloonTip(3500, "AutoPrint Spooler", "Test print request failed: " + ex.Message, ToolTipIcon.Warning);
+                }
+            });
+        }
+
+        private void ShowDiagnosticsDialog()
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                string reportText = "Diagnostic collector could not be reached.";
+                try
+                {
+                    var req = (HttpWebRequest)WebRequest.Create(string.Format("http://127.0.0.1:{0}/api/support/diagnostics/report", backendPort));
+                    req.Method = "GET";
+                    req.Headers.Add("Accept", "text/plain");
+                    req.Timeout = 5000;
+                    using (var resp = (HttpWebResponse)req.GetResponse())
+                    using (var stream = resp.GetResponseStream())
+                    using (var reader = new StreamReader(stream, Encoding.UTF8))
+                    {
+                        reportText = reader.ReadToEnd();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    reportText = "Diagnostic Report Unavailable: " + ex.Message + "\n\nEnsure that the AutoPrint backend service is running.";
+                }
+
+                var dialogResult = MessageBox.Show(reportText + "\n\nCopy report to clipboard?", "AutoPrint Diagnostics Report", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                if (dialogResult == DialogResult.Yes)
+                {
+                    try
+                    {
+                        Thread t = new Thread(() => Clipboard.SetText(reportText));
+                        t.SetApartmentState(ApartmentState.STA);
+                        t.Start();
+                        t.Join();
+                        trayIcon.ShowBalloonTip(2000, "AutoPrint Diagnostics", "Diagnostic report copied to clipboard.", ToolTipIcon.Info);
+                    }
+                    catch { }
+                }
+            });
+        }
+
+        private void ShowAboutDialog()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("AutoPrint Express");
+            sb.AppendLine("Version 2.0.0 — Production Print-Shop Operating System");
+            sb.AppendLine();
+            sb.AppendLine("Architecture:");
+            sb.AppendLine("• V1 Offline Core: Autonomous local kiosk, SQLite queue & physical spooler");
+            sb.AppendLine("• V2 Central Cloud: Optional private Supabase storage & Realtime ingress");
+            sb.AppendLine();
+            sb.AppendLine(string.Format("Backend Port:\t\t{0}", backendPort));
+            sb.AppendLine(string.Format("Merchant Desk Port:\t{0}", merchantPort));
+            sb.AppendLine(string.Format("Customer Kiosk Port:\t{0}", customerPort));
+            sb.AppendLine();
+            sb.AppendLine("Copyright (C) 2026 AutoPrint Engineering. All rights reserved.");
+
+            MessageBox.Show(sb.ToString(), "About AutoPrint", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void OpenLogsDirectory()

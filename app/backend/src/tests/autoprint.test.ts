@@ -268,7 +268,8 @@ test('=== AUTOPRINT BACKEND TEST SUITE ===', async (t) => {
       sampleBytes,
       '12345678',
       '1234 5678',
-      'SEC-A1B2-C3D4'
+      'SEC-A1B2-C3D4',
+      { addVerificationPage: false }
     );
 
     assert.ok(result.processedFilePath, 'Processed file path must be returned');
@@ -301,7 +302,7 @@ test('=== AUTOPRINT BACKEND TEST SUITE ===', async (t) => {
       '87654321',
       '8765 4321',
       'SEC-IMG-VALID',
-      { originalFileName: 'photo.png', orientation: 'portrait' }
+      { originalFileName: 'photo.png', orientation: 'portrait', addVerificationPage: false }
     );
 
     assert.ok(result.processedFilePath, 'Processed file path must be returned');

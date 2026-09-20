@@ -13,6 +13,10 @@ import { CONFIG } from '../config/environment.js';
 
 export { randomUUID };
 
+export function computeSha256(data: Buffer | string): string {
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
+
 // ─── Verification Code ────────────────────────────────────────────────────────
 
 export interface GeneratedCode {

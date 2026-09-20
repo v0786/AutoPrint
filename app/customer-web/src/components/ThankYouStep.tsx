@@ -3,6 +3,7 @@ import { usePrintJob } from '../context/PrintJobContext';
 import { useLanguage } from '../context/LanguageContext';
 import { speakCollectionCode, downloadReceipt } from '../utils/helpers';
 import confetti from 'canvas-confetti';
+import { JobStatusTimeline } from './JobStatusTimeline';
 import {
   Ticket,
   Volume2,
@@ -305,56 +306,14 @@ export const ThankYouStep: React.FC = () => {
           </div>
         </div>
 
-        {/* Step progress timeline: Multi-State Tracker */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-2">
-          {/* Step 1: Payment Status */}
-          <div className={`p-3 rounded-2xl border transition-all ${
-            currentOrder.payment.paymentVerified
-              ? 'bg-[#005228]/40 border-[#6dd58c] text-[#8cf6aa]'
-              : 'bg-[#3A2A10]/60 border-amber-400 text-amber-300 shadow-md animate-pulse'
-          }`}>
-            <div className="text-[11px] font-bold">
-              {currentOrder.payment.paymentVerified ? '1. Paid ✓' : isCash ? '1. Cash Pending ⏳' : '1. Payment Pending'}
-            </div>
-            <div className="text-[9px] opacity-80 mt-0.5">
-              {currentOrder.payment.paymentVerified ? 'Confirmed' : 'At Counter'}
-            </div>
-          </div>
-
-          {/* Step 2: Print Queued */}
-          <div className={`p-3 rounded-2xl border transition-all ${
-            jobStatus === 'queued' && currentOrder.payment.paymentVerified
-              ? 'bg-[#381E72]/60 border-[#D0BCFF] text-white shadow-md animate-pulse'
-              : jobStatus === 'printing' || jobStatus === 'ready'
-              ? 'bg-black/30 border-white/10 text-[#6dd58c]'
-              : 'bg-black/30 border-white/10 text-zinc-500'
-          }`}>
-            <div className="text-[11px] font-bold">2. Queued</div>
-            <div className="text-[9px] opacity-80 mt-0.5">Spooler Hold</div>
-          </div>
-
-          {/* Step 3: Printing */}
-          <div className={`p-3 rounded-2xl border transition-all ${
-            jobStatus === 'printing'
-              ? 'bg-[#381E72]/60 border-[#D0BCFF] text-white shadow-md animate-pulse'
-              : jobStatus === 'ready'
-              ? 'bg-black/30 border-white/10 text-[#6dd58c]'
-              : 'bg-black/30 border-white/10 text-zinc-500'
-          }`}>
-            <div className="text-[11px] font-bold">3. Printing ⏳</div>
-            <div className="text-[9px] opacity-80 mt-0.5">Active Spool</div>
-          </div>
-
-          {/* Step 4: Ready for Pickup */}
-          <div className={`p-3 rounded-2xl border transition-all ${
-            jobStatus === 'ready'
-              ? 'bg-[#005228]/50 border-[#6dd58c] text-[#8cf6aa] shadow-lg'
-              : 'bg-black/30 border-white/10 text-zinc-500'
-          }`}>
-            <div className="text-[11px] font-bold">4. Ready 🎉</div>
-            <div className="text-[9px] opacity-80 mt-0.5">In Pickup Tray</div>
-          </div>
-        </div>
+        {/* Granular Real-time Job Status Timeline */}
+        <JobStatusTimeline
+          status={currentOrder.rawStatus || (jobStatus === 'ready' ? 'READY_FOR_COLLECTION' : jobStatus === 'printing' ? 'PRINTING' : currentOrder.payment.paymentVerified ? 'QUEUED' : 'PAYMENT_PENDING')}
+          jobId={currentOrder.orderId}
+          fileName={currentOrder.file?.name}
+          storagePath={currentOrder.storagePath}
+          verificationCode={currentOrder.collectionCode}
+        />
 
         <div className="bg-black/30 rounded-2xl p-3.5 text-xs text-zinc-400 flex items-center justify-between border border-white/5">
           <div className="flex items-center gap-2">

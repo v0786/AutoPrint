@@ -14,8 +14,10 @@ import {
   LogIn,
   UserPlus,
   Key,
+  Globe,
 } from 'lucide-react';
 import { apiFetch } from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
 
 interface MerchantAuthModalProps {
   isOnboarded: boolean;
@@ -26,6 +28,7 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
   isOnboarded,
   onAuthenticated,
 }) => {
+  const auth = useAuth();
   const [authTab, setAuthTab] = useState<'login' | 'signup' | 'onboard'>(
     isOnboarded ? 'login' : 'onboard'
   );
@@ -38,12 +41,13 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
   const [loginPassword, setLoginPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
 
-  // Sign Up Form State (Local Operator Registration)
+  // Sign Up Form State
   const [signupUsername, setSignupUsername] = useState('');
   const [signupFullName, setSignupFullName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPhone, setSignupPhone] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
+  const [signupBusinessName, setSignupBusinessName] = useState('AutoPrint Express Store');
 
   // First-Time Onboarding Form State (Primary Administrator Account)
   const [shopName, setShopName] = useState('AutoPrint Express Store');
@@ -80,6 +84,23 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
     setLoading(true);
 
     try {
+      if (auth.isCloudAuthEnabled) {
+        const res = await auth.signIn(loginIdentifier.trim(), loginPassword);
+        if (!res.success) {
+          throw new Error(res.error || 'Authentication failed. Please verify your credentials.');
+        }
+
+        const token = auth.session?.access_token || localStorage.getItem('autoprint_supabase_auth_token') || 'supabase_token';
+        localStorage.setItem('autoprint_merchant_session_token', token);
+        onAuthenticated(token, {
+          shopName: auth.activeMerchant?.business_name || 'AutoPrint Store',
+          ownerName: auth.profile?.full_name || loginIdentifier.trim(),
+          role: auth.memberRole || 'merchant_owner',
+        });
+        return;
+      }
+
+      // Local V1 Fallback
       const res = await apiFetch('/api/merchant/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,6 +131,30 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
     setLoading(true);
 
     try {
+      if (auth.isCloudAuthEnabled) {
+        const res = await auth.signUp(signupEmail.trim(), signupPassword, signupFullName.trim(), signupPhone.trim());
+        if (!res.success) {
+          throw new Error(res.error || 'Registration failed.');
+        }
+
+        if (signupBusinessName.trim()) {
+          await auth.createMerchant(signupBusinessName.trim(), 'Main Branch');
+        }
+
+        setSuccessMessage('Registration successful! Redirecting to merchant console...');
+        const token = auth.session?.access_token || localStorage.getItem('autoprint_supabase_auth_token') || 'supabase_token';
+        localStorage.setItem('autoprint_merchant_session_token', token);
+        setTimeout(() => {
+          onAuthenticated(token, {
+            shopName: signupBusinessName.trim() || 'AutoPrint Store',
+            ownerName: signupFullName.trim(),
+            role: 'merchant_owner',
+          });
+        }, 1000);
+        return;
+      }
+
+      // Local V1 Fallback
       const res = await apiFetch('/api/merchant/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -189,22 +234,35 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
       <div className="w-full max-w-lg bg-[#141419] rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/10 flex flex-col max-h-[92vh] overflow-y-auto text-white">
         
         {/* Modal Header */}
-        <div className="flex items-center gap-3.5 mb-5 pb-4 border-b border-white/10">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-purple-600/30">
-            <Printer className="w-6 h-6" />
+        <div className="flex items-center justify-between gap-3.5 mb-5 pb-4 border-b border-white/10">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-purple-600/30">
+              <Printer className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-white tracking-tight">
+                AutoPrint Merchant Desk
+              </h2>
+              <p className="text-xs text-zinc-400 font-medium">
+                {authTab === 'login'
+                  ? 'Sign in to access your print queue & verification terminal'
+                  : authTab === 'signup'
+                  ? (auth.isCloudAuthEnabled ? 'Create an account and set up your print shop' : 'Register a local desk operator account')
+                  : 'Configure your primary store profile to start'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-black text-white tracking-tight">
-              AutoPrint Merchant Desk
-            </h2>
-            <p className="text-xs text-zinc-400 font-medium">
-              {authTab === 'login'
-                ? 'Sign in to access your print queue & verification terminal'
-                : authTab === 'signup'
-                ? 'Register a local desk operator account'
-                : 'Configure your primary store profile to start'}
-            </p>
-          </div>
+          {auth.isCloudAuthEnabled ? (
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold">
+              <Globe className="w-3 h-3" />
+              <span>Cloud Auth</span>
+            </div>
+          ) : (
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-950/40 border border-blue-500/30 text-blue-300 text-[11px] font-bold">
+              <ShieldCheck className="w-3 h-3" />
+              <span>Local V1</span>
+            </div>
+          )}
         </div>
 
         {/* Tab Navigation (Login vs Local Sign Up) */}
@@ -318,20 +376,37 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
         {/* FORM 2: SIGN UP TAB (Local Staff Registration) */}
         {authTab === 'signup' && (
           <form onSubmit={handleSignupSubmit} className="space-y-3.5">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-zinc-300">Username *</label>
-              <div className="relative">
-                <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. cashier_1 or rahul"
-                  value={signupUsername}
-                  onChange={(e) => setSignupUsername(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-black/40 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-purple-500 font-mono"
-                />
+            {auth.isCloudAuthEnabled ? (
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-300">Business / Shop Name *</label>
+                <div className="relative">
+                  <Store className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Apex Xerox & Print Hub"
+                    value={signupBusinessName}
+                    onChange={(e) => setSignupBusinessName(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-black/40 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-300">Username *</label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. cashier_1 or rahul"
+                    value={signupUsername}
+                    onChange={(e) => setSignupUsername(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-black/40 text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-purple-500 font-mono"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1">
               <label className="text-xs font-bold text-zinc-300">Full Name *</label>

@@ -202,12 +202,12 @@ export class PaymentController {
     try {
       const parsed = digitalAttemptSchema.parse(req.body);
 
-      // Free print fraud defense: only authenticated staff can manually mark SUCCESS without gateway verification
-      const user = (req as any).user;
-      if (parsed.status === 'SUCCESS' && !user) {
+      // Free-print fraud defense: this endpoint records attempts only. A
+      // browser must never be able to turn an attempt into a paid job.
+      if (parsed.status === 'SUCCESS') {
         res.status(403).json({
           ok: false,
-          error: 'Self-reported payment success is not permitted. Digital payments require cryptographic gateway verification or merchant staff counter confirmation.',
+          error: 'Self-reported payment success is not permitted. Use trusted gateway verification or cash collection.',
         });
         return;
       }
@@ -220,20 +220,10 @@ export class PaymentController {
         errorMessage: parsed.errorMessage,
       });
 
-      if (parsed.status === 'SUCCESS') {
-        await AutoPrintService.confirmDigitalPayment(
-          result.record.jobId,
-          parsed.gatewayRef || `STAFF-DIGITAL-${Date.now()}`,
-          parsed.vpa
-        );
-      }
-
       res.json({
         ok: true,
         message: result.strikeLockoutTriggered
           ? 'Digital payment failed 3 times. Job locked into Cash Collection mode exclusively.'
-          : parsed.status === 'SUCCESS'
-          ? 'Digital payment successful and print job dispatched.'
           : 'Digital payment attempt recorded.',
         strikeLockoutTriggered: result.strikeLockoutTriggered,
         data: result.record,

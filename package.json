@@ -35,5 +35,9 @@
     "kiosk"
   ],
   "author": "AutoPrint Engineering",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.116.0"
+  }
 }

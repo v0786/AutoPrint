@@ -5,6 +5,7 @@ import { PrintJobRequest, AppError } from '../types';
 import { generateTraceId, logTrace } from '../utils/traceLogger';
 import { jobRepository } from '../database/repositories/jobRepository';
 import { CONFIG } from '../config/environment';
+import { AuthenticatedRequest } from '../middleware/auth';
 
 const printSettingsSchema = z.object({
   paperFormat: z.string().optional(),
@@ -33,6 +34,8 @@ const submitJobSchema = z.object({
   amountTotal: z.coerce.number().positive().optional(),
   currency: z.string().default('INR'),
   fileName: z.string().optional(),
+  storagePath: z.string().optional(),
+  fileHash: z.string().optional(),
 });
 
 export class JobController {
@@ -116,6 +119,8 @@ export class JobController {
         amountMinorUnits,
         currency: parsed.currency,
         traceId,
+        storagePath: parsed.storagePath || (req.body.storagePath as string),
+        fileHash: parsed.fileHash || (req.body.fileHash as string) || (req.body.file_hash as string),
       };
 
       const job = await AutoPrintService.submitJob(request, file?.buffer, traceId);
@@ -177,6 +182,12 @@ export class JobController {
   public static getJobById(req: Request, res: Response, next: NextFunction): void {
     try {
       const { id } = req.params;
+      const accessToken = req.headers['x-job-access-token'];
+      const isMerchantRequest = Boolean((req as AuthenticatedRequest).user);
+      if (!isMerchantRequest && (typeof accessToken !== 'string' || !jobRepository.hasValidCustomerAccessToken(id, accessToken))) {
+        res.status(401).json({ ok: false, error: 'A valid job access token is required.' });
+        return;
+      }
       const job = AutoPrintService.getJobById(id);
       if (!job) {
         res.status(404).json({ ok: false, error: 'Job not found' });
@@ -195,6 +206,14 @@ export class JobController {
       const traceId = (req.headers['x-trace-id'] as string) || (req.body.traceId as string) || '';
       if (!status) {
         res.status(400).json({ ok: false, error: 'Status is required' });
+        return;
+      }
+
+      // Payment and physical completion are protected transitions. They are
+      // produced by gateway verification and the print engine, never by a
+      // browser PATCH request (even an authenticated merchant UI).
+      if (['PAID', 'PRINTED', 'READY_FOR_PICKUP', 'READY_FOR_COLLECTION', 'COLLECTED'].includes(String(status))) {
+        res.status(403).json({ ok: false, error: 'This status is controlled by trusted payment or print-engine logic.' });
         return;
       }
 

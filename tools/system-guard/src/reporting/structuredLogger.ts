@@ -14,7 +14,7 @@ const SENSITIVE_PATTERNS = [
   /token["']?\s*[:=]\s*["']?([^"',\s]+)/gi,
   /authorization["']?\s*[:=]\s*["']?Bearer\s+([^"',\s]+)/gi,
   /razorpay_key_secret["']?\s*[:=]\s*["']?([^"',\s]+)/gi,
-  /pagekite[_-]?secret["']?\s*[:=]\s*["']?([^"',\s]+)/gi,
+  /service[_-]?secret["']?\s*[:=]\s*["']?([^"',\s]+)/gi,
 ];
 
 export class StructuredLogger {

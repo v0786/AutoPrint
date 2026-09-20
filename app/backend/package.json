@@ -1,6 +1,6 @@
 {
   "name": "autoprint-backend",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Production-grade fail-safe AutoPrint verification and payment backend service",
   "main": "dist/server.js",
   "scripts": {
@@ -19,6 +19,7 @@
   "author": "AutoPrint Engineering",
   "license": "Apache-2.0",
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

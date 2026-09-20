@@ -67,7 +67,7 @@ In **Merchant Dashboard → Settings → Print Pricing**, enable **Do not print 
 
 ### System Tray & Service Supervisor
 
-The native `AutoPrint.exe` launcher supervises the backend, customer kiosk, merchant service, and optional PageKite tunnel. Its tray menu provides Merchant Web, service status, printer/payment settings, logs, restart, and exit actions. The launcher prevents duplicate service processes and keeps Web Mode available without requiring the native interface.
+The native `AutoPrint.exe` launcher supervises the backend, customer kiosk, merchant service, and local printer services. Its tray menu provides Merchant Web, service status, printer/payment settings, logs, restart, and exit actions. Hosted customer access is configured through the central AutoPrint cloud URL; LAN-only operation remains available without an external service.
 
 ---
 
@@ -132,4 +132,3 @@ powershell -File scripts/build.ps1
 ## 6. License
 
 AutoPrint is released under the [Apache-2.0 License](LICENSE).
-

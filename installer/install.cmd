@@ -81,26 +81,7 @@ if /i "!PROMPT_RESULT!"=="N" (
 )
 
 :: ============================================================================
-:: STEP 3: PAGEKITE INTERNET ACCESS
-:: ============================================================================
-call "%LIB_DIR%\common.cmd" :print_step "3" "Customer Internet Access & PageKite Ingress"
-
-echo PageKite enables customers to scan your QR code and access the kiosk
-echo from mobile data (4G/5G) or foreign Wi-Fi without router port-forwarding.
-echo.
-set "PAGEKITE_ENABLE=Y"
-call "%LIB_DIR%\common.cmd" :prompt_yn "Enable customer Internet access through PageKite?" "Y"
-set "PAGEKITE_ENABLE=!PROMPT_RESULT!"
-
-set "PAGEKITE_NAME=quickprint-kiosk"
-if /i "!PAGEKITE_ENABLE!"=="Y" (
-    set /p "PAGEKITE_NAME=Enter PageKite Subdomain (e.g. quickprint-delhi): "
-    if "!PAGEKITE_NAME!"=="" set "PAGEKITE_NAME=autoprint-kiosk"
-    echo Configured Public URL: https://!PAGEKITE_NAME!.pagekite.me
-)
-
-:: ============================================================================
-:: STEP 4: BACKUP BEFORE PROCEEDING
+:: STEP 3: BACKUP BEFORE PROCEEDING
 :: ============================================================================
 call "%LIB_DIR%\common.cmd" :print_step "4" "Safety Backup Creation"
 
@@ -145,14 +126,11 @@ echo NODE_ENV=development
 echo API_PREFIX=/api
 echo MAX_DIGITAL_ATTEMPTS=3
 echo HMAC_SECRET=AP_VERIFY_HMAC_SECURE_2026_CHANGE_THIS_IN_PRODUCTION
-echo CORS_ORIGIN=http://localhost:!CUSTOM_CUSTOMER_PORT!,http://localhost:!CUSTOM_MERCHANT_PORT!,http://localhost:!CUSTOM_API_PORT!,https://!PAGEKITE_NAME!.pagekite.me
+echo CORS_ORIGIN=http://localhost:!CUSTOM_CUSTOMER_PORT!,http://localhost:!CUSTOM_MERCHANT_PORT!,http://localhost:!CUSTOM_API_PORT!
 echo CURRENCY=INR
 echo MAX_FILE_SIZE_MB=50
 echo AUTOPRINT_DATA_DIR=%PROJECT_ROOT%\datastore
-echo PAGEKITE_ENABLED=!PAGEKITE_ENABLE!
-echo PAGEKITE_NAME=!PAGEKITE_NAME!
-echo PAGEKITE_DOMAIN=pagekite.me
-echo CUSTOMER_PUBLIC_URL=https://!PAGEKITE_NAME!.pagekite.me
+echo AUTOPRINT_CLOUD_URL=
 ) > "%PROJECT_ROOT%\.env"
 
 call "%LIB_DIR%\common.cmd" :success_msg "Saved runtime configuration to .env"
@@ -204,7 +182,6 @@ echo ===========================================================================
 echo.
 echo   Configured Access Endpoints:
 echo     [Customer Mobile Portal] : http://localhost:!CUSTOM_CUSTOMER_PORT!
-if /i "!PAGEKITE_ENABLE!"=="Y" echo     [Public Customer URL]    : https://!PAGEKITE_NAME!.pagekite.me
 echo     [Merchant Counter Desk]  : http://localhost:!CUSTOM_MERCHANT_PORT!
 echo     [Backend REST API]       : http://localhost:!CUSTOM_API_PORT!/api
 echo     [Backend Health Check]   : http://localhost:!CUSTOM_API_PORT!/health

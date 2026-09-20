@@ -29,6 +29,15 @@ export type PrintJobStatus =
   | 'PAYMENT_PROCESSING'
   | 'AWAITING_CASH_CONFIRMATION'
   | 'PAID'
+  | 'READY_TO_TRANSMIT'
+  | 'TRANSMITTING'
+  | 'TRANSMISSION_FAILED'
+  | 'RECEIVED'
+  | 'RECEIVE_FAILED'
+  | 'DOWNLOADING'
+  | 'DOWNLOAD_FAILED'
+  | 'FILE_READY'
+  | 'FILE_VERIFICATION_FAILED'
   | 'PAYMENT_FAILED'
   | 'PAYMENT_CANCELLED'
   | 'PAYMENT_EXPIRED'
@@ -131,6 +140,8 @@ export interface PrintJobRequest {
   /** Currency code e.g. INR */
   currency?: string;
   traceId?: string;
+  storagePath?: string;
+  fileHash?: string;
 }
 
 export interface PrintJobRow {
@@ -139,6 +150,8 @@ export interface PrintJobRow {
   title: string;
   file_name: string;
   file_path: string;
+  file_hash?: string | null;
+  customer_access_token_hash?: string | null;
   processed_file_path: string | null;
   customer_name: string;
   customer_phone: string | null;
@@ -197,6 +210,7 @@ export interface PrintJobResponse {
   traceId?: string;
   createdAt: string;
   updatedAt: string;
+  customerAccessToken?: string;
 }
 
 export interface PaymentAttempt {

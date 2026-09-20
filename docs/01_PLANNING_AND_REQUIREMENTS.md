@@ -46,7 +46,7 @@ $$\text{Scan Shop QR} \longrightarrow \text{Enter Name} \longrightarrow \text{Up
 
 | Requirement ID | Module | Description | Priority |
 |---|---|---|---|
-| **FR-01** | Ingress | The system shall generate a permanent Shop QR code pointing to `http://<LAN_IP>:7000` or `https://<kite>.pagekite.me`. | Critical |
+| **FR-01** | Ingress | The system shall generate a permanent Shop QR code pointing to the merchant's hosted AutoPrint store URL or the local LAN kiosk URL. | Critical |
 | **FR-02** | Customer | Customer onboarding shall require **no account or password**; only a **Customer Name** is mandatory. | Critical |
 | **FR-03** | Localization | Customer Kiosk shall support **English and Hindi** with an extensible resource dictionary. | High |
 | **FR-04** | Document Ingress | System shall accept PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, JPEG, and PNG. | Critical |
@@ -115,6 +115,6 @@ $$\text{Scan Shop QR} \longrightarrow \text{Enter Name} \longrightarrow \text{Up
 | **REQ-07** | Windows 7–11 Native Host | Native Supervisor Subsystem | `src-launcher/Program.cs` (.NET 4.5.2) | C# Compiler (`csc.exe`) Verification |
 | **REQ-08** | 10-Minute Inactivity Lock | Presentation Security Gate | `app/merchant-desktop/src/App.tsx`, `auth.ts` | `security_audit_verification.test.ts` (Test 4) |
 | **REQ-09** | Anti-Brute Force Rate Limit | Security Middleware Tier | `app/backend/src/middleware/rateLimiter.ts` | `security_audit_verification.test.ts` (Test 6) |
-| **REQ-10** | Dynamic LAN & PageKite QR | Network Ingress Subsystem | `tunnelService.ts`, `qrCodeService.ts` | `security_audit_verification.test.ts` (Test 1) |
+| **REQ-10** | Dynamic LAN & hosted-store QR | Network Ingress Subsystem | `tunnelService.ts`, `qrCodeService.ts` | `security_audit_verification.test.ts` |
 | **REQ-11** | Duplicate Print Prevention | Operator Safety Gate | `merchant-desktop/src/components/JobDetailModal.tsx`| Manual Spooler Simulation Suite |
 | **REQ-12** | Accessible Motion Primitives | UI Motion Framework | `components/motion-primitives/*` | Vite Build & `tsc --noEmit` Verification |

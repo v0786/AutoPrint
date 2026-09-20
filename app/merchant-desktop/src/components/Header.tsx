@@ -25,6 +25,8 @@ interface HeaderProps {
   shopName?: string;
   printers: PrinterDevice[];
   metrics: SpoolerMetrics;
+  cloudStatus?: 'ONLINE' | 'OFFLINE' | 'CONNECTING';
+  isLocalOperational?: boolean;
   onToggleOnline: () => void;
   onLogout: () => void;
   onSelectView: (view: string) => void;
@@ -39,6 +41,8 @@ export const Header: React.FC<HeaderProps> = ({
   shopName,
   printers,
   metrics,
+  cloudStatus = 'OFFLINE',
+  isLocalOperational = true,
   onToggleOnline,
   onLogout,
   onSelectView,
@@ -122,13 +126,68 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden md:inline">
             {errorPrinters.length > 0
               ? `${errorPrinters.length} Printer Alert`
-              : defaultPrinter?.displayName || defaultPrinter?.name || 'Printers OK'}
+              : defaultPrinter?.displayName || defaultPrinter?.name || 'Printer Ready'}
           </span>
           <span
             className={`w-2 h-2 rounded-full ${
               errorPrinters.length > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400'
             }`}
           />
+        </button>
+
+        {/* 2. Local Printing Operational (V1 Offline-first Core) */}
+        <div
+          className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border ${
+            isLocalOperational
+              ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
+              : 'bg-rose-950/50 border-rose-500/40 text-rose-300'
+          }`}
+          title="Local Core V1 Spooler & SQLite engine status (works 100% offline)"
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isLocalOperational ? 'bg-emerald-400' : 'bg-rose-500 animate-pulse'
+            }`}
+          />
+          <span className="hidden lg:inline">
+            {isLocalOperational ? 'Local Printing Operational' : 'Local Engine Degraded'}
+          </span>
+          <span className="lg:hidden">
+            {isLocalOperational ? 'Local Ready' : 'Local Degraded'}
+          </span>
+        </div>
+
+        {/* 3. Cloud Sync Status (V2 Optional Layer) */}
+        <button
+          onClick={() => onSelectView('settings')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+            cloudStatus === 'ONLINE'
+              ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300 hover:bg-emerald-950/50'
+              : cloudStatus === 'CONNECTING'
+              ? 'bg-amber-950/30 border-amber-500/30 text-amber-300 hover:bg-amber-950/50'
+              : 'bg-zinc-900/60 border-amber-500/30 text-amber-300/90 hover:bg-zinc-800'
+          }`}
+          title="Cloud Sync (V2) status • Click to configure in Settings"
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              cloudStatus === 'ONLINE'
+                ? 'bg-emerald-400'
+                : cloudStatus === 'CONNECTING'
+                ? 'bg-amber-400 animate-ping'
+                : 'bg-amber-400'
+            }`}
+          />
+          <span className="hidden md:inline">
+            {cloudStatus === 'ONLINE'
+              ? 'Cloud Online'
+              : cloudStatus === 'CONNECTING'
+              ? 'Cloud Connecting'
+              : 'Cloud Offline'}
+          </span>
+          <span className="md:hidden">
+            {cloudStatus === 'ONLINE' ? 'Cloud' : 'Offline'}
+          </span>
         </button>
 
         {/* 2. Shop Online / Offline Status Button */}

@@ -54,7 +54,7 @@ All release packages are compiled into [`release/`](file:///d:/AutoPrint/release
 8. **Shop Identity**: Enter Shop Name, Country, Currency Symbol (`₹`), and Language (English/Hindi).
 9. **Printer Discovery**: System auto-discovers connected printers; select primary laser printer as **Default Printer**.
 10. **Pricing Rates**: Set per-page rates for A4 B&W Single/Double, A4 Color, A3, and custom services.
-11. **Public Access (PageKite)**: If remote mobile uploads are desired, enter PageKite Kite Name and Secret; otherwise, select local Wi-Fi mode.
+11. **Public Access**: Configure the central AutoPrint hosted store URL for remote mobile uploads; otherwise, use the local Wi-Fi/LAN URL.
 12. **Generate Shop QR**: The wizard generates the permanent shop counter QR code.
 13. **Print Counter Standee**: Click **[Print Counter Standee]** to print the counter standee card immediately.
 14. **Emergency Recovery Code**: Save the 24-character recovery key securely and click **[Finish Setup]**.

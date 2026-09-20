@@ -22,7 +22,8 @@ export const jobRepository = {
 
     db.prepare(`
       INSERT INTO print_jobs (
-        id, job_no, title, file_name, file_path, processed_file_path,
+        id, job_no, title, file_name, file_path, file_hash, processed_file_path,
+        customer_access_token_hash,
         customer_name, customer_phone, printer_id, printer_name,
         color_mode, copies, page_range, paper_size, duplex, finishing,
         print_settings_json,
@@ -32,7 +33,8 @@ export const jobRepository = {
         ready_for_pickup_at, collected_at, pickup_code,
         status, created_at, updated_at
       ) VALUES (
-        @id, @job_no, @title, @file_name, @file_path, @processed_file_path,
+        @id, @job_no, @title, @file_name, @file_path, @file_hash, @processed_file_path,
+        @customer_access_token_hash,
         @customer_name, @customer_phone, @printer_id, @printer_name,
         @color_mode, @copies, @page_range, @paper_size, @duplex, @finishing,
         @print_settings_json,
@@ -45,6 +47,8 @@ export const jobRepository = {
     `).run({
       ...row,
       job_no: jobNo,
+      file_hash: row.file_hash ?? null,
+      customer_access_token_hash: row.customer_access_token_hash ?? null,
       processed_file_path: row.processed_file_path ?? null,
       customer_phone: row.customer_phone ?? null,
       printer_id: row.printer_id ?? null,
@@ -74,6 +78,16 @@ export const jobRepository = {
   getByPickupCode(code: string): PrintJobRow | null {
     const db = getDb();
     return (db.prepare('SELECT * FROM print_jobs WHERE pickup_code = ?').get(code) as PrintJobRow | undefined) ?? null;
+  },
+
+  hasValidCustomerAccessToken(id: string, token: string): boolean {
+    const row = this.getById(id);
+    if (!row?.customer_access_token_hash || !token) return false;
+    const crypto = require('crypto') as typeof import('crypto');
+    const actual = crypto.createHash('sha256').update(token).digest('hex');
+    const expectedBuffer = Buffer.from(row.customer_access_token_hash, 'utf8');
+    const actualBuffer = Buffer.from(actual, 'utf8');
+    return expectedBuffer.length === actualBuffer.length && crypto.timingSafeEqual(expectedBuffer, actualBuffer);
   },
 
   getAll(): PrintJobRow[] {

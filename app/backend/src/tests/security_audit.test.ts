@@ -1,7 +1,6 @@
 /**
  * AutoPrint Security Audit Regression Test Suite
  * Validates remediation of all identified vulnerabilities:
- * - VULN-01: Command injection prevention in PageKite connector
  * - VULN-02: Authentication & authorization enforcement on merchant profile & payment receiver
  * - VULN-03: Fraudulent client-side digital payment self-reporting restriction
  * - VULN-04 / VULN-08: In-memory sliding-window rate limiter enforcement
@@ -14,7 +13,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
 import { initDatabase } from '../database/db';
-import { PageKiteConnector } from '../connectors/pagekiteConnector';
 import { MerchantRepository } from '../database/repositories/merchantRepository';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { createRateLimiter } from '../middleware/rateLimiter';
@@ -59,60 +57,7 @@ function createMockReqRes(options: {
 
 test('=== SECURITY AUDIT REMEDIATION VERIFICATION ===', async (t) => {
 
-  await t.test('1. VULN-01: PageKite Connector Input Sanitization & Shell Prevention', async () => {
-    // Malicious injection subdomains
-    const maliciousSubdomains = [
-      'test;calc.exe',
-      'test&calc.exe',
-      'test|whoami',
-      'test`id`',
-      'test$(whoami)',
-      'test>file.txt',
-      'test<file.txt',
-      'test"calc"',
-      'test space',
-      '..//evil',
-    ];
-
-    for (const subdomain of maliciousSubdomains) {
-      const connector = new PageKiteConnector({
-        enabled: true,
-        domain: 'pagekite.me',
-        subdomain,
-        secret: 'valid-secret-1234',
-        localPort: 3001,
-      });
-
-      const started = connector.start();
-      assert.equal(started, false, `Subdomain "${subdomain}" should be rejected`);
-      assert.equal(connector.getState().status, 'ERROR');
-      assert.match(connector.getState().error || '', /Invalid PageKite subdomain/);
-    }
-
-    // Malicious secret with newline / command chaining
-    const maliciousSecrets = [
-      'secret\ncalc.exe',
-      'secret\r\ncalc.exe',
-      'secret\0evil',
-    ];
-
-    for (const secret of maliciousSecrets) {
-      const connector = new PageKiteConnector({
-        enabled: true,
-        domain: 'pagekite.me',
-        subdomain: 'valid-subdomain',
-        secret,
-        localPort: 3001,
-      });
-
-      const started = connector.start();
-      assert.equal(started, false, `Secret with control characters should be rejected`);
-      assert.equal(connector.getState().status, 'ERROR');
-      assert.match(connector.getState().error || '', /Invalid PageKite secret/);
-    }
-  });
-
-  await t.test('2. VULN-09: Timing-Safe Comparison & Credential Verification', async () => {
+  await t.test('1. VULN-09: Timing-Safe Comparison & Credential Verification', async () => {
     // 1. Password comparison timing-safe
     const admin = MerchantRepository.getPrimaryMerchant();
     if (admin) {
@@ -140,7 +85,7 @@ test('=== SECURITY AUDIT REMEDIATION VERIFICATION ===', async (t) => {
     assert.equal(crypto.timingSafeEqual(bufA, bufC), false, 'Different buffers must not be equal');
   });
 
-  await t.test('3. VULN-10: Token from Query String Rejection (Bearer Header Enforcement)', async () => {
+  await t.test('2. VULN-10: Token from Query String Rejection (Bearer Header Enforcement)', async () => {
     let admin = MerchantRepository.getPrimaryMerchant();
     if (!admin) {
       admin = MerchantRepository.createMerchant({
@@ -167,7 +112,7 @@ test('=== SECURITY AUDIT REMEDIATION VERIFICATION ===', async (t) => {
     assert.equal(getData()?.error, 'Authentication required. Bearer token must be provided in the Authorization header.');
   });
 
-  await t.test('4. VULN-02: Authentication & Authorization Enforcement on Sensitive Endpoints', async () => {
+  await t.test('3. VULN-02: Authentication & Authorization Enforcement on Sensitive Endpoints', async () => {
     let admin = MerchantRepository.getPrimaryMerchant();
     if (!admin) {
       admin = MerchantRepository.createMerchant({
@@ -206,7 +151,7 @@ test('=== SECURITY AUDIT REMEDIATION VERIFICATION ===', async (t) => {
     assert.equal(mock3.req.user?.id, admin.id);
   });
 
-  await t.test('5. VULN-03: Fraudulent Payment Self-Reporting Protection', async () => {
+  await t.test('4. VULN-03: Fraudulent Payment Self-Reporting Protection', async () => {
     // Simulating PaymentController.recordDigitalAttempt logic
     // Unauthenticated caller attempting to report status = 'SUCCESS' must be rejected
     const unauthenticatedReq = {
@@ -236,7 +181,7 @@ test('=== SECURITY AUDIT REMEDIATION VERIFICATION ===', async (t) => {
     assert.equal(failedPermitted, true, 'Kiosk reporting legitimate client failure is permitted');
   });
 
-  await t.test('6. VULN-04 / VULN-08: Sliding-Window Rate Limiter Protection', async () => {
+  await t.test('5. VULN-04 / VULN-08: Sliding-Window Rate Limiter Protection', async () => {
     // Create rate limiter with small window and limit for fast testing
     const limiter = createRateLimiter({
       windowMs: 500,
@@ -279,7 +224,7 @@ test('=== SECURITY AUDIT REMEDIATION VERIFICATION ===', async (t) => {
     assert.equal(nDiff, true, 'Different IP must have its own bucket');
   });
 
-  await t.test('7. VULN-06: PowerShell Command Injection Protection Verification', async () => {
+  await t.test('6. VULN-06: PowerShell Command Injection Protection Verification', async () => {
     // Malicious printer names containing PowerShell command injection payloads
     const maliciousPrinterNames = [
       'Printer"; Start-Process calc.exe; #',

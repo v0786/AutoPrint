@@ -57,7 +57,6 @@ try {
     Write-Host 'ONLINE' -ForegroundColor Green;
     Write-Host ('   Database Status    : ' + `$health.database.healthy + ' (Engine: ' + `$health.database.engine + ')');
     Write-Host ('   Datastore Root     : ' + `$health.storage.dataDir);
-    Write-Host ('   PageKite State     : ' + `$health.pagekite);
     Write-Host ('   Active Customer URL: ' + `$health.customerUrl) -ForegroundColor Cyan;
 } catch {
     Write-Host '   Backend Health     : ' -NoNewline;

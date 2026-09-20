@@ -34,7 +34,6 @@ function printBanner() {
   console.log('  - The SQLite database (autoprint.db, WAL, SHM)');
   console.log('  - All login sessions');
   console.log('  - Remember This PC tokens');
-  console.log('  - PageKite configuration & credentials');
   console.log('  - Application setup & installation state\n');
   console.log('This action cannot be undone.\n');
 }
@@ -76,9 +75,6 @@ function stopAutoPrintProcesses() {
       '  $c = $_.CommandLine',
       '  if ($c) {',
       '    if ($_.Name -eq "node.exe" -and ($c -like "*app*backend*" -or $c -like "*app*customer-web*" -or $c -like "*app*merchant-desktop*")) {',
-      '      $targetPids += $_.ProcessId',
-      '    }',
-      '    if ($_.Name -eq "python.exe" -and ($c -like "*pagekite*" -and $c -like "*autoprint*")) {',
       '      $targetPids += $_.ProcessId',
       '    }',
       '  }',
@@ -188,7 +184,7 @@ function removeApplicationState() {
     }
   }
 
-  console.log('[3/5] Removing installation state & PageKite configurations...');
+  console.log('[3/5] Removing installation state...');
   const configFiles = [
     path.join(programDataDir, 'config', 'installation.json'),
     path.join(programDataDir, 'config', 'appsettings.json'),
@@ -326,7 +322,6 @@ async function main() {
     console.log('✓ Customers removed');
     console.log('✓ Uploaded files removed');
     console.log('✓ Installation state removed');
-    console.log('✓ PageKite configuration removed');
     console.log('✓ Required directories recreated\n');
     console.log('AutoPrint will behave like a fresh installation');
     console.log('the next time it is started.\n');

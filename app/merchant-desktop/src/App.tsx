@@ -39,8 +39,10 @@ import { QuickNewJobModal } from './components/QuickNewJobModal';
 import { MerchantAuthModal } from './components/auth/MerchantAuthModal';
 import { FirstRunOnboarding } from './components/auth/FirstRunOnboarding';
 import { apiFetch } from './utils/api';
+import { useAuth } from './context/AuthContext';
 
 export default function App() {
+  const auth = useAuth();
   const [authChecking, setAuthChecking] = useState<boolean>(true);
   const [hasUsers, setHasUsers] = useState<boolean>(true);
   const [isOnboarded, setIsOnboarded] = useState<boolean>(true);
@@ -61,6 +63,8 @@ export default function App() {
     isQueuePaused: false,
     uptimeSeconds: 0,
   });
+  const [cloudStatus, setCloudStatus] = useState<'ONLINE' | 'OFFLINE' | 'CONNECTING'>('OFFLINE');
+  const [isLocalOperational, setIsLocalOperational] = useState<boolean>(true);
 
   // Modals
   const [isQuickJobModalOpen, setIsQuickJobModalOpen] = useState<boolean>(false);
@@ -77,8 +81,43 @@ export default function App() {
     docType: 'receipt',
   });
 
-  // Verify auth session against backend SQLite
+  // Synchronize Cloud Auth State when Supabase is enabled
+  useEffect(() => {
+    if (auth.isCloudAuthEnabled) {
+      if (auth.isAuthenticated && auth.user) {
+        setIsAuthenticated(true);
+        setIsOnboarded(true);
+        setMerchantProfile({
+          ownerName: auth.profile?.full_name || auth.user.email?.split('@')[0] || 'Merchant Owner',
+          username: auth.user.email || 'merchant',
+          role: auth.memberRole || 'merchant_owner',
+          shopName: auth.activeStore?.name || auth.activeMerchant?.business_name || 'AutoPrint Cloud Station',
+          isOnline: true,
+        });
+        setCloudStatus('ONLINE');
+      } else if (!auth.isLoading) {
+        setIsAuthenticated(false);
+        setMerchantProfile(null);
+        setCloudStatus('OFFLINE');
+      }
+    }
+  }, [
+    auth.isCloudAuthEnabled,
+    auth.isAuthenticated,
+    auth.isLoading,
+    auth.user,
+    auth.profile,
+    auth.activeMerchant,
+    auth.activeStore,
+    auth.memberRole,
+  ]);
+
+  // Verify auth session against backend SQLite (when Cloud Auth is disabled)
   const checkAuth = useCallback(async () => {
+    if (auth.isCloudAuthEnabled) {
+      setAuthChecking(false);
+      return;
+    }
     setAuthChecking(true);
     try {
       // 1. Authoritative check: Does SQLite have at least one merchant user?
@@ -128,7 +167,7 @@ export default function App() {
     } finally {
       setAuthChecking(false);
     }
-  }, []);
+  }, [auth.isCloudAuthEnabled]);
 
   useEffect(() => {
     checkAuth();
@@ -156,11 +195,35 @@ export default function App() {
       setLogs(initialLogs || []);
       if (currentMetrics) setMetrics(currentMetrics);
       try {
-        await verificationService.syncFromBackend();
         setVerificationRecords(verificationService.getAllRecords() || []);
       } catch {
         setVerificationRecords([]);
       }
+
+      // Check cloud & local health status independently
+      apiFetch('/api/cloud/status')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.ok) {
+            if (data.status === 'ONLINE' || data.mode === 'HYBRID') {
+              setCloudStatus('ONLINE');
+            } else if (data.status === 'CONNECTING') {
+              setCloudStatus('CONNECTING');
+            } else {
+              setCloudStatus('OFFLINE');
+            }
+          } else {
+            setCloudStatus('OFFLINE');
+          }
+        })
+        .catch(() => setCloudStatus('OFFLINE'));
+
+      apiFetch('/api/health')
+        .then((res) => res.json())
+        .then((data) => {
+          setIsLocalOperational(Boolean(data && data.ok));
+        })
+        .catch(() => setIsLocalOperational(false));
     } catch (e) {
       console.warn('Failed to load spooler data:', e);
     }
@@ -241,6 +304,9 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    if (auth.isCloudAuthEnabled) {
+      await auth.signOut();
+    }
     const token = localStorage.getItem('autoprint_merchant_session_token');
     if (token) {
       apiFetch('/api/merchant/auth/logout', {
@@ -260,7 +326,7 @@ export default function App() {
     setMerchantProfile(merchant);
   };
 
-  if (authChecking) {
+  if (auth.isCloudAuthEnabled ? auth.isLoading : authChecking) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0a0a0e] text-white font-sans">
         <div className="text-center space-y-3">
@@ -271,8 +337,8 @@ export default function App() {
     );
   }
 
-  // 1. Fresh Installation: Present First-Run Onboarding Wizard
-  if (!hasUsers) {
+  // 1. Fresh Installation: Present First-Run Onboarding Wizard (only for local SQLite mode)
+  if (!auth.isCloudAuthEnabled && !hasUsers) {
     return (
       <FirstRunOnboarding
         onSetupComplete={(token, merchant) => {
@@ -328,6 +394,8 @@ export default function App() {
           shopName={merchantProfile?.shopName}
           printers={printers}
           metrics={metrics}
+          cloudStatus={cloudStatus}
+          isLocalOperational={isLocalOperational}
           onToggleOnline={handleToggleOnline}
           onLogout={handleLogout}
           onSelectView={setCurrentView}
